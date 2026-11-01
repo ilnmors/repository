@@ -1,0 +1,20 @@
+---
+# --- site.yaml ---
+site:
+  timezone: "Asia/Seoul"
+  org: "ilnmors"
+  directory:
+    base_dn: "dc=ilnmors,dc=internal"
+  domain:
+    public: "ilnmors.com"
+    internal: "ilnmors.internal"
+  ca:
+    x509:
+      root:
+        certificate_file: "ilnmors_root_ca.crt"
+      intermediate:
+        certificate_file: "ilnmors_intermediate_ca.crt"
+        private_key_file: "ilnmors_intermediate_ca.key"
+    ssh:
+      root:
+        public_key_file: "ilnmors_root_ssh_ca.pub"

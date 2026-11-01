@@ -1,0 +1,362 @@
+---
+# --- services.yaml ---
+services:
+  packages:
+    git:
+      units:
+        main:
+          release: "git"
+          hosts: ["console", "client"]
+    build-essential:
+      units:
+        main:
+          release: "build-essential"
+          hosts: ["console", "client"]
+    fuse3:
+      units:
+        main:
+          release: "fuse3"
+          hosts: ["console", "client"]
+    acl:
+      units:
+        main:
+          release: "acl"
+          hosts: ["console", "vmm", "client", "infra"]
+    jq:
+      units:
+        main:
+          release: "jq"
+          hosts: ["console", "vmm", "client", "infra", "auth", "app"]
+    curl:
+      units:
+        main:
+          release: "curl"
+          hosts: ["console", "vmm", "client", "infra", "auth", "app"]
+    sops:
+      units:
+        main:
+          release: "sops"
+          hosts: ["console"]
+    step:
+      units:
+        main:
+          release: "step"
+          hosts: ["console", "client"]
+    nftables:
+      units:
+        main:
+          release: "nftables"
+          hosts: ["vmm", "client", "infra", "auth", "app"]
+    netcat:
+      units:
+        main:
+          release: "netcat"
+          hosts: ["vmm", "client", "infra", "auth", "app"]
+    logrotate:
+      units:
+        main:
+          release: "logrotate"
+          hosts: ["vmm"]
+    conntrack:
+      units:
+        main:
+          release: "conntrack"
+          hosts: ["vmm"]
+    chrony:
+      units:
+        main:
+          release: "chrony"
+          hosts: ["vmm"]
+          ports:
+            ntp:
+              protocol: "udp"
+              ext: 123
+    wireguard:
+      units:
+        main:
+          release: "wireguard"
+          hosts: ["vmm"]
+          domain:
+            public: "vpn"
+          ports:
+            wg:
+              protocol: "udp"
+              ext: 11290
+    crowdsec:
+      units:
+        lapi:
+          release: "crowdsec"
+          hosts: ["vmm"]
+          domain:
+            internal: "crowdsec"
+          ports:
+            https:
+              protocol: "tcp"
+              ext: 8080
+            metrics:
+              protocol: "tcp"
+              ext: 6060
+          dependency:
+            pki:
+              cert: true
+        machine:
+          release: "crowdsec"
+          hosts: ["vmm", "client", "infra", "auth", "app"]
+        fw-bouncer:
+          release: "crowdsec-fw-bouncer"
+          hosts: ["vmm"]
+          acquisd:
+            collection:
+              - "crowdsecurity/suricata"
+            parser: []
+            config:
+              - "suricata.yaml"
+        http-bouncer:
+          release: "crowdsec"
+          hosts: []
+          acquisd:
+            collection:
+              - "crowdsecurity/caddy"
+            parser:
+              - "crowdsecurity/nextcloud-whitelist"
+            config:
+              - "caddy.yaml"
+    suricata:
+      units:
+        main:
+          release: "suricata"
+          hosts: ["vmm"]
+        update:
+          release: "suricata-update"
+          hosts: ["vmm"]
+    bind:
+      units:
+        main:
+          release: "bind"
+          hosts: ["vmm"]
+          domain:
+            internal: "bind"
+          ports:
+            dns:
+              protocol: "udp/tcp"
+              ext: 53
+    kea4:
+      units:
+        main:
+          release: "kea4"
+          hosts: ["vmm"]
+          ports:
+            dhcp-sv:
+              protocol: "udp"
+              ext: 67
+    ddns:
+      units:
+        main:
+          release: "local"
+          hosts: ["vmm"]
+    smart-exporter:
+      units:
+        main:
+          release: "smart-exporter"
+          hosts: ["vmm"]
+    rclone:
+      units:
+        main:
+          release: "rclone"
+          hosts: ["client"]
+    kopia:
+      units:
+        server:
+          release: "kopia"
+          hosts: ["client"]
+          domain:
+            internal: "kopia"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 51515
+          dependency:
+            pki:
+              cert: true
+        client:
+          release: "kopia"
+          hosts: ["client", "infra", "auth", "app"]
+    podman:
+      units:
+        main:
+          release: "podman"
+          hosts: ["client", "infra", "auth", "app"]
+    alloy:
+      units:
+        main:
+          release: "alloy"
+          hosts: ["vmm", "client", "infra", "auth", "app"]
+  containers:
+    code-server:
+      units:
+        main:
+          release: "code-server"
+          hosts: ["client"]
+          domain:
+            internal: "code"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8081
+              container: 8081
+          dependency:
+            pki:
+              cert: true
+            web:
+              status: true
+    caddy:
+      units:
+        main:
+          release: "caddy"
+          hosts: ["infra"]
+          ports:
+            http:
+              protocol: "tcp"
+              ext: 80
+              int: 2080
+              container: 80
+            https:
+              protocol: "tcp"
+              ext: 443
+              int: 2443
+              container: 443
+          build:
+            rfc2136:
+              release: "rfc2136"
+              hosts: ["infra"]
+            http-bouncer:
+              release: "http-bouncer"
+              hosts: []
+            crowdsec-bouncer:
+              release: "crowdsec-bouncer"
+              hosts: []
+    step-ca:
+      units:
+        main:
+          release: "step-ca"
+          hosts: ["infra"]
+          domain:
+            internal: "step-ca"
+          subuid: 100999
+          ports:
+            https:
+              protocol: "tcp"
+              ext: 9000
+              int: 9000
+              container: 9000
+    rustfs:
+      units:
+        main:
+          release: "rustfs"
+          hosts: ["infra"]
+          domain:
+            internal: "rustfs"
+          subuid: 110000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9001
+              container: 9001
+          dependency:
+            web:
+              status: true
+    postgresql:
+      units:
+        main:
+          release: "postgresql"
+          hosts: ["infra"]
+          domain:
+            internal: "postgresql"
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 5432
+              container: 5432
+          dependency:
+            pki:
+              cert: true
+    mariadb:
+      units:
+        main:
+          release: "mariadb"
+          hosts: ["infra"]
+          domain:
+            internal: "mariadb"
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 3306
+              container: 3306
+          dependency:
+            pki:
+              cert: true
+    ldap:
+      units:
+        main:
+          release: "ldap"
+          hosts: ["infra"]
+          domain:
+            internal: "ldap"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 17170
+              container: 17170
+            ldaps:
+              protocol: "tcp"
+              ext: 636
+              int: 6360
+              container: 6360
+          dependency:
+            pki:
+              cert: true
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+    prometheus:
+      units:
+        main:
+          release: "prometheus"
+          hosts: ["infra"]
+          domain:
+            internal: "prometheus"
+          subuid: 165533
+          ports:
+            https:
+              protocol: "tcp"
+              int: 9090
+              container: 9090
+          dependency:
+            pki:
+              cert: true
+            web:
+              status: true
+    loki:
+      units:
+        main:
+          release: "loki"
+          hosts: ["infra"]
+          domain:
+            internal: "loki"
+          subuid: 110000
+          ports:
+            https:
+              protocol: "tcp"
+              int: 3100
+              container: 3100
+          dependency:
+            pki:
+              cert: true
+            web:
+              status: true

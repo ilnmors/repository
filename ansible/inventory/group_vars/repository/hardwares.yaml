@@ -1,0 +1,89 @@
+---
+# --- hardwares.yaml ---
+hardwares:
+  vmm:
+    cpu:
+      model: "i5-1235u"
+      vendor: "intel"
+    memory: "62.5332G"
+    gpu:
+      gpu01:
+        type: "igpu"
+        model: "IrisXE"
+        vendor: "intel"
+        id: null # "8086:46a8"
+        address: null # "0000:00:02.0"
+      gpu02:
+        type: "egpu"
+        model: "RX7900XT"
+        vendor: "radeon"
+        id: null #
+        address: null #
+    usb:
+      usb01:
+        type: "xhci"
+        model: "Alder Lake PCH USB 3.2 xHCI"
+        vendor: "intel"
+        id: null # "8086:51ed"
+        address: null # "0000:00:14.0"
+    nic:
+      nic01:
+        type: "rj45"
+        reserved: false
+        mac: "c8:ff:bf:07:02:34"
+      nic02:
+        type: "rj45"
+        reserved: false
+        mac: "c8:ff:bf:07:02:33"
+      nic03:
+        type: "sfpp"
+        reserved: false
+        mac: "c8:ff:bf:07:02:31"
+      nic04:
+        type: "sfpp"
+        reserved: false
+        mac: "c8:ff:bf:07:02:32"
+    disk:
+      disk01:
+        type: "ssd"
+        model: "Samsung 990 PRO 2TB"
+        serial: "S7DDNJ0X158483T"
+        size: "1.8190T"
+        role: "root"
+      disk02:
+        type: "ssd"
+        model: "SK Hynix BC711"
+        serial: "CJ11Q797410101U02"
+        size: "128G"
+        role: "swap"
+      disk03:
+        type: "hdd"
+        model: "HGST Ultrastar 7K4000"
+        serial: "PN1138P2GH354H"
+        size: "1.8180T"
+        role: "data"
+      disk04:
+        type: "hdd"
+        model: "HGST Ultrastar 7K4000"
+        serial: "PN2131P6GJKSMP"
+        size: "1.8180T"
+        role: "data"
+      disk05:
+        type: "hdd"
+        model: "HGST Ultrastar 7K4000"
+        serial: "PN1134P6HVTL0W"
+        size: "1.8180T"
+        role: "backup"
+      # spare.serial: "WMC6N0E617S8" # HGST Ultrastar 7K2
+  switch:
+    nic:
+      nic01:
+        type: "rj45"
+        reserved: true
+        mac: "58:04:4f:18:6c:5e"
+  printer:
+    nic:
+      nic01:
+        type: "rj45"
+        reserved: true
+        mac: "38:ca:84:94:5e:06"

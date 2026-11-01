@@ -1,0 +1,128 @@
+---
+# --- networks.yaml ---
+networks:
+  dns:
+    serial: "1"
+    forwarder:
+      name: "external_dns"
+      hostname: "cloudflare-dns.com"
+      ipv4:
+        - "1.1.1.2"
+        - "1.0.0.2"
+      ipv6:
+        - "2606:4700:4700::1112"
+        - "2606:4700:4700::1002"
+    zones:
+      internal:
+        domain: "{{ site['domain']['internal'] }}"
+        hosts_from: ["client", "server", "user"]
+      public:
+        domain: "{{ site['domain']['public'] }}"
+        hosts_from: null
+      public_forward:
+        domain: "{{ services['packages']['wireguard']['units']['main']['domain']['public'] }}"
+        hosts_from: null
+      reverse:
+        domain: "{{ site['domain']['internal'] }}"
+        networks: ["client", "server"]
+        families: ["ipv4", "ipv6"]
+  segments:
+    client:
+      vlan: 1
+      subnet:
+        ipv4: "192.168.1.0/24"
+        ipv6: "fd00:1::/64"
+      gateway:
+        ipv4: "192.168.1.1"
+        ipv6: "fd00:1::1"
+      dhcp4:
+        pool: "192.168.1.101 - 192.168.1.199"
+      hosts:
+        vmm:
+          ipv4: "192.168.1.1"
+          ipv6: "fd00:1::1"
+        console:
+          ipv4: "192.168.1.10"
+          ipv6: "fd00:1::10"
+          domain: "console"
+        client:
+          ipv4: "192.168.1.11"
+          ipv6: "fd00:1::11"
+          domain: "client"
+          alias:
+            - "{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}"
+            - "{{ services['containers']['code-server']['units']['main']['domain']['internal'] }}"
+        switch:
+          ipv4: "192.168.1.2"
+          domain: "switch"
+        printer:
+          ipv4: "192.168.1.100"
+          domain: "printer"
+    server:
+      vlan: 10
+      subnet:
+        ipv4: "192.168.10.0/24"
+        ipv6: "fd00:10::/64"
+      gateway:
+        ipv4: "192.168.10.1"
+        ipv6: "fd00:10::1"
+      hosts:
+        vmm:
+          ipv4: "192.168.10.1"
+          ipv6: "fd00:10::1"
+          domain: "vmm"
+          alias:
+            - "{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}"
+        bind:
+          ipv4: "192.168.10.2"
+          ipv6: "fd00:10::2"
+          domain: "bind"
+        infra:
+          ipv4: "192.168.10.11"
+          ipv6: "fd00:10::11"
+          domain: "infra"
+          alias:
+            - "{{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['rustfs']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['ldap']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['loki']['units']['main']['domain']['internal'] }}"
+            - "*.infra"
+        auth:
+          ipv4: "192.168.10.12"
+          ipv6: "fd00:10::12"
+          domain: "auth"
+        app:
+          ipv4: "192.168.10.13"
+          ipv6: "fd00:10::13"
+          domain: "app"
+          alias:
+            - "*.app"
+    user:
+      vlan: 20
+      subnet:
+        ipv4: "192.168.20.0/24"
+        ipv6: null
+      gateway:
+        ipv4: "192.168.20.1"
+      dhcp4:
+        pool: "192.168.20.100 - 192.168.20.199"
+      hosts:
+        vmm:
+          ipv4: "192.168.20.1"
+    wg:
+      subnet:
+        ipv4: "192.168.99.0/24"
+        ipv6: "fd00:99::/64"
+      gateway:
+        ipv4: "192.168.99.1"
+        ipv6: "fd00:99::1"
+      hosts:
+        vmm:
+          ipv4: "192.168.99.1"
+          ipv6: "fd00:99::1"
+        console:
+          ipv4: "192.168.99.10"
+          ipv6: "fd00:99::10"
