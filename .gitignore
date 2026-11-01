@@ -1,0 +1,7 @@
+!.gitkeep
+.vscode/
+.ansible/
+.agent-workplace/
+*.tmp
+CLAUDE.md
+AGENT.md
