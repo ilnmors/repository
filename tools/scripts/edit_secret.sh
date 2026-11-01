@@ -1,0 +1,1 @@
+../../ansible/roles/secrets/files/scripts/edit_secret.sh
