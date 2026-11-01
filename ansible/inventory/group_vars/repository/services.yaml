@@ -6,32 +6,32 @@ services:
       units:
         main:
           release: "git"
-          hosts: ["console", "client"]
+          hosts: ["console"]
     build-essential:
       units:
         main:
           release: "build-essential"
-          hosts: ["console", "client"]
+          hosts: ["console"]
     fuse3:
       units:
         main:
           release: "fuse3"
-          hosts: ["console", "client"]
+          hosts: ["console"]
     acl:
       units:
         main:
           release: "acl"
-          hosts: ["console", "vmm", "client", "infra"]
+          hosts: ["console", "vmm", "infra"]
     jq:
       units:
         main:
           release: "jq"
-          hosts: ["console", "vmm", "client", "infra", "auth", "app"]
+          hosts: ["console", "vmm", "infra", "auth", "app"]
     curl:
       units:
         main:
           release: "curl"
-          hosts: ["console", "vmm", "client", "infra", "auth", "app"]
+          hosts: ["console", "vmm", "infra", "auth", "app"]
     sops:
       units:
         main:
@@ -41,17 +41,17 @@ services:
       units:
         main:
           release: "step"
-          hosts: ["console", "client"]
+          hosts: ["console"]
     nftables:
       units:
         main:
           release: "nftables"
-          hosts: ["vmm", "client", "infra", "auth", "app"]
+          hosts: ["vmm", "infra", "auth", "app"]
     netcat:
       units:
         main:
           release: "netcat"
-          hosts: ["vmm", "client", "infra", "auth", "app"]
+          hosts: ["vmm", "infra", "auth", "app"]
     logrotate:
       units:
         main:
@@ -101,7 +101,7 @@ services:
               cert: true
         machine:
           release: "crowdsec"
-          hosts: ["vmm", "client", "infra", "auth", "app"]
+          hosts: ["vmm", "infra", "auth", "app"]
         fw-bouncer:
           release: "crowdsec-fw-bouncer"
           hosts: ["vmm"]
@@ -163,12 +163,12 @@ services:
       units:
         main:
           release: "rclone"
-          hosts: ["client"]
+          hosts: ["vmm"]
     kopia:
       units:
         server:
           release: "kopia"
-          hosts: ["client"]
+          hosts: ["vmm"]
           domain:
             internal: "kopia"
           ports:
@@ -180,23 +180,23 @@ services:
               cert: true
         client:
           release: "kopia"
-          hosts: ["client", "infra", "auth", "app"]
+          hosts: ["infra", "auth", "app"]
     podman:
       units:
         main:
           release: "podman"
-          hosts: ["client", "infra", "auth", "app"]
+          hosts: ["infra", "auth", "app"]
     alloy:
       units:
         main:
           release: "alloy"
-          hosts: ["vmm", "client", "infra", "auth", "app"]
+          hosts: ["vmm", "infra", "auth", "app"]
   containers:
     code-server:
       units:
         main:
           release: "code-server"
-          hosts: ["client"]
+          hosts: ["console"]
           domain:
             internal: "code"
           subuid: 100999

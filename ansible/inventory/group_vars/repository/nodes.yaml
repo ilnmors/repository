@@ -13,6 +13,7 @@ nodes:
     group: "{{ group['name'] }}"
     paths:
       home: "/home/console"
+      repository: "/home/console/workspace/repository"
   vmm:
     control_node: false
     virtualization: false
@@ -51,8 +52,6 @@ nodes:
           fs:
             type: "btrfs"
             label: "{{ site['org'] }}_data"
-            mount_point: "{{ nodes['vmm']['paths']['libvirt'] }}/disk/data"
-            mount_opts: ["defaults", "noatime", "nodatacow", "degraded", "nofail"]
             btrfs:
               profile: "raid1"
               metadata: "raid1"
@@ -69,8 +68,8 @@ nodes:
           fs:
             type: "btrfs"
             label: "{{ site['org'] }}_backup"
-            mount_point: "{{ nodes['vmm']['paths']['libvirt'] }}/disk/backup"
-            mount_opts: ["defaults", "noatime", "nodatacow", "nofail"]
+            mount_point: "/data"
+            mount_opts: ["defaults", "noatime", "nofail"]
             btrfs:
               profile: "single"
               metadata: "dup"
@@ -82,60 +81,6 @@ nodes:
         eth1:
           mac: "{{ hardwares['vmm']['nic']['nic02']['mac'] }}"
           vlan: [1, 10, 20]
-  client:
-    control_node: true
-    virtualization: true
-    user: "client"
-    uid: 3001
-    group: "{{ group['name'] }}"
-    paths:
-      home: "/home/client"
-      data: "/data/client"
-    system:
-      cpu:
-        vcpu: 8
-        pin: []
-        emulator: []
-        shares: 1024
-      memory: "16G"
-      gpu:
-        type: "vfio"
-        address: >-
-          {{
-            hardwares['vmm']['gpu']
-            | dict2items
-            | selectattr('value.type', 'defined')
-            | selectattr('value.type', 'equalto', 'igpu')
-            | map(attribute='value.address')
-            | list
-          }}
-      usb:
-        type: "vfio"
-        address: >-
-          {{
-            hardwares['vmm']['usb']
-            | dict2items
-            | selectattr('value.type', 'defined')
-            | selectattr('value.type', 'equalto', 'xhci')
-            | map(attribute='value.address')
-            | list
-          }}
-      disk:
-        root:
-          size: "512G"
-        data:
-          type: "block"
-          format: "raw"
-          path: "{{ nodes['vmm']['system']['disk']['backup']['fs']['mount_point'] }}"
-          pool: "backup-pool"
-          size: "1.75T"
-          mount_point: "/data"
-      nic:
-        lan:
-          type: "virtio"
-          libvirt_network: "lan-net"
-          port_group: "vlan1-access"
-          mac: "0a:49:6e:4d:00:00"
   infra:
     control_node: false
     virtualization: true
@@ -151,10 +96,10 @@ nodes:
         pin: []
         emulator: []
         shares: 2048
-      memory: "6G"
+      memory: "8G"
       disk:
         root:
-          size: "256G"
+          size: "512G"
       nic:
         lan:
           type: "virtio"
@@ -179,7 +124,7 @@ nodes:
       memory: "1G"
       disk:
         root:
-          size: "32G"
+          size: "64G"
       nic:
         lan:
           type: "virtio"
@@ -201,7 +146,7 @@ nodes:
         pin: []
         emulator: []
         shares: 1024
-      memory: "38G"
+      memory: "48G"
       gpu:
         type: "vfio"
         address: >-
@@ -215,14 +160,15 @@ nodes:
           }}
       disk:
         root:
-          size: "512G"
+          size: "1T"
         data:
           type: "block"
-          format: "raw"
-          path: "{{ nodes['vmm']['system']['disk']['data']['fs']['mount_point'] }}"
-          pool: "data-pool"
-          size: "1.75T"
-          mount_point: "/data"
+          serials: "{{ nodes['vmm']['system']['disk']['data']['serials'] }}"
+          fs:
+            type: "btrfs"
+            label: "{{ nodes['vmm']['system']['disk']['data']['fs']['label'] }}"
+            mount_point: "/data"
+            mount_opts: ["defaults", "noatime", "degraded", "nofail"]
       nic:
         lan:
           type: "virtio"

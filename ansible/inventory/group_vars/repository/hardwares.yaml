@@ -11,21 +11,16 @@ hardwares:
         type: "igpu"
         model: "IrisXE"
         vendor: "intel"
+        driver: "i915"
         id: null # "8086:46a8"
         address: null # "0000:00:02.0"
       gpu02:
         type: "egpu"
         model: "RX7900XT"
         vendor: "radeon"
+        driver: "amdgpu"
         id: null #
         address: null #
-    usb:
-      usb01:
-        type: "xhci"
-        model: "Alder Lake PCH USB 3.2 xHCI"
-        vendor: "intel"
-        id: null # "8086:51ed"
-        address: null # "0000:00:14.0"
     nic:
       nic01:
         type: "rj45"

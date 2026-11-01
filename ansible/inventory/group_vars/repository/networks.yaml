@@ -42,16 +42,9 @@ networks:
           ipv4: "192.168.1.1"
           ipv6: "fd00:1::1"
         console:
-          ipv4: "192.168.1.10"
-          ipv6: "fd00:1::10"
+          ipv4: "192.168.1.20"
+          ipv6: "fd00:1::20"
           domain: "console"
-        client:
-          ipv4: "192.168.1.11"
-          ipv6: "fd00:1::11"
-          domain: "client"
-          alias:
-            - "{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}"
-            - "{{ services['containers']['code-server']['units']['main']['domain']['internal'] }}"
         switch:
           ipv4: "192.168.1.2"
           domain: "switch"
@@ -73,6 +66,7 @@ networks:
           domain: "vmm"
           alias:
             - "{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}"
+            - "{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}"
         bind:
           ipv4: "192.168.10.2"
           ipv6: "fd00:10::2"
@@ -124,5 +118,5 @@ networks:
           ipv4: "192.168.99.1"
           ipv6: "fd00:99::1"
         console:
-          ipv4: "192.168.99.10"
-          ipv6: "fd00:99::10"
+          ipv4: "192.168.99.20"
+          ipv6: "fd00:99::20"
