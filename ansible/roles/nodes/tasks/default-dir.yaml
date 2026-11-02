@@ -47,6 +47,13 @@
         mode: "0755"
       become: true
 
+    - name: Mount the data-volume task
+      ansible.builtin.include_tasks:
+        file: "data-volume.yaml"
+        apply:
+          tags: ["default-dir"]
+      when: (nodes[target_host]['system']['disk']['data']['type'] | default('')) == 'block'
+
     - name: Create the user data directory
       ansible.builtin.file:
         path: "{{ nodes[target_host]['paths']['data'] }}"

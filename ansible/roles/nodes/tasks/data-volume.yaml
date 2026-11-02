@@ -1,0 +1,122 @@
+---
+# The data volume is formatted as btrfs by vmm and passed to the VM as block devices.
+- name: Check the data volume configuration
+  ansible.builtin.assert:
+    that:
+      - (nodes[target_host]['system']['disk']['data']['serials'] | default([]) | length) > 0
+      - nodes[target_host]['system']['disk']['data']['type'] == 'block'
+      - nodes[target_host]['system']['disk']['data']['fs']['type'] == 'btrfs'
+      - (nodes[target_host]['system']['disk']['data']['fs']['label'] | default('') | length) > 0
+      - nodes[target_host]['system']['disk']['data']['fs']['mount_point'] is abs
+      - nodes[target_host]['system']['disk']['data']['fs']['mount_point'] != '/'
+    success_msg: "The data volume configuration is correct"
+    fail_msg: "The data volume needs block disks, a btrfs label and an absolute mount point other than /."
+
+- name: Install btrfs
+  ansible.builtin.apt:
+    name:
+      - "btrfs-progs"
+    state: "present"
+  become: true
+
+- name: Set the data disk path
+  ansible.builtin.shell: |
+    set -o pipefail
+    ls -1 /dev/disk/by-id/*{{ nodes[target_host]['system']['disk']['data']['serials'] | join('* /dev/disk/by-id/*') }}* | \
+    grep -vE -- '-part[0-9]+$' | \
+    xargs -r readlink -f | \
+    sort -u
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  register: "nodes_disk_path"
+
+- name: Load the disk's filesystem
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsblk {{ nodes_disk_path['stdout_lines'] | join(' ') }} -o FSTYPE,LABEL --json
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  register: "nodes_disk_fs_info"
+
+- name: Set the disk's filesystem information
+  ansible.builtin.set_fact:
+    nodes_existing_correct_disk_num: >-
+      {{
+        (nodes_disk_fs_info['stdout'] | from_json)['blockdevices']
+        | selectattr('fstype', 'equalto', 'btrfs')
+        | selectattr("label", 'equalto',  nodes[target_host]['system']['disk']['data']['fs']['label'])
+        | list
+        | length
+      }}
+
+- name: Check the disk's filesystem
+  ansible.builtin.assert:
+    that:
+      - >-
+        (nodes_disk_path['stdout_lines'] | length)
+        == (nodes[target_host]['system']['disk']['data']['serials'] | length)
+      - >-
+        nodes_existing_correct_disk_num == (nodes_disk_path['stdout_lines'] | length)
+    success_msg: "All data disks have the btrfs filesystem from vmm"
+    fail_msg: "One or more data disks are missing or do not have the expected btrfs label. Please check vmm and try again."
+
+- name: Scan the btrfs devices
+  ansible.builtin.shell: |
+    /usr/bin/btrfs device scan
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+
+- name: Mount data volume
+  ansible.posix.mount:
+    path: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] }}"
+    src: "LABEL={{ nodes[target_host]['system']['disk']['data']['fs']['label'] }}"
+    state: "mounted"
+    fstype: "{{ nodes[target_host]['system']['disk']['data']['fs']['type'] }}"
+    opts: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_opts'] | join(',') }}"
+  become: true
+
+- name: Verify disk is mounted
+  ansible.builtin.shell: |
+    mountpoint -q {{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] | quote }}
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  become: true
+
+- name: Set data volume path permissions
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] }}"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  become: true
+
+- name: Deploy btrfs scrub service and timer
+  vars:
+    nodes_disk: "data"
+  ansible.builtin.template:
+    src: "disk/btrfs/btrfs-scrub.{{ item }}.j2"
+    dest: "/etc/systemd/system/btrfs-scrub-{{ nodes_disk }}.{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  loop:
+    - "service"
+    - "timer"
+  become: true
+
+- name: Enable auto btrfs scrub
+  vars:
+    nodes_disk: "data"
+  ansible.builtin.systemd_service:
+    name: "btrfs-scrub-{{ nodes_disk }}.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  become: true
