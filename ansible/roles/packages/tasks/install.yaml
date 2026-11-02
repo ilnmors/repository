@@ -1,0 +1,15 @@
+---
+- name: Download the package
+  ansible.builtin.get_url:
+    url: "{{ packages_download_url }}"
+    dest: "/var/cache/apt/archives/{{ packages_name }}"
+    owner: "root"
+    group: "root"
+    mode: "0600"
+  become: true
+
+- name: Install the package
+  ansible.builtin.apt:
+    deb: "/var/cache/apt/archives/{{ packages_name }}"
+    state: "present"
+  become: true

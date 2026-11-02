@@ -1,0 +1,8 @@
+---
+- name: Install sops
+  vars:
+    packages_download_url: "https://github.com/getsops/sops/releases/download/v{{ releases['packages']['sops']['version'] }}/\
+        sops_{{ releases['packages']['sops']['version'] }}_{{ packages_host_architecture }}.deb"
+    packages_name: "{{ releases['packages']['sops']['name'] }}_{{ releases['packages']['sops']['version'] }}_{{ packages_host_architecture }}.deb"
+  ansible.builtin.include_tasks:
+    file: "install.yaml"

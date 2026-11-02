@@ -1,0 +1,39 @@
+---
+- name: Gather system facts (hardware)
+  ansible.builtin.setup:
+    gather_subset:
+      - "hardware"
+  become: true
+  tags: ["always"]
+
+- name: Set packages_host_architecture
+  ansible.builtin.set_fact:
+    packages_host_architecture: >-
+      {{
+        'arm64'
+        if ansible_facts['architecture'] == 'aarch64'
+        else 'amd64'
+      }}
+  tags: ["always"]
+
+- name: Install packages from the Debian APT repository
+  ansible.builtin.apt:
+    name: "{{ packages_host_debian_package_list }}"
+  become: true
+  tags: ["apt-packages"]
+
+- name: Include the sops task
+  ansible.builtin.include_tasks:
+    file: "sops.yaml"
+    apply:
+      tags: ["sops"]
+  when: target_host in services['packages']['sops']['units']['main']['hosts']
+  tags: ["sops"]
+
+- name: Include the step task
+  ansible.builtin.include_tasks:
+    file: "step.yaml"
+    apply:
+      tags: ["step"]
+  when: target_host in services['packages']['step']['units']['main']['hosts']
+  tags: ["step"]

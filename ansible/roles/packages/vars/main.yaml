@@ -1,0 +1,35 @@
+---
+packages_all_package_list: >-
+  {{
+    releases['packages']
+    | dict2items
+    | selectattr('value.source', 'defined')
+    | selectattr('value.source', 'equalto', 'debian')
+    | map(attribute='key')
+    | list
+  }}
+
+packages_host_package_list: >-
+  {{
+    services['packages']
+    | dict2items
+    | selectattr('value.units', 'defined')
+    | map(attribute='value.units')
+    | map('dict2items')
+    | flatten
+    | selectattr('value.hosts', 'defined')
+    | selectattr('value.hosts', 'contains', target_host)
+    | map(attribute='value.release')
+    | unique
+    | list
+  }}
+
+packages_host_debian_package_list: >-
+  {{
+    packages_all_package_list
+    | select('in', packages_host_package_list)
+    | map('extract', releases['packages'])
+    | map(attribute='name')
+    | unique
+    | list
+  }}
