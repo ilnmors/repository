@@ -1,0 +1,79 @@
+---
+# This task is not included in the main.yaml
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0755"
+  loop:
+    - "init"
+    - "init/ssh"
+    - "init/networkd"
+
+- name: Copy the script
+  ansible.builtin.template:
+    src: "init/vmm/scripts/vmm_init.sh.j2"
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/vmm_init.sh"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0744"
+
+- name: Copy init configuration files
+  ansible.builtin.template:
+    src: "{{ item['src'] }}"
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/{{ item['dest'] }}"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - src: "sysctl/vmm/bridge.conf.j2"
+      dest: "bridge.conf"
+    - src: "sysctl/vmm/ipforward.conf.j2"
+      dest: "ipforward.conf"
+    - src: "init/vmm/iommu.cfg.j2"
+      dest: "iommu.cfg"
+    - src: "init/vmm/vfio.conf.j2"
+      dest: "vfio.conf"
+    - src: "nftables/vmm.conf.j2"
+      dest: "nftables.conf"
+
+- name: Create the SSH CA pub file
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['ssh']['root']['pub'] }}
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+
+- name: Create the auth_principals file
+  ansible.builtin.copy:
+    content: |
+      {{ nodes[control_host]['group'] }}
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/ssh/vmm"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+
+- name: Create the sshd_config file
+  ansible.builtin.copy:
+    content: |
+      PermitRootLogin no
+      TrustedUserCAKeys /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
+      AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
+      AllowGroups {{ nodes[target_host]['group'] }}
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/ssh/{{ site['org'] }}.conf"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+
+- name: Copy the networkd files
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/networkd/{{ item | basename | replace('.j2', '') }}"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/networkd/vmm/*') | sort }}"

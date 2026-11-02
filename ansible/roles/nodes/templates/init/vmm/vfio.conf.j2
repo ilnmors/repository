@@ -1,0 +1,4 @@
+options vfio-pci ids={{ hardwares['vmm']['gpu'] | dict2items | map(attribute='value.id') | reject('equalto', none) | join(',') }}
+{% for gpu in hardwares['vmm']['gpu'] | dict2items %}
+softdep {{ gpu['value']['driver'] }} pre: vfio-pci
+{% endfor %}

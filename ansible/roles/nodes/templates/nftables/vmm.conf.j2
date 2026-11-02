@@ -1,0 +1,181 @@
+#!/usr/sbin/nft -f
+# Convention
+# iifname oifname saddr daddr proto dport ct state action
+flush ruleset
+
+define IF_WAN = "wan"
+define IF_CLIENT = "client"
+define IF_SERVER = "server"
+define IF_USER = "user"
+define IF_WG = "wg0"
+
+define NET4_CLIENT = {{ networks['segments']['client']['subnet']['ipv4'] }}
+define NET6_CLIENT = {{ networks['segments']['client']['subnet']['ipv6'] }}
+define NET4_SERVER = {{ networks['segments']['server']['subnet']['ipv4'] }}
+define NET6_SERVER = {{ networks['segments']['server']['subnet']['ipv6'] }}
+define NET4_USER = {{ networks['segments']['user']['subnet']['ipv4'] }}
+define NET4_WG = {{ networks['segments']['wg']['subnet']['ipv4'] }}
+define NET6_WG = {{ networks['segments']['wg']['subnet']['ipv6'] }}
+define NET4_LLA = 169.254.0.0/16
+define NET6_LLA = fe80::/10
+define NET4_RFC1918 = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }
+
+
+
+define HOSTS4_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv4', 'defined') | map(attribute='value.hosts.console.ipv4') | join(', ') }} }
+define HOSTS6_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv6', 'defined') | map(attribute='value.hosts.console.ipv6') | join(', ') }} }
+define HOSTS4_VMM = { {{ networks['segments'] | dict2items | selectattr('value.hosts.vmm', 'defined') | selectattr('value.hosts.vmm.ipv4', 'defined') | map(attribute='value.hosts.vmm.ipv4') | join(', ') }} }
+define HOSTS6_VMM = { {{ networks['segments'] | dict2items | selectattr('value.hosts.vmm', 'defined') | selectattr('value.hosts.vmm.ipv6', 'defined') | map(attribute='value.hosts.vmm.ipv6') | join(', ') }} }
+define HOSTS4_BIND = {{ networks['segments']['server']['hosts']['bind']['ipv4'] }}
+define HOSTS6_BIND = {{ networks['segments']['server']['hosts']['bind']['ipv6'] }}
+define HOSTS4_INFRA = {{ networks['segments']['server']['hosts']['infra']['ipv4'] }}
+define HOSTS6_INFRA = {{ networks['segments']['server']['hosts']['infra']['ipv6'] }}
+define HOSTS4_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv4'] }}
+define HOSTS6_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv6'] }}
+define HOSTS4_APP = {{ networks['segments']['server']['hosts']['app']['ipv4'] }}
+define HOSTS6_APP = {{ networks['segments']['server']['hosts']['app']['ipv6'] }}
+define HOSTS4_VMS = { $HOSTS4_INFRA, $HOSTS4_AUTH, $HOSTS4_APP }
+define HOSTS6_VMS = { $HOSTS6_INFRA, $HOSTS6_AUTH, $HOSTS6_APP }
+define HOSTS4_SWITCH = {{ networks['segments']['client']['hosts']['switch']['ipv4'] }}
+define HOSTS4_PRINTER = {{ networks['segments']['client']['hosts']['printer']['ipv4'] }}
+
+define PORTS_SSH = 22
+define PORTS_DNS = {{ services['packages']['bind']['units']['main']['ports']['dns']['ext'] }}
+define PORTS_NTP = {{ services['packages']['chrony']['units']['main']['ports']['ntp']['ext'] }}
+define PORTS_DHCP = { 67, 68, 546, 547 }
+define PORTS_VPN = {{ services['packages']['wireguard']['units']['main']['ports']['wg']['ext'] }}
+define PORTS_CROWDSEC = {{ services['packages']['crowdsec']['units']['lapi']['ports']['https']['ext'] }}
+define PORTS_WEB = { 80, 443 }
+define PORTS_KOPIA = {{ services['packages']['kopia']['units']['server']['ports']['http']['int'] }}
+
+
+table inet nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        # After prerouting, accept forward chain WAN
+        iifname $IF_WAN meta nfproto ipv4 tcp dport $PORTS_WEB dnat to $HOSTS4_AUTH comment "DNAT44 ipv4 web connection: WAN > VMM > SERVER AUTH"
+        iifname $IF_WAN meta nfproto ipv6 tcp dport $PORTS_WEB dnat to $HOSTS6_AUTH comment "DNAT66 ipv6 web connection: WAN > VMM > SERVER AUTH"
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        # Masquerade the packet
+        oifname $IF_WAN meta nfproto ipv4 masquerade comment "masquerade ipv4 wan connection: > VMM > WAN"
+        # $IF_USER uses GUA on IPv6
+        iifname { $IF_CLIENT, $IF_SERVER, $IF_WG } oifname $IF_WAN meta nfproto ipv6 masquerade comment "masquerade ipv6 wan connection: CLIENT/SERVER/WG > VMM > WAN"
+    }
+    chain output {
+    }
+}
+
+table inet filter {
+    set crowdsec-blacklists {
+        type ipv4_addr;
+        flags timeout;
+    }
+    set crowdsec6-blacklists {
+        type ipv6_addr;
+        flags timeout;
+    }
+    chain global {
+        # invalid packets
+        ct state invalid drop comment "deny invalid connection"
+        # VPN connection exception handling
+        udp dport $PORTS_VPN return comment "return vpn connection to input and forward chain"
+        ip saddr @crowdsec-blacklists counter drop comment "deny crowdsec ipv4 decisions"
+        ip6 saddr @crowdsec6-blacklists counter drop comment "deny crowdsec ipv6 decisions"
+        ct state established, related accept comment "allow all connection already existing"
+        iifname $IF_WAN tcp dport $PORTS_SSH drop comment "deny ssh connection: WAN !> "
+        iifname $IF_WAN udp dport $PORTS_DNS drop comment "deny udp dns connection: WAN !> "
+        iifname $IF_WAN tcp dport $PORTS_DNS drop comment "deny tcp dns connection: WAN !> "
+        iifname $IF_WAN icmp type echo-request drop comment "deny icmp echo connection (Ping): WAN !>"
+        iifname $IF_WAN icmpv6 type echo-request drop comment "deny icmpv6 echo connection (Ping): WAN !>"
+        ip6 saddr $NET6_LLA return comment "return ipv6 linklocaladdress to input and forward chain"
+        iifname $IF_WAN ip saddr $NET4_RFC1918 drop comment "deny ipv4 all connection: WAN RFC1918 !>"
+        iifname $IF_WAN ip saddr $NET4_LLA drop comment "deny ipv4 all connection: WAN APIPA(bogon) !>"
+        iifname $IF_CLIENT ip saddr != $NET4_CLIENT drop comment "deny ipv4 all connection: CLIENT !CLIENT !>"
+        iifname $IF_CLIENT ip6 saddr != $NET6_CLIENT drop comment "deny ipv6 all connection: CLIENT !CLIENT !>"
+        iifname $IF_SERVER ip saddr != $NET4_SERVER drop comment "deny ipv4 all connection: SERVER !SERVER !>"
+        iifname $IF_SERVER ip6 saddr != $NET6_SERVER drop comment "deny ipv6 all connection: SERVER !SERVER !>"
+        # IF_USER uses GUA on ipv6, so ipv6 rule is not needed
+        iifname $IF_USER ip saddr != $NET4_USER drop comment "deny ipv4 all connection: USER !USER !>"
+        iifname $IF_WG ip saddr != $NET4_WG drop comment "deny all ipv4 connection: WG !WG !>"
+        iifname $IF_WG ip6 saddr != $NET6_WG drop comment "deny all ipv6 connection: WG !WG !>"
+
+    }
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state invalid drop comment "deny invalid connection"
+        iifname $IF_WAN meta nfproto ipv4 udp sport 67 udp dport 68 accept comment "allow wan dhcp4 replies: WAN > VMM"
+        iifname $IF_WAN meta nfproto ipv6 udp sport 547 udp dport 546 accept comment "allow wan dhcp6 replies: WAN > VMM"
+        iifname { $IF_CLIENT, $IF_SERVER, $IF_USER } udp dport $PORTS_DHCP accept comment "allow dhcp4, dhcp6 connection: CLIENT/SERVER/USER > VMM"
+        iifname { $IF_WAN, $IF_CLIENT, $IF_SERVER, $IF_USER } ip6 saddr :: ip6 hoplimit 255 icmpv6 type nd-neighbor-solicit accept comment "allow ipv6 DAD: > VMM"
+        iifname $IF_WAN icmp type != echo-request accept comment "allow icmp connection except ping: WAN > VMM"
+        iifname $IF_WAN icmpv6 type != echo-request accept comment "allow icmpv6 connection except ping: WAN > VMM"
+        jump global comment "set global condition"
+        iifname "lo" accept comment "allow local connection: VMM > VMM"
+        udp dport $PORTS_VPN accept comment "allow vpn connection: > VMM"
+        ip6 saddr $NET6_LLA meta l4proto icmpv6 accept comment "allow icmpv6 connection: ipv6 LLA > VMM"
+        iifname { $IF_CLIENT, $IF_SERVER, $IF_USER, $IF_WG } meta l4proto { icmp, icmpv6 } accept comment "allow icmp, icmpv6 connection: CLIENT/SERVER/USER/WG > VMM"
+        iifname { $IF_CLIENT, $IF_SERVER, $IF_WG } udp dport $PORTS_NTP accept comment "allow ntp connection: CLIENT/SERVER/WG > VMM"
+        # Global chain contains "WAN !> :SSH_PORT"
+        ip saddr $HOSTS4_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv4 ssh connection: CONSOLE > VMM"
+        ip6 saddr $HOSTS6_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv6 ssh connection: CONSOLE > VMM"
+        ip saddr { $HOSTS4_VMM, $HOSTS4_VMS } tcp dport $PORTS_CROWDSEC accept comment "allow ipv4 crowdsec lapi connection: VMM, VMs > VMM"
+        ip6 saddr { $HOSTS6_VMM, $HOSTS6_VMS } tcp dport $PORTS_CROWDSEC accept comment "allow ipv6 crowdsec lapi connection: VMM, VMs > VMM"
+        # Global chain contains "WAN !> :DNS_PORT"
+        ip daddr $HOSTS4_BIND udp dport $PORTS_DNS accept comment "allow ipv4 udp dns connection: !WAN > SERVER BIND9(VMM)"
+        ip daddr $HOSTS4_BIND tcp dport $PORTS_DNS accept comment "allow ipv4 tcp dns connection: !WAN > SERVER BIND9(VMM)"
+        ip6 daddr $HOSTS6_BIND udp dport $PORTS_DNS accept comment "allow ipv6 udp dns connection: !WAN > SERVER BIND9(VMM)"
+        ip6 daddr $HOSTS6_BIND tcp dport $PORTS_DNS accept comment "allow ipv6 tcp dns connection: !WAN > SERVER BIND9(VMM)"
+        ip saddr { $HOSTS4_CONSOLE, $HOSTS4_VMS } tcp dport $PORTS_KOPIA accept comment "allow ipv4 tcp kopia connection: CONSOLE, VMs > KOPIA(VMM)"
+        ip6 saddr { $HOSTS6_CONSOLE, $HOSTS6_VMS } tcp dport $PORTS_KOPIA accept comment "allow ipv6 tcp kopia connection: CONSOLE, VMs > KOPIA(VMM)"
+   }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        jump global comment "set global condition"
+        # ICMP
+        ip saddr $HOSTS4_CONSOLE meta l4proto icmp accept comment "allow icmp connection: CONSOLE > VMM >"
+        ip6 saddr $HOSTS6_CONSOLE meta l4proto icmpv6 accept comment "allow icmpv6 connection: CONSOLE > VMM >"
+        # SSH connection
+        ip saddr $HOSTS4_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv4 ssh connection: CONSOLE > VMM >"
+        ip6 saddr $HOSTS6_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv6 ssh connection: CONSOLE > VMM >"
+        # Printer
+        ip saddr $HOSTS4_CONSOLE ip daddr $HOSTS4_PRINTER accept comment "allow ipv4 printer connection: CONSOLE > VMM > PRINTER"
+        # Reverse Proxy
+        oifname $IF_SERVER ip daddr $HOSTS4_AUTH tcp dport $PORTS_WEB accept comment "allow ipv4 web connection: > VMM > SERVER AUTH"
+        oifname $IF_SERVER ip6 daddr $HOSTS6_AUTH tcp dport $PORTS_WEB accept comment "allow ipv6 web connection: > VMM > SERVER AUTH"
+        # Reverse proxy (internal servers)
+        oifname $IF_SERVER ip saddr $HOSTS4_CONSOLE ip daddr { $HOSTS4_INFRA, $HOSTS4_APP } tcp dport $PORTS_WEB accept comment "allow ipv4 web connection: CONSOLE > VMM > SERVER INFRA/APP"
+        oifname $IF_SERVER ip6 saddr $HOSTS6_CONSOLE ip6 daddr { $HOSTS6_INFRA, $HOSTS6_APP } tcp dport $PORTS_WEB accept comment "allow ipv6 web connection: CONSOLE > VMM > SERVER INFRA/APP"
+
+        iifname $IF_WAN jump wan comment "set WAN interface rules"
+        iifname $IF_CLIENT jump client comment "set CLIENT interface rules"
+        iifname $IF_SERVER jump server comment "set SERVER interface rules"
+        iifname $IF_USER jump user comment "set USER interface rules"
+        iifname $IF_WG jump wg comment "set WG interface rules"
+    }
+    chain wan {
+            return
+    }
+    chain client {
+        oifname $IF_WAN ip saddr { $HOSTS4_PRINTER, $HOSTS4_SWITCH } drop comment "deny ipv4 internet connection: CLIENT PRINTER/SWITCH !> VMM > WAN"
+        oifname $IF_WAN accept comment "allow internet connection: CLIENT > VMM > WAN"
+        return
+    }
+    chain server {
+        oifname $IF_WAN ip saddr $HOSTS4_VMS accept comment "allow ipv4 internet connection: SERVER VMs > VMM > WAN"
+        oifname $IF_WAN ip6 saddr $HOSTS6_VMS accept comment "allow ipv6 internet connection: SERVER VMs > VMM > WAN"
+        return
+    }
+    chain user {
+        oifname $IF_WAN accept comment "allow internet connection: USER > VMM > WAN"
+        return
+    }
+    chain wg {
+        oifname $IF_WAN accept comment "allow internet connection: WG > VMM > WAN"
+        return
+    }
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}

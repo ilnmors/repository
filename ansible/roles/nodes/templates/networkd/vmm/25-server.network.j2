@@ -1,0 +1,28 @@
+{% set segment = networks['segments']['server'] %}
+[Match]
+Name=server
+
+[Link]
+RequiredForOnline=false
+
+[Network]
+IPv4Forwarding=true
+IPv6Forwarding=true
+IPv6SendRA=false
+IPv6AcceptRA=false
+Address={{ segment['hosts']['vmm']['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+Address={{ segment['hosts']['vmm']['ipv6'] }}/{{ segment['subnet']['ipv6'] | split('/') | last }}
+{% if segment['gateway']['ipv4'] != segment['hosts']['vmm']['ipv4'] %}
+Address={{ segment['gateway']['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+{% endif %}
+Address={{ segment['hosts']['bind']['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+
+{% if segment['gateway']['ipv6'] != segment['hosts']['vmm']['ipv6'] %}
+[Address]
+Address={{ segment['gateway']['ipv6'] }}/{{ segment['subnet']['ipv6'] | split('/') | last }}
+PreferredLifetime=0
+{% endif %}
+
+[Address]
+Address={{ segment['hosts']['bind']['ipv6'] }}/{{ segment['subnet']['ipv6'] | split('/') | last }}
+PreferredLifetime=0

@@ -1,0 +1,17 @@
+{% set native_vlan = networks['segments']['client']['vlan'] %}
+[Match]
+Name=eth1
+
+[Network]
+Bridge=br1
+LinkLocalAddressing=false
+
+[BridgeVLAN]
+VLAN={{ native_vlan }}
+PVID={{ native_vlan }}
+EgressUntagged={{ native_vlan }}
+
+[BridgeVLAN]
+{% for vlan in nodes['vmm']['system']['nic']['eth1']['vlan'] | reject('equalto', native_vlan) %}
+VLAN={{ vlan }}
+{% endfor %}

@@ -154,7 +154,6 @@ nodes:
             hardwares['vmm']['gpu']
             | dict2items
             | selectattr('value.type', 'defined')
-            | selectattr('value.type', 'equalto', 'egpu')
             | map(attribute='value.address')
             | list
           }}

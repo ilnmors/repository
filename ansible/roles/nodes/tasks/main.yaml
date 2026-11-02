@@ -41,5 +41,31 @@
       tags: ["linger"]
   tags: ["linger"]
 
+- name: Include the nftables task
+  ansible.builtin.include_tasks:
+    file: "nftables.yaml"
+    apply:
+      tags: ["nftables"]
+  when: (role_path ~ '/templates/nftables/' ~ target_host ~ '.conf.j2') is file
+  tags: ["nftables"]
+
+- name: Include the sysctl task
+  ansible.builtin.include_tasks:
+    file: "sysctl.yaml"
+    apply:
+      tags: ["sysctl"]
+  when: (role_path ~ '/templates/sysctl/' ~ target_host) is directory
+  tags: ["sysctl"]
+
+- name: Include the networkd task
+  ansible.builtin.include_tasks:
+    file: "networkd.yaml"
+    apply:
+      tags: ["networkd"]
+  when: >-
+    (role_path ~ '/templates/networkd/' ~ target_host) is directory or
+    nodes[target_host]['system']['nic']['lan'] is defined
+  tags: ["networkd"]
+
 - name: Apply the nodes configuration handlers
   ansible.builtin.meta: "flush_handlers"

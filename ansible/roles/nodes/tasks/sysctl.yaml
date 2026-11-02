@@ -1,0 +1,11 @@
+---
+- name: Deploy the sysctl configuration files
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/sysctl.d/{{ item | basename | replace('.j2', '') }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/sysctl/' ~ target_host ~ '/*.j2') | sort }}"
+  become: true
+  notify: "notification_restart_sysctl"

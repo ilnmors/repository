@@ -2,6 +2,7 @@
 .vscode/
 .ansible/
 .agent-workplace/
+tools/build/
 *.tmp
 CLAUDE.md
 AGENT.md

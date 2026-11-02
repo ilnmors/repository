@@ -1,0 +1,22 @@
+{% set segment = networks['segments']['user'] %}
+[Match]
+Name=user
+
+[Network]
+IPv4Forwarding=true
+IPv6Forwarding=true
+DHCPPrefixDelegation=true
+IPv6SendRA=true
+IPv6AcceptRA=false
+Address={{ segment['gateway']['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+
+[DHCPPrefixDelegation]
+UplinkInterface=wan
+SubnetId={{ segment['vlan'] }}
+Announce=true
+
+[IPv6SendRA]
+Managed=false
+OtherInformation=false
+# Enable DNS announcements after the resolver configuration is implemented.
+EmitDNS=false

@@ -1,0 +1,37 @@
+---
+- name: Select the networkd template directory
+  ansible.builtin.set_fact:
+    nodes_networkd_target: "{{ target_host if (role_path ~ '/templates/networkd/' ~ target_host) is directory else 'common' }}"
+
+- name: Create the networkd configuration directory
+  ansible.builtin.file:
+    path: "/etc/systemd/network"
+    state: "directory"
+    owner: "root"
+    group: "systemd-network"
+    mode: "0755"
+  become: true
+
+- name: Deploy the networkd configuration files
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/network/{{ item | basename | replace('.j2', '') }}"
+    owner: "root"
+    group: "systemd-network"
+    mode: "0640"
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/networkd/' ~ nodes_networkd_target ~ '/*.j2') | sort }}"
+  become: true
+  notify: "notification_restart_networkd"
+
+- name: Disable the networking service
+  ansible.builtin.systemd_service:
+    name: "networking.service"
+    enabled: false
+  become: true
+
+- name: Enable the networkd service
+  ansible.builtin.systemd_service:
+    name: "systemd-networkd.service"
+    enabled: true
+  become: true
+  notify: "notification_restart_networkd"

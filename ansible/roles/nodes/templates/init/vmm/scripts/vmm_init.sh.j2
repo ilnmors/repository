@@ -1,0 +1,80 @@
+#!/bin/bash
+set -e -o pipefail
+
+SCRIPT_PATH=$(realpath -e -- "${BASH_SOURCE[0]}")
+SCRIPT_DIR=$(dirname -- "$SCRIPT_PATH")
+
+# Log function
+log() {
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local level="$1"
+    local msg="$2"
+    if [ "$level" == "error" ]; then
+        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm_init.sh\"">&2
+    else
+        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm_init.sh\"">&1
+    fi
+}
+
+# sudo check
+if (( EUID != 0 )); then
+    if ! command -v sudo >/dev/null 2>&1; then
+        printf '%s\n' \
+            "sudo is not installed. Run this script as root." >&2
+        exit 1
+    fi
+
+    exec sudo -u root -- /bin/bash "$SCRIPT_PATH" "$@"
+fi
+
+# Group add
+groupadd {{ group['name'] }} -g {{ group['gid'] }} -f
+
+# User add
+if ! id "{{ nodes['vmm']['user'] }}" >/dev/null 2>&1; then
+    useradd -u {{ nodes['vmm']['uid'] }} -g {{ nodes['vmm']['group'] }} -G sudo \
+        -c "Hypervisor" -m -d {{ nodes['vmm']['paths']['home'] }} -s /bin/bash \
+        {{ nodes['vmm']['user'] }}
+fi
+
+# APT Packages
+apt update && apt upgrade -y
+apt install -y \
+acl curl jq nftables conntrack crowdsec systemd-resolved cloud-image-utils \
+qemu-system-x86 ksmtuned libvirt-daemon-system \
+python3 python3-apt python3-libvirt python3-lxml btrfs-progs rsync
+
+# Deploy SSH files
+mkdir -p /etc/ssh/auth_principals
+cp "${SCRIPT_DIR}/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}" \
+    "/etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}"
+cp "${SCRIPT_DIR}/ssh/vmm" \
+    "/etc/ssh/auth_principals/vmm"
+cp "${SCRIPT_DIR}/ssh/{{ site['org'] }}.conf" \
+    "/etc/ssh/sshd_config.d/{{ site['org'] }}.conf"
+chmod 644 "/etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}"
+chmod 644 "/etc/ssh/auth_principals/vmm"
+chmod 644 "/etc/ssh/sshd_config.d/{{ site['org'] }}.conf"
+
+# Deploy networkd files
+cp "${SCRIPT_DIR}/networkd/"* "/etc/systemd/network/"
+chown root:systemd-network "/etc/systemd/network/"*
+chmod 640 "/etc/systemd/network/"*
+
+cp "${SCRIPT_DIR}/bridge.conf" "/etc/sysctl.d/bridge.conf"
+cp "${SCRIPT_DIR}/ipforward.conf" "/etc/sysctl.d/ipforward.conf"
+cp "${SCRIPT_DIR}/vfio.conf" "/etc/modprobe.d/vfio.conf"
+cp "${SCRIPT_DIR}/iommu.cfg" "/etc/default/grub.d/iommu.cfg"
+chmod 644 "/etc/sysctl.d/bridge.conf" "/etc/sysctl.d/ipforward.conf" "/etc/modprobe.d/vfio.conf" "/etc/default/grub.d/iommu.cfg"
+
+cp "${SCRIPT_DIR}/nftables.conf" "/etc/nftables.conf"
+chmod 700 "/etc/nftables.conf"
+
+update-grub
+update-initramfs -u
+
+systemctl disable networking.service
+systemctl enable systemd-networkd.service
+systemctl enable systemd-resolved.service
+ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+systemctl enable nftables.service

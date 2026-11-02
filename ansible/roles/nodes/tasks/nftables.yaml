@@ -1,0 +1,24 @@
+---
+- name: Install nftables
+  ansible.builtin.apt:
+    name: "nftables"
+    state: "present"
+  become: true
+
+- name: Deploy the nftables configuration
+  ansible.builtin.template:
+    src: "nftables/{{ target_host }}.conf.j2"
+    dest: "/etc/nftables.conf"
+    owner: "root"
+    group: "root"
+    mode: "0700"
+    validate: "/usr/sbin/nft --check --file %s"
+  become: true
+  notify: "notification_reload_nftables"
+
+- name: Enable the nftables service
+  ansible.builtin.systemd_service:
+    name: "nftables.service"
+    state: "started"
+    enabled: true
+  become: true
