@@ -1,0 +1,56 @@
+mode: nftables
+pid_dir: /var/run/
+daemonize: true
+update_frequency: 10s
+log_mode: file
+log_dir: /var/log/
+log_level: info
+log_compression: true
+log_max_size: 100
+log_max_backups: 3
+log_max_age: 30
+api_url: "https://{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['crowdsec']['units']['lapi']['ports']['https']['ext'] }}/"
+api_key: {{ secrets['crowdsec']['bouncers'][target_host] | to_json }}
+insecure_skip_verify: false
+disable_ipv6: false
+deny_action: DROP
+deny_log: false
+supported_decisions_types:
+  - ban
+#to change log prefix
+#deny_log_prefix: "crowdsec: "
+#to change the blacklists name
+blacklists_ipv4: crowdsec-blacklists
+blacklists_ipv6: crowdsec6-blacklists
+#type of ipset to use
+ipset_type: nethash
+#if present, insert rule in those chains
+#iptables_chains:
+#  - INPUT
+#  - FORWARD
+#  - OUTPUT
+#  - DOCKER-USER
+
+## The VMM nftables configuration provides the sets and drop rules.
+nftables:
+  ipv4:
+    enabled: true
+    set-only: true
+    table: filter
+    chain: global
+  ipv6:
+    enabled: true
+    set-only: true
+    table: filter
+    chain: global
+# packet filter
+pf:
+  # an empty string disables the anchor
+  anchor_name: ""
+
+# Crowdsec firewall bouncer cannot use "[::]" yet
+prometheus:
+  # Debian's 0.0.25 bouncer metrics assume ip/ip6 tables rather than inet.
+  enabled: false
+  listen_addr: "::"
+  listen_port: 60601

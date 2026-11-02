@@ -85,3 +85,17 @@
       tags: ["chrony"]
   when: target_host in services['packages']['chrony']['units']['main']['hosts']
   tags: ["chrony"]
+
+- name: Include the crowdsec task
+  ansible.builtin.include_tasks:
+    file: "crowdsec.yaml"
+    apply:
+      tags: ["crowdsec"]
+  when: >-
+    target_host in (
+      services['packages']['crowdsec']['units']
+      | dict2items
+      | map(attribute='value.hosts')
+      | flatten
+    )
+  tags: ["crowdsec"]

@@ -1,0 +1,37 @@
+name: local/console-whitelists
+description: "Local whitelist policy"
+whitelist:
+    reason: "rules"
+    ip:
+        # Console IP lists
+        - "127.0.0.1"
+        - "::1"
+{% for host in (
+        networks['segments']
+        | dict2items
+        | selectattr('value.hosts', 'defined')
+        | selectattr('value.hosts.console', 'defined')
+        | map(attribute='key')
+        | list
+    )
+%}
+{% if (networks['segments'][host]['hosts']['console']['ipv4'] | default(none)) %}
+        - "{{ networks['segments'][host]['hosts']['console']['ipv4'] }}"
+{% endif %}
+{% if (networks['segments'][host]['hosts']['console']['ipv6'] | default(none)) %}
+        - "{{ networks['segments'][host]['hosts']['console']['ipv6'] }}"
+{% endif %}
+{% endfor %}
+{% if target_host in services['packages']['crowdsec']['units']['http-bouncer']['hosts'] and 'immich' in services and 'nextcloud' in services and 'outline' in services %}
+    expression:
+        # immich thumbnail request 404 error false positive
+        - "evt.Meta.target_fqdn == '{{ services['immich']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '404' && evt.Meta.http_verb == 'GET' && evt.Meta.http_path contains '/api/assets/' && evt.Meta.http_path contains '/thumbnail'"
+        # nextcloud thumbnail/preview request error false positive
+        - "evt.Meta.target_fqdn == '{{ services['nextcloud']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '404' && evt.Meta.http_verb == 'GET' &&  evt.Meta.http_path startsWith '/index.php/core/preview?'"
+        # nextcloud chunks.mjs request false positive
+        - "evt.Meta.target_fqdn == '{{ services['nextcloud']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status in ['200', '304'] && evt.Meta.http_verb == 'GET' && evt.Meta.http_path contains 'chunk.mjs'"
+        # nextcloud app notification false positive (http-proving)
+        - "evt.Meta.target_fqdn == '{{ services['nextcloud']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '404' && evt.Meta.http_verb == 'GET' && evt.Meta.http_path startsWith '/ocs/v2.php/apps/notifications/api/v2/notifications/'"
+        # outline POST 401 errors false positive
+        - "evt.Meta.target_fqdn == '{{ services['outline']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '401' && evt.Meta.http_verb == 'POST' && evt.Meta.http_path startsWith '/api/'"
+{% endif %}

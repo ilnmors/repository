@@ -57,3 +57,28 @@
   listen: "notification_restart_chrony"
   register: "result_restart_chrony"
   ignore_errors: true
+
+- name: Restart crowdsec.service
+  ansible.builtin.systemd_service:
+    name: "crowdsec.service"
+    state: "restarted"
+    enabled: true
+    daemon_reload: true
+  become: true
+  changed_when: false
+  listen: "notification_restart_crowdsec"
+  register: "result_restart_crowdsec"
+  ignore_errors: true
+
+- name: Restart crowdsec-firewall-bouncer.service
+  ansible.builtin.systemd_service:
+    name: "crowdsec-firewall-bouncer.service"
+    state: "restarted"
+    enabled: true
+    daemon_reload: true
+  when: target_host in services['packages']['crowdsec']['units']['fw-bouncer']['hosts']
+  become: true
+  changed_when: false
+  listen: "notification_restart_crowdsec_bouncer"
+  register: "result_restart_crowdsec_bouncer"
+  ignore_errors: true
