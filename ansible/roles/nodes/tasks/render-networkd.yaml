@@ -1,0 +1,36 @@
+---
+- name: Select the networkd template directory
+  ansible.builtin.set_fact:
+    nodes_networkd_target: "{{ target_host if (role_path ~ '/templates/networkd/' ~ target_host) is directory else 'common' }}"
+
+- name: Set networkd paths
+  ansible.builtin.set_fact:
+    nodes_networkd_paths: >-
+      {{
+        query(
+          'ansible.builtin.fileglob',
+          role_path ~ '/templates/networkd/' ~ nodes_networkd_target ~ '/*.j2'
+        )
+        | default([])
+        | sort
+      }}
+
+- name: Set rendered the networkd templates
+  ansible.builtin.set_fact:
+    nodes_networkd_files: >-
+      {{
+        dict(
+          (
+            nodes_networkd_paths
+            | map('basename')
+            | map('regex_replace', '\.j2$', '')
+            | list
+          )
+          | zip(
+              query(
+                'ansible.builtin.template',
+                *nodes_networkd_paths
+              )
+            )
+        )
+      }}

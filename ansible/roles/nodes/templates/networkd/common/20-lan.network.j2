@@ -1,0 +1,14 @@
+{% set segment = networks['segments']['server'] %}
+[Match]
+Name=lan
+
+[Network]
+# IPv4
+Address={{ segment['hosts'][target_host]['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+Gateway={{ segment['gateway']['ipv4'] }}
+DNS={{ segment['hosts']['bind']['ipv4'] }}
+# IPv6
+IPv6AcceptRA=false
+Address={{ segment['hosts'][target_host]['ipv6'] }}/{{ segment['subnet']['ipv6'] | split('/') | last }}
+Gateway={{ segment['gateway']['ipv6'] }}
+DNS={{ segment['hosts']['bind']['ipv6'] }}
