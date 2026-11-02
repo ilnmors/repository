@@ -1,0 +1,14 @@
+/var/log/suricata/*.log /var/log/suricata/*.json {
+    weekly
+    missingok
+    rotate 4
+    compress
+    delaycompress
+    notifempty
+    maxsize 500M
+    create 0644 root root
+    sharedscripts
+    postrotate
+        /usr/bin/suricatasc -c reopen-log-files > /dev/null 2>&1 || true
+    endscript
+}

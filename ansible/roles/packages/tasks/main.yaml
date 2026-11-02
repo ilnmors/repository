@@ -86,6 +86,14 @@
   when: target_host in services['packages']['chrony']['units']['main']['hosts']
   tags: ["chrony"]
 
+- name: Include the suricata task
+  ansible.builtin.include_tasks:
+    file: "suricata.yaml"
+    apply:
+      tags: ["suricata"]
+  when: target_host in services['packages']['suricata']['units']['main']['hosts']
+  tags: ["suricata"]
+
 - name: Include the crowdsec task
   ansible.builtin.include_tasks:
     file: "crowdsec.yaml"

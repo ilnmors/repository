@@ -1,0 +1,123 @@
+---
+- name: Create the suricata directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  loop:
+    - "/etc/suricata/rules"
+    - "/var/lib/suricata/rules"
+    - "/var/log/suricata"
+  become: true
+
+- name: Deploy the suricata-update service files
+  ansible.builtin.template:
+    src: "suricata/{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/bin/systemd-analyze verify %s"
+  loop:
+    - "suricata-update.service"
+    - "suricata-update.timer"
+  become: true
+  notify: "notification_restart_suricata_update_timer"
+
+- name: Deploy the suricata rule configuration files
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/suricata/etc/{{ item }}"
+    dest: "/etc/suricata/{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  loop:
+    - "disable.conf"
+    - "enable.conf"
+  become: true
+  register: "suricata_rule_configuration"
+
+- name: Deploy the suricata local rules
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/suricata/etc/local.rules"
+    dest: "/etc/suricata/rules/local.rules"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+  register: "suricata_local_rules"
+
+- name: Check the suricata rules file
+  ansible.builtin.stat:
+    path: "/var/lib/suricata/rules/suricata.rules"
+    get_checksum: false
+  become: true
+  register: "is_suricata_rules_file"
+
+- name: Update the suricata rules
+  ansible.builtin.shell: |
+    set -euo pipefail
+    suricata_rules_before=""
+    if [[ -f /var/lib/suricata/rules/suricata.rules ]]; then
+      suricata_rules_before=$(sha256sum /var/lib/suricata/rules/suricata.rules)
+    fi
+    /usr/bin/suricata-update \
+      --suricata-conf /etc/suricata/suricata.yaml \
+      --disable-conf /etc/suricata/disable.conf \
+      --enable-conf /etc/suricata/enable.conf \
+      --local /etc/suricata/rules/local.rules \
+      --no-reload
+    suricata_rules_after=$(sha256sum /var/lib/suricata/rules/suricata.rules)
+    if [[ "${suricata_rules_before}" != "${suricata_rules_after}" ]]; then
+      echo "Suricata rules updated"
+    fi
+  args:
+    executable: "/bin/bash"
+  when: >-
+    not is_suricata_rules_file['stat']['exists']
+    or suricata_rule_configuration['changed']
+    or suricata_local_rules['changed']
+  become: true
+  changed_when: "'Suricata rules updated' in is_suricata_rules_updated['stdout']"
+  register: "is_suricata_rules_updated"
+  notify: "notification_restart_suricata"
+
+- name: Deploy the suricata configuration
+  ansible.builtin.template:
+    src: "suricata/etc/suricata.yaml.j2"
+    dest: "/etc/suricata/suricata.yaml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/bin/suricata -T --init-errors-fatal -c %s"
+  become: true
+  notify: "notification_restart_suricata"
+
+- name: Deploy the suricata logrotate configuration
+  ansible.builtin.template:
+    src: "suricata/logrotate/suricata.j2"
+    dest: "/etc/logrotate.d/suricata"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/sbin/logrotate --debug %s"
+  become: true
+
+- name: Enable suricata service
+  ansible.builtin.systemd_service:
+    name: "suricata.service"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  become: true
+
+- name: Enable the suricata-update timer
+  ansible.builtin.systemd_service:
+    name: "suricata-update.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  when: target_host in services['packages']['suricata']['units']['update']['hosts']
+  become: true
