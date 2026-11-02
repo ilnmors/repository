@@ -120,3 +120,15 @@
   listen: "notification_restart_kopia_server"
   register: "result_restart_kopia_server"
   ignore_errors: true
+
+- name: Restart alloy.service
+  ansible.builtin.systemd_service:
+    name: "alloy.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (packages_alloy_started['changed'] | default(false))
+  become: true
+  changed_when: false
+  listen: "notification_restart_alloy"
+  register: "result_restart_alloy"
+  ignore_errors: true

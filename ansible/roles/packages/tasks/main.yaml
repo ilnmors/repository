@@ -137,3 +137,11 @@
       tags: ["podman"]
   when: target_host in services['packages']['podman']['units']['main']['hosts']
   tags: ["podman"]
+
+- name: Include the alloy task
+  ansible.builtin.include_tasks:
+    file: "alloy.yaml"
+    apply:
+      tags: ["alloy"]
+  when: target_host in services['packages']['alloy']['units']['main']['hosts']
+  tags: ["alloy"]

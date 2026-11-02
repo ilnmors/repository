@@ -1,0 +1,58 @@
+---
+- name: Install alloy
+  vars:
+    packages_download_url: "https://github.com/grafana/alloy/releases/download/v{{ releases['packages']['alloy']['version'] }}/\
+      alloy-{{ releases['packages']['alloy']['version'] }}-1.{{ packages_host_architecture }}.deb"
+    packages_name: "{{ releases['packages']['alloy']['name'] }}_{{ releases['packages']['alloy']['version'] }}_{{ packages_host_architecture }}.deb"
+  ansible.builtin.include_tasks:
+    file: "install.yaml"
+    apply:
+      notify: "notification_restart_alloy"
+
+- name: Create the alloy configuration directory
+  ansible.builtin.file:
+    path: "/etc/alloy"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  become: true
+
+- name: Deploy the alloy root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "/etc/alloy/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+  notify: "notification_restart_alloy"
+
+- name: Deploy the alloy configuration
+  ansible.builtin.template:
+    src: "alloy/config.alloy.j2"
+    dest: "/etc/alloy/config.alloy"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/bin/alloy validate %s"
+  become: true
+  notify: "notification_restart_alloy"
+
+- name: Enable alloy.service
+  ansible.builtin.systemd_service:
+    name: "alloy.service"
+    enabled: true
+    daemon_reload: true
+  become: true
+
+- name: Start alloy.service
+  ansible.builtin.systemd_service:
+    name: "alloy.service"
+    state: "started"
+  become: true
+  register: "packages_alloy_started"
+
+- name: Apply the alloy configuration handlers
+  ansible.builtin.meta: "flush_handlers"
