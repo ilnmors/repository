@@ -1,0 +1,113 @@
+---
+- name: Deploy the rclone config
+  ansible.builtin.template:
+    src: "rclone/etc/rclone.config.j2"
+    dest: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Delete the lost+found directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['data'] }}/lost+found"
+    state: "absent"
+  become: true
+
+- name: Check the local rclone data directory is empty
+  ansible.builtin.find:
+    paths: "{{ nodes[target_host]['paths']['data'] }}"
+    file_type: "any"
+    hidden: true
+    recurse: false
+  register: "is_rclone_data_dir_empty"
+
+- name: Check the local rclone data directory was inspected
+  ansible.builtin.assert:
+    that:
+      - (is_rclone_data_dir_empty['skipped_paths'] | default({}) | length) == 0
+    fail_msg: "Unable to inspect the data directory for {{ target_host }}."
+
+- name: Check whether a rclone restore is pending
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
+  register: "is_rclone_restore_pending"
+
+- name: Restore the rclone data directory
+  when: is_rclone_data_dir_empty['matched'] == 0 or is_rclone_restore_pending['stat']['exists']
+  environment:
+    RCLONE_CONFIG: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+  block:
+    - name: Check the remote rclone data directory is empty
+      ansible.builtin.shell: |
+        /usr/bin/rclone lsf {{ ('gdrive:' ~ site['org']) | quote }}
+      args:
+        executable: "/bin/bash"
+      changed_when: false
+      failed_when: is_rclone_remote_dir_empty['rc'] not in [0, 3]
+      register: "is_rclone_remote_dir_empty"
+
+    - name: Check the pending rclone restore source is available
+      ansible.builtin.assert:
+        that:
+          - is_rclone_remote_dir_empty['rc'] == 0
+          - (is_rclone_remote_dir_empty['stdout'] | length) > 0
+        fail_msg: "The previous rclone restore is incomplete, but the remote data directory is empty or missing."
+      when: is_rclone_restore_pending['stat']['exists']
+
+    - name: Restore the remote rclone data directory
+      when:
+        - is_rclone_remote_dir_empty['rc'] == 0
+        - (is_rclone_remote_dir_empty['stdout'] | length) > 0
+      block:
+        - name: Create the rclone state directory
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone"
+            state: "directory"
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0700"
+
+        - name: Mark the rclone restore as pending
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
+            state: "touch"
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+
+        - name: Copy the remote rclone data directory
+          ansible.builtin.shell: |
+            set -euo pipefail
+            /usr/bin/rclone copy {{ ('gdrive:' ~ site['org']) | quote }} \
+            {{ nodes[target_host]['paths']['data'] | quote }}
+          args:
+            executable: "/bin/bash"
+          changed_when: true
+
+        - name: Clear the pending rclone restore
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
+            state: "absent"
+
+- name: Deploy rclone backup service files
+  ansible.builtin.template:
+    src: "rclone/{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/bin/systemd-analyze verify %s"
+  loop:
+    - "rclone.service"
+    - "rclone.timer"
+  become: true
+
+- name: Enable rclone timer
+  ansible.builtin.systemd_service:
+    name: "rclone.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  become: true

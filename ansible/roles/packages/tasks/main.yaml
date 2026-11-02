@@ -107,3 +107,11 @@
       | flatten
     )
   tags: ["crowdsec"]
+
+- name: Include the rclone task
+  ansible.builtin.include_tasks:
+    file: "rclone.yaml"
+    apply:
+      tags: ["rclone"]
+  when: target_host in services['packages']['rclone']['units']['main']['hosts']
+  tags: ["rclone"]
