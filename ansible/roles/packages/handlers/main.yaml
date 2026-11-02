@@ -21,3 +21,15 @@
   listen: "notification_restart_networkd"
   register: "result_restart_networkd"
   ignore_errors: true
+
+- name: Restart named.service
+  ansible.builtin.systemd_service:
+    name: "named.service"
+    state: "restarted"
+    enabled: true
+    daemon_reload: true
+  become: true
+  changed_when: false
+  listen: "notification_restart_bind"
+  register: "result_restart_bind"
+  ignore_errors: true

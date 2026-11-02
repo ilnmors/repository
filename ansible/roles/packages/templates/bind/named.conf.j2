@@ -1,0 +1,117 @@
+include "/etc/bind/acme.key";
+
+tls "{{ networks['dns']['forwarder']['name'] }}" { remote-hostname "{{ networks['dns']['forwarder']['hostname'] }}"; };
+
+options {
+        directory "/var/cache/bind";
+
+        listen-on port {{ services['packages']['bind']['units']['main']['ports']['dns']['ext'] }} { {{ networks['segments']['server']['hosts']['bind']['ipv4'] }}; };
+        listen-on-v6 port {{ services['packages']['bind']['units']['main']['ports']['dns']['ext'] }} { {{ networks['segments']['server']['hosts']['bind']['ipv6'] }}; };
+
+        recursion yes;
+        // Authoritative DNS setting
+        allow-query { any; };
+        allow-recursion { any; };
+        allow-query-cache { any; };
+        allow-transfer { none; };
+
+        dnssec-validation auto;
+        forward only;
+        forwarders port 853 tls "{{ networks['dns']['forwarder']['name'] }}" {
+                // ipv4
+{% for ip in networks['dns']['forwarder']['ipv4'] %}
+                {{ ip }};
+{% endfor %}
+                // ipv6
+{% for ip in networks['dns']['forwarder']['ipv6'] %}
+                {{ ip }};
+{% endfor %}
+        };
+        max-cache-size 256M;
+        notify no;
+};
+
+zone "{{ networks['dns']['zones']['internal']['domain'] }}" {
+        type primary;
+        file "/var/lib/bind/db.{{ networks['dns']['zones']['internal']['domain'] }}";
+        notify yes;
+        // Allow the ACME key to update TXT records within this zone.
+        update-policy {
+                grant acme-key subdomain {{ networks['dns']['zones']['internal']['domain'] }}. TXT;
+        };
+};
+
+zone "{{ networks['dns']['zones']['public']['domain'] }}" {
+        //split horizon dns
+        type primary;
+        file "/var/lib/bind/db.{{ networks['dns']['zones']['public']['domain'] }}";
+        notify yes;
+};
+
+// External exception
+zone "{{ networks['dns']['zones']['public_forward']['domain'] }}.{{ networks['dns']['zones']['public']['domain'] }}" {
+        type forward;
+        forward only;
+        forwarders port 853 tls "{{ networks['dns']['forwarder']['name'] }}" {
+                // ipv4
+{% for ip in networks['dns']['forwarder']['ipv4'] %}
+                {{ ip }};
+{% endfor %}
+                // ipv6
+{% for ip in networks['dns']['forwarder']['ipv6'] %}
+                {{ ip }};
+{% endfor %}
+        };
+};
+
+// Reverse zones (ipv4)
+{% for net in networks['dns']['zones']['reverse']['networks'] if 'ipv4' in networks['dns']['zones']['reverse']['families'] %}
+{% set segment = networks['segments'][net] %}
+{% if segment['subnet']['ipv4'] | default(none) %}
+zone "{{
+    (
+        (segment['subnet']['ipv4'] | split('/'))[0]
+        | community.dns.reverse_pointer
+        | regex_replace('[.]+$', '')
+        | split('.')
+    )
+    [4 - ((segment['subnet']['ipv4'] | split('/'))[1] | int // 8):]
+    | join('.')
+}}" {
+        type primary;
+        file "/var/lib/bind/db.{{ net }}.ipv4";
+        notify yes;
+};
+{% endif %}
+{% endfor %}
+
+// Reverse zones (ipv6)
+{% for net in networks['dns']['zones']['reverse']['networks'] if 'ipv6' in networks['dns']['zones']['reverse']['families'] %}
+{% set segment = networks['segments'][net] %}
+{% if segment['subnet']['ipv6'] | default(none) %}
+zone "{{
+    (
+        (segment['subnet']['ipv6'] | split('/'))[0]
+        | community.dns.reverse_pointer
+        | regex_replace('[.]+$', '')
+        | split('.')
+    )
+    [32 - ((segment['subnet']['ipv6'] | split('/'))[1] | int // 4):]
+    | join('.')
+}}" {
+        type primary;
+        file "/var/lib/bind/db.{{ net }}.ipv6";
+        notify yes;
+};
+{% endif %}
+{% endfor %}
+
+logging {
+        channel default_log {
+                stderr;
+                severity info;
+        };
+        category default { default_log; };
+        category config { default_log; };
+        category queries { default_log; };
+};

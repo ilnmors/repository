@@ -1,0 +1,25 @@
+{% set segment = networks['segments'][item] %}
+$ORIGIN {{
+    (
+        (segment['subnet']['ipv6'] | split('/'))[0]
+        | community.dns.reverse_pointer
+        | regex_replace('[.]+$', '')
+        | split('.')
+    )
+    [32 - ((segment['subnet']['ipv6'] | split('/'))[1] | int // 4):]
+    | join('.')
+}}.
+$TTL 3600
+@ IN SOA {{ networks['segments']['server']['hosts']['bind']['domain'] }}.{{ networks['dns']['zones']['internal']['domain'] }}. bind.{{ networks['dns']['zones']['internal']['domain'] }}. (
+    {{ networks['dns']['serial'] }} ; serial
+    3600 ; refresh
+    1800 ; retry
+    604800 ; expire
+    300 ; negative TTL
+)
+@ IN NS {{ networks['segments']['server']['hosts']['bind']['domain'] }}.{{ networks['dns']['zones']['internal']['domain'] }}.
+{% for name, host in segment['hosts'] | mandatory | items %}
+{% if host['ipv6'] | default(none) %}
+{{ host['ipv6'] | community.dns.reverse_pointer }} IN PTR {{ host['domain'] | default(name) }}.{{ networks['dns']['zones']['reverse']['domain'] }}.
+{% endif %}
+{% endfor %}

@@ -1,0 +1,24 @@
+$ORIGIN {{ networks['dns']['zones']['internal']['domain'] }}.
+$TTL 3600
+@ IN SOA {{ networks['segments']['server']['hosts']['bind']['domain'] }}.{{ networks['dns']['zones']['internal']['domain'] }}. bind.{{ networks['dns']['zones']['internal']['domain'] }}. (
+    {{ networks['dns']['serial'] }} ; serial
+    3600 ; refresh
+    1800 ; retry
+    604800 ; expire
+    300 ; negative TTL
+)
+@ IN NS {{ networks['segments']['server']['hosts']['bind']['domain'] }}.{{ networks['dns']['zones']['internal']['domain'] }}.
+{% for segment_name in networks['dns']['zones']['internal']['hosts_from'] %}
+{% set segment = networks['segments'][segment_name] %}
+{% for name, host in segment['hosts'] | mandatory | items %}
+{% if host['domain'] | default(none) %}
+{{ host['domain'] }} IN A {{ host['ipv4'] }}
+{% if host['ipv6'] | default(none) %}
+{{ host['domain'] }} IN AAAA {{ host['ipv6'] }}
+{% endif %}
+{% for alias in host['alias'] | default([]) %}
+{{ alias }} IN CNAME {{ host['domain'] }}.{{ networks['dns']['zones']['internal']['domain'] }}.
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endfor %}

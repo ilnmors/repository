@@ -61,3 +61,11 @@
       tags: ["ddns"]
   when: target_host in services['packages']['ddns']['units']['main']['hosts']
   tags: ["ddns"]
+
+- name: Include the bind task
+  ansible.builtin.include_tasks:
+    file: "bind.yaml"
+    apply:
+      tags: ["bind"]
+  when: target_host in services['packages']['bind']['units']['main']['hosts']
+  tags: ["bind"]

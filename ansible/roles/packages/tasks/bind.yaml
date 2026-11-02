@@ -1,0 +1,189 @@
+---
+- name: Validate BIND reverse zone prefixes
+  ansible.builtin.assert:
+    that:
+      - >-
+        'ipv4' not in networks['dns']['zones']['reverse']['families']
+        or (networks['segments'][item]['subnet']['ipv4'] | default(none)) is none
+        or (networks['segments'][item]['subnet']['ipv4'] | split('/'))[1] | int in [8, 16, 24, 32]
+      - >-
+        'ipv6' not in networks['dns']['zones']['reverse']['families']
+        or (networks['segments'][item]['subnet']['ipv6'] | default(none)) is none
+        or (networks['segments'][item]['subnet']['ipv6'] | split('/'))[1] | int % 4 == 0
+    quiet: true
+  loop: "{{ networks['dns']['zones']['reverse']['networks'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Create the BIND zone directory
+  ansible.builtin.file:
+    path: "/var/lib/bind"
+    state: "directory"
+    owner: "bind"
+    group: "bind"
+    mode: "0750"
+  become: true
+
+- name: Create and register BIND ACME key on secrets.yaml
+  when: >-
+    secrets['ca']['x509']['acme']['key'] is not defined
+    or secrets['ca']['x509']['acme']['key'] is none
+  block:
+    - name: Create the BIND ACME key
+      ansible.builtin.shell: |
+        set -euo pipefail
+        umask 0027
+        /usr/sbin/tsig-keygen -a hmac-sha256 acme-key > /etc/bind/acme.key
+        echo "BIND ACME key created"
+      args:
+        executable: "/bin/bash"
+        creates: "/etc/bind/acme.key"
+      become: true
+      changed_when: "'BIND ACME key created' in is_bind_acme_key_created['stdout']"
+      register: "is_bind_acme_key_created"
+      no_log: true
+
+    - name: Register the BIND ACME key as variable
+      ansible.builtin.slurp:
+        src: "/etc/bind/acme.key"
+      become: true
+      register: "bind_acme_key"
+      no_log: true
+
+    - name: Set the BIND ACME key in secrets.yaml
+      vars:
+        secrets_target: '["ca"]["x509"]["acme"]["key"]'
+        secrets_content: |
+          {{ bind_acme_key['content'] | b64decode | regex_findall('secret\s+"([^"]+)"') | first | to_json }}
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "update"
+
+- name: Configure the BIND ACME key
+  ansible.builtin.copy:
+    content: |
+      key "acme-key" {
+          algorithm hmac-sha256;
+          secret "{{ secrets['ca']['x509']['acme']['key'] }}";
+        };
+    dest: "/etc/bind/acme.key"
+    owner: "root"
+    group: "bind"
+    mode: "0640"
+    validate: "/usr/bin/named-checkconf %s"
+  become: true
+  no_log: true
+
+- name: Synchronize the BIND zones with inventory
+  become: true
+  block:
+    - name: Gather service facts for BIND
+      ansible.builtin.service_facts:
+
+    - name: Freeze the BIND zones
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/sbin/rndc freeze
+        echo "BIND zones frozen"
+      args:
+        executable: "/bin/bash"
+      when: ((ansible_facts['services']['named.service'] | default({}))['state'] | default(none)) == 'running'
+      changed_when: "'BIND zones frozen' in is_bind_zones_frozen['stdout']"
+      register: "is_bind_zones_frozen"
+
+    - name: Find the BIND zone journal files
+      ansible.builtin.find:
+        paths: "/var/lib/bind"
+        patterns: "*.jnl"
+        file_type: "file"
+      register: "bind_zone_journals"
+
+    - name: Delete the BIND zone journal files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: "absent"
+      loop: "{{ bind_zone_journals['files'] | map(attribute='path') | list }}"
+
+    - name: Configure the BIND internal zone
+      ansible.builtin.template:
+        src: "bind/db.internal.j2"
+        dest: "/var/lib/bind/db.{{ networks['dns']['zones']['internal']['domain'] }}"
+        owner: "bind"
+        group: "bind"
+        mode: "0640"
+        validate: "/usr/bin/named-checkzone {{ networks['dns']['zones']['internal']['domain'] }} %s"
+
+    - name: Configure the BIND public zone
+      ansible.builtin.template:
+        src: "bind/db.public.j2"
+        dest: "/var/lib/bind/db.{{ networks['dns']['zones']['public']['domain'] }}"
+        owner: "root"
+        group: "bind"
+        mode: "0640"
+        validate: "/usr/bin/named-checkzone {{ networks['dns']['zones']['public']['domain'] }} %s"
+
+    - name: Configure the BIND IPv4 reverse zones
+      ansible.builtin.template:
+        src: "bind/db.ipv4.j2"
+        dest: "/var/lib/bind/db.{{ item }}.ipv4"
+        owner: "root"
+        group: "bind"
+        mode: "0640"
+        validate: >-
+          /usr/bin/named-checkzone {{
+            (
+                (networks['segments'][item]['subnet']['ipv4'] | split('/'))[0]
+                | community.dns.reverse_pointer
+                | regex_replace('[.]+$', '')
+                | split('.')
+            )
+            [4 - ((networks['segments'][item]['subnet']['ipv4'] | split('/'))[1] | int // 8):]
+            | join('.')
+          }} %s
+      loop: "{{ networks['dns']['zones']['reverse']['networks'] }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - "'ipv4' in networks['dns']['zones']['reverse']['families']"
+        - (networks['segments'][item]['subnet']['ipv4'] | default(none)) is not none
+
+    - name: Configure the BIND IPv6 reverse zones
+      ansible.builtin.template:
+        src: "bind/db.ipv6.j2"
+        dest: "/var/lib/bind/db.{{ item }}.ipv6"
+        owner: "root"
+        group: "bind"
+        mode: "0640"
+        validate: >-
+          /usr/bin/named-checkzone {{
+            (
+                (networks['segments'][item]['subnet']['ipv6'] | split('/'))[0]
+                | community.dns.reverse_pointer
+                | regex_replace('[.]+$', '')
+                | split('.')
+            )
+            [32 - ((networks['segments'][item]['subnet']['ipv6'] | split('/'))[1] | int // 4):]
+            | join('.')
+          }} %s
+      loop: "{{ networks['dns']['zones']['reverse']['networks'] }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - "'ipv6' in networks['dns']['zones']['reverse']['families']"
+        - (networks['segments'][item]['subnet']['ipv6'] | default(none)) is not none
+
+    - name: Configure BIND
+      ansible.builtin.template:
+        src: "bind/named.conf.j2"
+        dest: "/etc/bind/named.conf"
+        owner: "root"
+        group: "bind"
+        mode: "0640"
+        validate: "/usr/bin/named-checkconf -j -z %s"
+  always:
+    - name: Enable and restart BIND
+      ansible.builtin.systemd_service:
+        name: "named.service"
+        enabled: true
+        state: "restarted"
+        daemon_reload: true
