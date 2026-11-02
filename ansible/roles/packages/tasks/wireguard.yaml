@@ -1,0 +1,157 @@
+---
+- name: Generate the missing WireGuard server key pair
+  environment:
+    WG_PRIVATE_KEY: "{{ secrets['wireguard']['server'][target_host]['private_key'] | default('', true) }}"
+    WG_PUBLIC_KEY: "{{ secrets['wireguard']['server'][target_host]['public_key'] | default('', true) }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if [[ -z "${WG_PRIVATE_KEY}" ]]; then
+        if [[ -n "${WG_PUBLIC_KEY}" ]]; then
+            echo "Restore the WireGuard server private key matching the saved public key." >&2
+            exit 1
+        fi
+        WG_PRIVATE_KEY=$(/usr/bin/wg genkey)
+    fi
+    WG_PUBLIC_KEY=$(/usr/bin/wg pubkey <<< "${WG_PRIVATE_KEY}")
+    /usr/bin/jq -cn --arg private_key "${WG_PRIVATE_KEY}" --arg public_key "${WG_PUBLIC_KEY}" \
+      '{private_key: $private_key, public_key: $public_key}'
+  args:
+    executable: "/bin/bash"
+  when: >-
+    (secrets['wireguard']['server'][target_host]['private_key'] | default('', true) | length) == 0
+    or (secrets['wireguard']['server'][target_host]['public_key'] | default('', true) | length) == 0
+  changed_when: false
+  register: "packages_wireguard_server_keys"
+  no_log: true
+
+- name: Register the WireGuard server key pair on secrets.yaml
+  vars:
+    secrets_target: '["wireguard"]["server"][{{ target_host | to_json }}]'
+    secrets_content: >-
+      {{
+          (secrets['wireguard']['server'][target_host] | default({}, true))
+          | combine(packages_wireguard_server_keys['stdout'] | from_json)
+          | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: not (packages_wireguard_server_keys['skipped'] | default(false))
+  no_log: true
+
+- name: Generate the missing WireGuard peer keys
+  environment:
+    WG_PRIVATE_KEY: "{{ secrets['wireguard']['peers'][packages_wireguard_peer]['private_key'] | default('', true) }}"
+    WG_PUBLIC_KEY: "{{ secrets['wireguard']['peers'][packages_wireguard_peer]['public_key'] | default('', true) }}"
+    WG_PRESHARED_KEY: "{{ secrets['wireguard']['peers'][packages_wireguard_peer]['preshared_key'] | default('', true) }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if [[ -z "${WG_PUBLIC_KEY}" ]]; then
+        if [[ -z "${WG_PRIVATE_KEY}" ]]; then
+            WG_PRIVATE_KEY=$(/usr/bin/wg genkey)
+        fi
+        WG_PUBLIC_KEY=$(/usr/bin/wg pubkey <<< "${WG_PRIVATE_KEY}")
+    fi
+    if [[ -z "${WG_PRESHARED_KEY}" ]]; then
+        WG_PRESHARED_KEY=$(/usr/bin/wg genpsk)
+    fi
+    /usr/bin/jq -cn --arg private_key "${WG_PRIVATE_KEY}" --arg public_key "${WG_PUBLIC_KEY}" --arg preshared_key "${WG_PRESHARED_KEY}" \
+      '{public_key: $public_key, preshared_key: $preshared_key} + (if $private_key != "" then {private_key: $private_key} else {} end)'
+  args:
+    executable: "/bin/bash"
+  loop: >-
+    {{ (
+        (secrets['wireguard']['peers'] | default({}, true) | dict2items | map(attribute='key') | list)
+        + (networks['segments']['wg']['hosts'] | list | difference(services['packages']['wireguard']['units']['main']['hosts']) | default([], true))
+    ) | unique | list }}
+  loop_control:
+    loop_var: "packages_wireguard_peer"
+  when: >-
+    (secrets['wireguard']['peers'][packages_wireguard_peer]['public_key'] | default('', true) | length) == 0
+    or (secrets['wireguard']['peers'][packages_wireguard_peer]['preshared_key'] | default('', true) | length) == 0
+  changed_when: false
+  register: "packages_wireguard_peer_keys"
+  no_log: true
+
+- name: Register the WireGuard peer keys on secrets.yaml
+  vars:
+    secrets_target: '["wireguard"]["peers"][{{ packages_wireguard_peer_result["packages_wireguard_peer"] | to_json }}]'
+    secrets_content: >-
+      {{
+          (secrets['wireguard']['peers'][packages_wireguard_peer_result['packages_wireguard_peer']] | default({}, true))
+          | combine(packages_wireguard_peer_result['stdout'] | from_json)
+          | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: "{{ packages_wireguard_peer_keys['results'] | rejectattr('skipped', 'defined') | list }}"
+  loop_control:
+    loop_var: "packages_wireguard_peer_result"
+    label: "{{ packages_wireguard_peer_result['packages_wireguard_peer'] }}"
+  no_log: true
+
+- name: Set existing peer list
+  ansible.builtin.set_fact:
+    packages_wireguard_peer_list: >-
+      {{
+        secrets['wireguard']['peers']
+        | dict2items
+        | map(attribute='key')
+        | list
+      }}
+
+- name: Create the WireGuard key directory
+  ansible.builtin.file:
+    path: "/etc/secrets/systemd-network/wireguard"
+    state: "directory"
+    owner: "systemd-network"
+    group: "root"
+    mode: "0750"
+  become: true
+
+- name: Deploy the WireGuard server private key
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['wireguard']['server'][target_host]['private_key'] }}
+    dest: "/etc/secrets/systemd-network/wireguard/wg0.key"
+    owner: "systemd-network"
+    group: "root"
+    mode: "0640"
+  become: true
+  no_log: true
+  notify: "notification_restart_networkd"
+
+- name: Deploy the WireGuard peer preshared keys
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['wireguard']['peers'][item]['preshared_key'] }}
+    dest: "/etc/secrets/systemd-network/wireguard/wg0-{{ item }}.psk"
+    owner: "systemd-network"
+    group: "root"
+    mode: "0640"
+  loop: "{{ packages_wireguard_peer_list }}"
+  become: true
+  no_log: true
+  notify: "notification_restart_networkd"
+
+- name: Deploy the WireGuard networkd configuration
+  ansible.builtin.template:
+    src: "wireguard/{{ item }}.j2"
+    dest: "/etc/systemd/network/{{ item }}"
+    owner: "root"
+    group: "systemd-network"
+    mode: "0640"
+  loop:
+    - "30-wg0.netdev"
+    - "31-wg0.network"
+  become: true
+  no_log: true
+  notify: "notification_restart_networkd"
+
+- name: Enable networkd for WireGuard
+  ansible.builtin.systemd_service:
+    name: "systemd-networkd.service"
+    enabled: true
+    state: "started"
+  become: true

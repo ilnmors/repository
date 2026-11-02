@@ -1,0 +1,15 @@
+{% set segment = networks['segments']['wg'] %}
+[Match]
+Name=wg0
+
+[Link]
+RequiredForOnline=false
+MTUBytes=1420
+
+[Network]
+Address={{ segment['hosts'][target_host]['ipv4'] }}/{{ segment['subnet']['ipv4'] | split('/') | last }}
+Address={{ segment['hosts'][target_host]['ipv6'] }}/{{ segment['subnet']['ipv6'] | split('/') | last }}
+LinkLocalAddressing=no
+IPv4Forwarding=true
+IPv6Forwarding=true
+IPv6AcceptRA=false

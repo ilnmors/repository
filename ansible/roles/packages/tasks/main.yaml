@@ -45,3 +45,11 @@
       tags: ["code-server"]
   when: target_host in services['packages']['code-server']['units']['main']['hosts']
   tags: ["code-server"]
+
+- name: Include the wireguard task
+  ansible.builtin.include_tasks:
+    file: "wireguard.yaml"
+    apply:
+      tags: ["wireguard"]
+  when: target_host in services['packages']['wireguard']['units']['main']['hosts']
+  tags: ["wireguard"]

@@ -1,0 +1,14 @@
+[NetDev]
+Name=wg0
+Kind=wireguard
+
+[WireGuard]
+ListenPort={{ services['packages']['wireguard']['units']['main']['ports']['wg']['ext'] }}
+PrivateKeyFile=/etc/secrets/systemd-network/wireguard/wg0.key
+RouteTable=off
+{% for peer in packages_wireguard_peer_list %}
+[WireGuardPeer]
+PublicKey={{ secrets['wireguard']['peers'][peer]['public_key'] }}
+PresharedKeyFile=/etc/secrets/systemd-network/wireguard/wg0-{{ peer }}.psk
+AllowedIPs={{ networks['segments']['wg']['hosts'][peer]['ipv4'] }}/32,{{ networks['segments']['wg']['hosts'][peer]['ipv6'] }}/128
+{% endfor %}
