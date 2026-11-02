@@ -23,6 +23,7 @@ nodes:
     paths:
       home: "/home/vmm"
       libvirt: "/var/lib/libvirt"
+      data: "/data/vmm"
     system:
       disk:
         root:

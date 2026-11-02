@@ -115,3 +115,17 @@
       tags: ["rclone"]
   when: target_host in services['packages']['rclone']['units']['main']['hosts']
   tags: ["rclone"]
+
+- name: Include the kopia task
+  ansible.builtin.include_tasks:
+    file: "kopia.yaml"
+    apply:
+      tags: ["kopia"]
+  when: >-
+    target_host in (
+      services['packages']['kopia']['units']
+      | dict2items
+      | map(attribute='value.hosts')
+      | flatten
+    )
+  tags: ["kopia"]

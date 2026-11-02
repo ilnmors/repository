@@ -1,0 +1,596 @@
+---
+- name: Install kopia
+  vars:
+    packages_download_url: "https://github.com/kopia/kopia/releases/download/v{{ releases['packages']['kopia']['version'] }}/\
+      kopia_{{ releases['packages']['kopia']['version'] }}_linux_{{ packages_host_architecture }}.deb"
+    packages_name: "{{ releases['packages']['kopia']['name'] }}_{{ releases['packages']['kopia']['version'] }}_{{ packages_host_architecture }}.deb"
+  ansible.builtin.include_tasks:
+    file: "install.yaml"
+
+- name: Register the missing kopia repository passwords on secrets.yaml
+  vars:
+    secrets_target: '["kopia"]["repository"][{{ packages_kopia_repository | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: >-
+    {{ (
+        services['packages']['kopia']['units']['server']['hosts']
+        + (secrets['kopia']['repository'] | default({}, true) | dict2items | map(attribute='key') | list)
+    ) | unique | list }}
+  loop_control:
+    loop_var: "packages_kopia_repository"
+  when: (secrets['kopia']['repository'][packages_kopia_repository] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing kopia user passwords on secrets.yaml
+  vars:
+    secrets_target: '["kopia"]["users"][{{ packages_kopia_user | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: >-
+    {{ (
+        [control_host]
+        + services['packages']['kopia']['units']['client']['hosts']
+        + (secrets['kopia']['users'] | default({}, true) | dict2items | map(attribute='key') | list)
+    ) | unique | list }}
+  loop_control:
+    loop_var: "packages_kopia_user"
+  when: (secrets['kopia']['users'][packages_kopia_user] | default('', true) | length) == 0
+  no_log: true
+
+- name: Create the kopia directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "root"
+    mode: "0700"
+  loop:
+    - "/etc/kopia"
+    - "/var/cache/kopia"
+  become: true
+
+- name: Deploy the kopia env
+  ansible.builtin.template:
+    src: "kopia/kopia.env.j2"
+    dest: "/etc/kopia/kopia.env"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "root"
+    mode: "0600"
+  become: true
+  notify:
+    - "notification_restart_kopia_server"
+  no_log: true
+
+- name: Set the kopia server
+  when: target_host in services['packages']['kopia']['units']['server']['hosts']
+  environment:
+    KOPIA_PASSWORD: "{{ secrets['kopia']['repository'][target_host] }}"
+    KOPIA_CONFIG_PATH: "/etc/kopia/repository.config"
+    KOPIA_CACHE_DIRECTORY: "/var/cache/kopia"
+    KOPIA_LOG_DIR: "/var/cache/kopia/logs"
+    KOPIA_CHECK_FOR_UPDATES: "false"
+    KOPIA_USE_KEYRING: "false"
+  block:
+    - name: Prepare the kopia server certificate # noqa: var-naming[no-role-prefix]
+      vars:
+        target_service: "{{ services['packages']['kopia']['units']['server'] }}"
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "x509-leaf"
+      when: >-
+          (secrets['ca']['x509']['leaf'][services['packages']['kopia']['units']['server']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+          (secrets['ca']['x509']['leaf'][services['packages']['kopia']['units']['server']['domain']['internal']]['key'] | default('', true) | length) == 0
+      no_log: true
+
+    - name: Create the kopia SSL directory
+      ansible.builtin.file:
+        path: "/etc/kopia/ssl"
+        state: "directory"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "root"
+        mode: "0700"
+      become: true
+
+    - name: Deploy the kopia server SSL certificate
+      ansible.builtin.copy:
+        content: |
+          {{ secrets['ca']['x509']['leaf'][services['packages']['kopia']['units']['server']['domain']['internal']]['crt'] | trim }}
+          {{ secrets['ca']['x509']['intermediate']['crt'] }}
+        dest: "/etc/kopia/ssl/{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.crt"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "root"
+        mode: "0600"
+      become: true
+      notify: "notification_restart_kopia_server"
+      no_log: true
+
+    - name: Deploy the kopia server SSL key
+      ansible.builtin.copy:
+        content: |
+          {{ secrets['ca']['x509']['leaf'][services['packages']['kopia']['units']['server']['domain']['internal']]['key'] }}
+        dest: "/etc/kopia/ssl/{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.key"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "root"
+        mode: "0400"
+      become: true
+      notify: "notification_restart_kopia_server"
+      no_log: true
+
+    - name: Create the repository directory
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}/kopia/repository"
+        state: "directory"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "root"
+        mode: "0700"
+      become: true
+
+    - name: Check the repository directory empty
+      ansible.builtin.find:
+        paths: "{{ nodes[target_host]['paths']['data'] }}/kopia/repository/"
+        file_type: "any"
+        hidden: true
+        recurse: false
+      register: "is_kopia_repository_empty"
+
+    - name: Create the kopia repository
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia repository create filesystem \
+        --path="{{ nodes[target_host]['paths']['data'] }}/kopia/repository" \
+        --override-username={{ nodes[target_host]['user'] | quote }} \
+        --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }} \
+        --description="{{ site['org'] }} kopia repository"
+      args:
+        executable: "/bin/bash"
+      when: is_kopia_repository_empty.matched == 0
+      changed_when: true
+      no_log: true
+
+    - name: Connect to the kopia repository
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia repository connect filesystem \
+        --path="{{ nodes[target_host]['paths']['data'] }}/kopia/repository" \
+        --override-username={{ nodes[target_host]['user'] | quote }} \
+        --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
+      args:
+        executable: "/bin/bash"
+      when: is_kopia_repository_empty.matched > 0
+      changed_when: false
+      failed_when:
+        - is_kopia_repository_empty.matched > 0
+        - is_repository_connected.rc != 0
+      register: "is_repository_connected"
+      no_log: true
+
+    - name: Check the kopia user definitions
+      ansible.builtin.assert:
+        that:
+          - secrets['kopia']['users'] is mapping
+          - control_host in secrets['kopia']['users']
+        fail_msg: "Define {{ control_host }} and the backup client passwords under kopia.users in secrets.yaml."
+      no_log: true
+
+    - name: Check the kopia user names and passwords
+      ansible.builtin.assert:
+        that:
+          - item['key'] is match('^[a-z0-9][a-z0-9_-]*$')
+          - item['value'] is string
+          - (item['value'] | length) > 0
+      loop: "{{ secrets['kopia']['users'] | dict2items }}"
+      no_log: true
+
+    - name: Get the existing kopia users
+      ansible.builtin.shell: |
+        /usr/bin/kopia server users list --json
+      args:
+        executable: "/bin/bash"
+      changed_when: false
+      register: "existing_kopia_users"
+      no_log: true
+
+    - name: Enable the kopia ACLs
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if kopia_acl_result=$(/usr/bin/kopia server acl enable 2>&1); then
+            echo "Kopia ACLs enabled"
+        elif [[ "${kopia_acl_result}" != "ACLs already enabled" ]]; then
+            printf '%s\n' "${kopia_acl_result}" >&2
+            exit 1
+        fi
+      args:
+        executable: "/bin/bash"
+      changed_when: "'Kopia ACLs enabled' in is_kopia_acl_enabled['stdout']"
+      register: "is_kopia_acl_enabled"
+      notify: "notification_restart_kopia_server"
+
+    - name: Get the existing kopia ACLs
+      ansible.builtin.shell: |
+        /usr/bin/kopia server acl list --json
+      args:
+        executable: "/bin/bash"
+      changed_when: false
+      register: "existing_kopia_acls"
+
+    - name: Set the kopia global policy
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kopia_policy_before=$(/usr/bin/kopia policy show --global --json)
+        /usr/bin/kopia policy set --global --compression=zstd
+        kopia_policy_after=$(/usr/bin/kopia policy show --global --json)
+        if [[ "${kopia_policy_before}" != "${kopia_policy_after}" ]]; then
+            echo "Kopia global policy updated"
+        fi
+      args:
+        executable: "/bin/bash"
+      changed_when: "'Kopia global policy updated' in is_kopia_global_policy_updated['stdout']"
+      register: "is_kopia_global_policy_updated"
+      notify: "notification_restart_kopia_server"
+
+    - name: Create the kopia users
+      vars:
+        packages_kopia_identity: "{{ packages_kopia_user['key'] }}@{{ packages_kopia_user['key'] }}.{{ site['domain']['internal'] }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia server users add --no-ask-password \
+        --user-password={{ packages_kopia_user['value'] | quote }} \
+        {{ packages_kopia_identity | quote }}
+        echo "Kopia user created"
+      args:
+        executable: "/bin/bash"
+      loop: "{{ secrets['kopia']['users'] | dict2items }}"
+      loop_control:
+        loop_var: "packages_kopia_user"
+        label: "{{ packages_kopia_user['key'] }}"
+      when: packages_kopia_identity not in (existing_kopia_users['stdout'] | from_json | map(attribute='username') | list)
+      changed_when: "'Kopia user created' in is_kopia_user_created['stdout']"
+      register: "is_kopia_user_created"
+      notify: "notification_restart_kopia_server"
+      no_log: true
+
+    - name: Update the kopia user passwords
+      vars:
+        packages_kopia_identity: "{{ packages_kopia_user['key'] }}@{{ packages_kopia_user['key'] }}.{{ site['domain']['internal'] }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia server users set --no-ask-password \
+        --user-password={{ packages_kopia_user['value'] | quote }} \
+        {{ packages_kopia_identity | quote }}
+      args:
+        executable: "/bin/bash"
+      loop: "{{ secrets['kopia']['users'] | dict2items }}"
+      loop_control:
+        loop_var: "packages_kopia_user"
+        label: "{{ packages_kopia_user['key'] }}"
+      changed_when: false
+      register: "is_kopia_user_updated"
+      notify: "notification_restart_kopia_server"
+      no_log: true
+
+    - name: Set the kopia master ACLs
+      vars:
+        packages_kopia_identity: "{{ control_host }}@{{ control_host }}.{{ site['domain']['internal'] }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia server acl add \
+        --user={{ packages_kopia_identity | quote }} \
+        --target={{ ('type=' ~ item) | quote }} \
+        --access=FULL --overwrite
+        echo "Kopia master ACL updated"
+      args:
+        executable: "/bin/bash"
+      loop: ["snapshot", "policy", "user", "acl", "content"]
+      when: >-
+        (
+          existing_kopia_acls['stdout'] | from_json
+          | selectattr('user', 'equalto', packages_kopia_identity)
+          | selectattr('target', 'equalto', {'type': item})
+          | selectattr('access', 'equalto', 'FULL')
+          | list | length
+        ) == 0
+      changed_when: "'Kopia master ACL updated' in is_kopia_master_acl_updated['stdout']"
+      register: "is_kopia_master_acl_updated"
+      notify: "notification_restart_kopia_server"
+
+    - name: Set the kopia backup client ACLs
+      vars:
+        packages_kopia_identity: "{{ packages_kopia_acl[0] }}@{{ packages_kopia_acl[0] }}.{{ site['domain']['internal'] }}"
+        packages_kopia_client_acls:
+          - target: "type=snapshot"
+            labels: {type: "snapshot"}
+            access: "FULL"
+          - target: "type=policy"
+            labels: {type: "policy"}
+            access: "READ"
+          - target: "type=content"
+            labels: {type: "content"}
+            access: "APPEND"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia server acl add \
+        --user={{ packages_kopia_identity | quote }} \
+        --target={{ packages_kopia_acl[1]['target'] | quote }} \
+        --access={{ packages_kopia_acl[1]['access'] | quote }} --overwrite
+        echo "Kopia backup client ACL updated"
+      args:
+        executable: "/bin/bash"
+      loop: >-
+        {{
+          secrets['kopia']['users'] | list | reject('equalto', control_host)
+          | product(packages_kopia_client_acls) | list
+        }}
+      loop_control:
+        loop_var: "packages_kopia_acl"
+        label: "{{ packages_kopia_acl[0] }}: {{ packages_kopia_acl[1]['target'] }}"
+      when: >-
+        (
+          existing_kopia_acls['stdout'] | from_json
+          | selectattr('user', 'equalto', packages_kopia_identity)
+          | selectattr('target', 'equalto', packages_kopia_acl[1]['labels'])
+          | selectattr('access', 'equalto', packages_kopia_acl[1]['access'])
+          | list | length
+        ) == 0
+      changed_when: "'Kopia backup client ACL updated' in is_kopia_client_acl_updated['stdout']"
+      register: "is_kopia_client_acl_updated"
+      notify: "notification_restart_kopia_server"
+
+    - name: Set the kopia backup client policy ACLs
+      vars:
+        packages_kopia_identity: "{{ packages_kopia_client }}@{{ packages_kopia_client }}.{{ site['domain']['internal'] }}"
+        packages_kopia_policy_labels:
+          type: "policy"
+          username: "{{ packages_kopia_client }}"
+          hostname: "{{ packages_kopia_client }}.{{ site['domain']['internal'] }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia server acl add \
+        --user={{ packages_kopia_identity | quote }} \
+        --target={{ ('type=policy,username=' ~ packages_kopia_client ~ ',hostname=' ~ packages_kopia_client ~ '.' ~ site['domain']['internal']) | quote }} \
+        --access=FULL --overwrite
+        echo "Kopia backup client policy ACL updated"
+      args:
+        executable: "/bin/bash"
+      loop: "{{ secrets['kopia']['users'] | list | reject('equalto', control_host) | list }}"
+      loop_control:
+        loop_var: "packages_kopia_client"
+      when: >-
+        (
+          existing_kopia_acls['stdout'] | from_json
+          | selectattr('user', 'equalto', packages_kopia_identity)
+          | selectattr('target', 'equalto', packages_kopia_policy_labels)
+          | selectattr('access', 'equalto', 'FULL')
+          | list | length
+        ) == 0
+      changed_when: "'Kopia backup client policy ACL updated' in is_kopia_client_policy_acl_updated['stdout']"
+      register: "is_kopia_client_policy_acl_updated"
+      notify: "notification_restart_kopia_server"
+
+    - name: Set the kopia backup client policies
+      vars:
+        packages_kopia_identity: "{{ packages_kopia_client }}@{{ packages_kopia_client }}.{{ site['domain']['internal'] }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kopia_policy_before=$(/usr/bin/kopia policy show {{ packages_kopia_identity | quote }} --json)
+        /usr/bin/kopia policy set {{ packages_kopia_identity | quote }} \
+        --compression={{ 'none' if packages_kopia_client == 'app' else 'zstd' }} \
+        --keep-latest=10 --keep-hourly=0 --keep-daily=14 \
+        --keep-weekly=4 --keep-monthly=6 --keep-annual=1
+        kopia_policy_after=$(/usr/bin/kopia policy show {{ packages_kopia_identity | quote }} --json)
+        if [[ "${kopia_policy_before}" != "${kopia_policy_after}" ]]; then
+            echo "Kopia backup client policy updated"
+        fi
+      args:
+        executable: "/bin/bash"
+      loop: "{{ secrets['kopia']['users'] | list | reject('equalto', control_host) | list }}"
+      loop_control:
+        loop_var: "packages_kopia_client"
+      changed_when: "'Kopia backup client policy updated' in is_kopia_client_policy_updated['stdout']"
+      register: "is_kopia_client_policy_updated"
+      notify: "notification_restart_kopia_server"
+
+    - name: Set kopia parameters
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia repository set-parameters \
+        --max-pack-size-mb=100
+      args:
+        executable: "/bin/bash"
+      changed_when: false
+      no_log: true
+
+    - name: Deploy kopia server service file
+      ansible.builtin.template:
+        src: "kopia/server/kopia-server.service.j2"
+        dest: "/etc/systemd/system/kopia-server.service"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+        validate: "/usr/bin/systemd-analyze verify %s"
+      become: true
+      notify: "notification_restart_kopia_server"
+
+    - name: Enable kopia server service
+      ansible.builtin.systemd_service:
+        name: "kopia-server.service"
+        state: "started"
+        enabled: true
+        daemon_reload: true
+      become: true
+
+- name: Set the kopia remote connection
+  when: target_host in services['packages']['kopia']['units']['client']['hosts']
+  vars:
+    packages_kopia_server_url: "https://{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['kopia']['units']['server']['ports']['http']['int'] }}"
+  environment:
+    KOPIA_PASSWORD: "{{ secrets['kopia']['users'][target_host] }}"
+    KOPIA_CONFIG_PATH: "/etc/kopia/repository.config"
+    KOPIA_CACHE_DIRECTORY: "/var/cache/kopia"
+    KOPIA_LOG_DIR: "/var/cache/kopia/logs"
+    KOPIA_CHECK_FOR_UPDATES: "false"
+    KOPIA_USE_KEYRING: "false"
+  block:
+    - name: Check the kopia user password
+      ansible.builtin.assert:
+        that:
+          - target_host in secrets['kopia']['users']
+          - secrets['kopia']['users'][target_host] is string
+          - (secrets['kopia']['users'][target_host] | length) > 0
+        fail_msg: "Define the password for {{ target_host }} under kopia.users in secrets.yaml."
+      no_log: true
+
+    - name: Connect to the kopia server
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia repository connect server \
+        --url={{ packages_kopia_server_url | quote }} \
+        --override-username={{ target_host | quote }} \
+        --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
+      args:
+        executable: "/bin/bash"
+      changed_when: false
+      register: "is_kopia_connected"
+      no_log: true
+      ignore_errors: "{{ target_host == control_host }}"
+
+- name: Set the kopia backup client
+  when: target_host in services['packages']['kopia']['units']['client']['hosts']
+  vars:
+    packages_kopia_server_url: "https://{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['kopia']['units']['server']['ports']['http']['int'] }}"
+  environment:
+    KOPIA_PASSWORD: "{{ secrets['kopia']['users'][target_host] }}"
+    KOPIA_CONFIG_PATH: "/etc/kopia/repository.config"
+    KOPIA_CACHE_DIRECTORY: "/var/cache/kopia"
+    KOPIA_LOG_DIR: "/var/cache/kopia/logs"
+    KOPIA_CHECK_FOR_UPDATES: "false"
+    KOPIA_USE_KEYRING: "false"
+  become: true
+  block:
+    - name: Check the kopia client data path
+      ansible.builtin.assert:
+        that:
+          - (nodes[target_host]['paths']['data'] | default('') | length) > 0
+        fail_msg: "Define the data path for {{ target_host }} in nodes.yaml."
+
+    - name: Check the kopia client data directory
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['data'] }}"
+      register: "is_data_dir"
+
+    - name: Check the kopia client data directory is ready
+      ansible.builtin.assert:
+        that:
+          - is_data_dir['stat']['isdir'] | default(false)
+        fail_msg: "Create the data directory for {{ target_host }} with the nodes role before setting kopia."
+
+    - name: Check the kopia client data directory is empty
+      ansible.builtin.find:
+        paths: "{{ nodes[target_host]['paths']['data'] }}"
+        file_type: "any"
+        hidden: true
+        recurse: false
+      register: "is_data_dir_empty"
+
+    - name: Check the kopia client data directory was inspected
+      ansible.builtin.assert:
+        that:
+          - (is_data_dir_empty['skipped_paths'] | default({}) | length) == 0
+        fail_msg: "Unable to inspect the data directory for {{ target_host }}."
+
+    - name: Check whether a kopia restore is pending
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia/restore-in-progress"
+      register: "is_kopia_restore_pending"
+
+    - name: Check whether the kopia client snapshot exists
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/kopia snapshot list \
+        {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ nodes[target_host]['paths']['data']) | quote }} \
+        --json --max-results=1
+      args:
+        executable: "/bin/bash"
+      when: is_data_dir_empty['matched'] == 0 or is_kopia_restore_pending['stat']['exists']
+      become: false
+      changed_when: false
+      register: "is_snapshot_exist"
+      no_log: true
+
+    - name: Check the pending kopia restore source is available
+      ansible.builtin.assert:
+        that:
+          - (is_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
+        fail_msg: "The previous kopia restore is incomplete, but the client snapshot is missing."
+      when: is_kopia_restore_pending['stat']['exists']
+
+    - name: Restore the kopia client data directory
+      when:
+        - is_data_dir_empty['matched'] == 0 or is_kopia_restore_pending['stat']['exists']
+        - (is_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
+      block:
+        - name: Create the kopia state directory
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia"
+            state: "directory"
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0700"
+
+        - name: Mark the kopia restore as pending
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia/restore-in-progress"
+            state: "touch"
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+
+        - name: Restore the latest kopia client snapshot
+          ansible.builtin.shell: |
+            set -euo pipefail
+            kopia_restore_dir=$(mktemp -d)
+            trap 'rm -rf -- "${kopia_restore_dir}"' EXIT
+            export KOPIA_CONFIG_PATH="${kopia_restore_dir}/repository.config"
+            export KOPIA_CACHE_DIRECTORY="${kopia_restore_dir}/cache"
+            export KOPIA_LOG_DIR="${kopia_restore_dir}/logs"
+            /usr/bin/kopia repository connect server \
+            --url={{ packages_kopia_server_url | quote }} \
+            --override-username={{ target_host | quote }} \
+            --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
+            /usr/bin/kopia snapshot restore --snapshot-time=latest \
+            --write-files-atomically --skip-existing \
+            {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ nodes[target_host]['paths']['data']) | quote }} \
+            {{ nodes[target_host]['paths']['data'] | quote }}
+          args:
+            executable: "/bin/bash"
+          changed_when: true
+          register: "is_kopia_restored"
+          no_log: true
+
+        - name: Clear the pending kopia restore
+          ansible.builtin.file:
+            path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia/restore-in-progress"
+            state: "absent"
+
+    - name: Deploy the kopia client service files
+      ansible.builtin.template:
+        src: "kopia/client/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+        validate: "/usr/bin/systemd-analyze verify %s"
+      loop:
+        - "kopia-client.service"
+        - "kopia-client.timer"
+
+    - name: Enable the kopia client timer
+      ansible.builtin.systemd_service:
+        name: "kopia-client.timer"
+        state: "started"
+        enabled: true
+        daemon_reload: true

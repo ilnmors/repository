@@ -1,0 +1,28 @@
+[Unit]
+Description=Kopia repository server
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor={{ nodes[target_host]['paths']['data'] }}
+
+[Service]
+User={{ nodes[target_host]['user'] }}
+Group={{ nodes[target_host]['group'] }}
+# logging
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/etc/kopia/kopia.env
+
+ExecStartPre=/usr/bin/kopia repository connect filesystem \
+    --path={{ nodes[target_host]['paths']['data'] }}/kopia/repository \
+    --override-username={{ nodes[target_host]['user'] }} \
+    --override-hostname={{ target_host }}.{{ site['domain']['internal'] }}
+
+ExecStart=/usr/bin/kopia server start \
+    --no-ui \
+    --tls-cert-file=/etc/kopia/ssl/{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.crt \
+    --tls-key-file=/etc/kopia/ssl/{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}.key \
+    --address=0.0.0.0:{{ services['packages']['kopia']['units']['server']['ports']['http']['int'] }} \
+    --log-level=info
+
+[Install]
+WantedBy=multi-user.target
