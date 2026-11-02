@@ -1,0 +1,45 @@
+---
+- name: Set the podman subordinate IDs
+  ansible.builtin.copy:
+    content: |
+      {{ nodes[target_host]['user'] }}:100000:65536
+    dest: "/etc/sub{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  loop: ["uid", "gid"]
+  become: true
+
+- name: Create the podman configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers"
+    - "{{ nodes[target_host]['paths']['home'] }}/.config/containers"
+    - "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd"
+  become: true
+
+- name: Create the podman container data directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  become: true
+
+- name: Create the podman image archive directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/archives"
+    - "{{ nodes[target_host]['paths']['data'] }}/archives/containers"
+  become: true

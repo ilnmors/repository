@@ -129,3 +129,11 @@
       | flatten
     )
   tags: ["kopia"]
+
+- name: Include the podman task
+  ansible.builtin.include_tasks:
+    file: "podman.yaml"
+    apply:
+      tags: ["podman"]
+  when: target_host in services['packages']['podman']['units']['main']['hosts']
+  tags: ["podman"]
