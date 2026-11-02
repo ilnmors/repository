@@ -33,3 +33,15 @@
   listen: "notification_restart_bind"
   register: "result_restart_bind"
   ignore_errors: true
+
+- name: Restart kea-dhcp4-server.service
+  ansible.builtin.systemd_service:
+    name: "kea-dhcp4-server.service"
+    state: "restarted"
+    enabled: true
+    daemon_reload: true
+  become: true
+  changed_when: false
+  listen: "notification_restart_kea"
+  register: "result_restart_kea"
+  ignore_errors: true

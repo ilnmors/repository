@@ -69,3 +69,11 @@
       tags: ["bind"]
   when: target_host in services['packages']['bind']['units']['main']['hosts']
   tags: ["bind"]
+
+- name: Include the kea task
+  ansible.builtin.include_tasks:
+    file: "kea.yaml"
+    apply:
+      tags: ["kea"]
+  when: target_host in services['packages']['kea4']['units']['main']['hosts']
+  tags: ["kea"]

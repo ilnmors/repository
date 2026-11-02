@@ -1,0 +1,93 @@
+{
+    "Dhcp4": {
+        "subnet4": [
+            {
+                "subnet": "{{ networks['segments']['client']['subnet']['ipv4'] }}",
+                "pools" : [
+                    {
+                        "pool": "{{ networks['segments']['client']['dhcp4']['pool'] }}"
+                    }
+                ],
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "{{ networks['segments']['client']['gateway']['ipv4'] }}"
+                    },
+                    {
+                        "name": "domain-name-servers",
+                        "data": "{{ networks['segments']['server']['hosts']['bind']['ipv4'] }}"
+                    },
+                    {
+                        "name": "domain-name",
+                        "data": "{{ site['domain']['internal'] }}."
+                    }
+                ],
+                "reservations": [
+{% set client_hosts=(networks['segments']['client']['hosts'] | dict2items | selectattr('value.domain', 'defined') | map(attribute='key') | select('in', hardwares) | list) %}
+{% for host in client_hosts %}
+                    {
+                        "hw-address": "{{ hardwares[host]['nic']['nic01']['mac'] }}",
+                        "ip-address": "{{ networks['segments']['client']['hosts'][host]['ipv4'] }}",
+                        "hostname": "{{ networks['segments']['client']['hosts'][host]['domain'] }}"
+                    }{{ ',' if not loop.last }}
+{% endfor %}
+                ],
+                "id": 1,
+                "interface": "client"
+            },
+            {
+                "subnet": "{{ networks['segments']['user']['subnet']['ipv4'] }}",
+                "pools" : [
+                    {
+                        "pool": "{{ networks['segments']['user']['dhcp4']['pool'] }}"
+                    }
+                ],
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "{{ networks['segments']['user']['gateway']['ipv4'] }}"
+                    },
+                    {
+                        "name": "domain-name-servers",
+                        "data": "{{ networks['segments']['server']['hosts']['bind']['ipv4'] }}"
+                    },
+                    {
+                        "name": "domain-name",
+                        "data": "{{ site['domain']['internal'] }}."
+                    }
+                ],
+                "id": 2,
+                "interface": "user"
+            }
+        ],
+        "interfaces-config": {
+            "interfaces": [
+                "client",
+                "user"
+            ],
+            "dhcp-socket-type": "raw",
+            "service-sockets-max-retries": 5,
+            "service-sockets-require-all": true
+        },
+        "renew-timer": 1000,
+        "rebind-timer": 2000,
+        "valid-lifetime": 4000,
+        "loggers": [
+            {
+                "name": "kea-dhcp4",
+                "output_options": [
+                    {
+                        "output": "stdout"
+                    }
+                ],
+                "severity": "INFO"
+            }
+        ],
+        "lease-database": {
+            "type": "memfile",
+            "persist": true,
+            "name": "/var/lib/kea/kea-leases4.csv",
+            "lfc-interval": 3600
+        }
+    }
+}
