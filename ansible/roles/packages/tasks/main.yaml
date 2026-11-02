@@ -37,3 +37,11 @@
       tags: ["step"]
   when: target_host in services['packages']['step']['units']['main']['hosts']
   tags: ["step"]
+
+- name: Include the code-server task
+  ansible.builtin.include_tasks:
+    file: "code-server.yaml"
+    apply:
+      tags: ["code-server"]
+  when: target_host in services['packages']['code-server']['units']['main']['hosts']
+  tags: ["code-server"]

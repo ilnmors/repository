@@ -42,6 +42,15 @@ services:
         main:
           release: "step"
           hosts: ["console"]
+    code-server:
+      units:
+        main:
+          release: "code-server"
+          hosts: ["console"]
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8081
     nftables:
       units:
         main:
@@ -197,24 +206,6 @@ services:
           release: "alloy"
           hosts: ["vmm", "infra", "auth", "app"]
   containers:
-    code-server:
-      units:
-        main:
-          release: "code-server"
-          hosts: ["console"]
-          domain:
-            internal: "code"
-          subuid: 100999
-          ports:
-            http:
-              protocol: "tcp"
-              int: 8081
-              container: 8081
-          dependency:
-            pki:
-              cert: true
-            web:
-              status: true
     caddy:
       units:
         main:

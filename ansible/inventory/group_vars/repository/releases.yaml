@@ -82,6 +82,10 @@ releases:
       source: "github"
       name: "step-cli"
       version: "0.30.6"
+    code-server:
+      source: "github"
+      name: "code-server"
+      version: "4.144.0"
     kopia:
       source: "github"
       name: "kopia"
@@ -91,10 +95,6 @@ releases:
       name: "alloy"
       version: "1.17.1"
   containers:
-    code-server:
-      name: "code-server"
-      repository: "docker.io/codercom/code-server"
-      tag: "4.144.0"
     caddy:
       name: "caddy"
       repository: "docker.io/library/caddy"
