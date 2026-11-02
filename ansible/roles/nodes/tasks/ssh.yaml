@@ -1,0 +1,312 @@
+---
+- name: Install SSH
+  ansible.builtin.apt:
+    name:
+      - "openssh-client"
+      - "openssh-server"
+    state: "present"
+  become: true
+
+- name: Set the SSH client
+  when: nodes[target_host]['control_node']
+  block:
+    - name: Create the .ssh directory
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['home'] }}/.ssh"
+        state: "directory"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0700"
+
+    - name: Check the ssh key file
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519"
+      register: "is_ssh_key_file"
+
+    - name: Check the ssh pub file
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519.pub"
+      register: "is_ssh_pub_file"
+
+    - name: Create the key file (Overwrite)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        rm -f {{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519*
+        /usr/bin/ssh-keygen -t ed25519 -f {{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519 -N ""
+        echo "SSH key created"
+      args:
+        executable: "/bin/bash"
+      when: not is_ssh_key_file['stat']['exists'] or not is_ssh_pub_file['stat']['exists']
+      changed_when: "'SSH key created' in is_ssh_key_created['stdout']"
+      register: "is_ssh_key_created"
+      no_log: true
+
+    - name: Check the SSH certificate file
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519-cert.pub"
+      register: "is_ssh_certificate_file"
+
+    - name: Get the principals of the current signed pub file
+      ansible.builtin.shell: |
+        set -o pipefail
+        /usr/bin/ssh-keygen -L -f {{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519-cert.pub | \
+        sed -n '/Principals:/,/Critical Options:/p' | \
+        sed '1d;$d' | \
+        sed 's/^[[:space:]]*//'
+      args:
+        executable: "/bin/bash"
+      when: is_ssh_certificate_file['stat']['exists']
+      changed_when: false
+      failed_when: false
+      register: "current_ssh_principals"
+      no_log: true
+
+    - name: Compare the signing SSH CA and the repository SSH CA
+      environment:
+        SSH_CA_PUB: "{{ secrets['ca']['ssh']['root']['pub'] }}"
+      ansible.builtin.shell: |
+        set -o pipefail
+        test "$(/usr/bin/ssh-keygen -L \
+          -f {{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519-cert.pub | \
+          awk '/Signing CA:/ {print $4}')" = \
+        "$(printf '%s\n' "${SSH_CA_PUB}" | /usr/bin/ssh-keygen -lf - | \
+          awk '{print $2}')"
+      args:
+        executable: "/bin/bash"
+      when: is_ssh_certificate_file['stat']['exists']
+      changed_when: false
+      failed_when: false
+      register: "is_ssh_ca_same"
+      no_log: true
+
+    - name: Get the SSH CA and sign on the ssh pub file
+      when: >
+        is_ssh_key_created is changed or
+        not is_ssh_certificate_file['stat']['exists'] or
+        nodes[target_host]['group'] not in (current_ssh_principals['stdout_lines'] | default([])) or
+        (is_ssh_ca_same['rc'] | default(0)) != 0
+      block:
+        - name: Get the SSH CA
+          ansible.builtin.copy:
+            content: |
+              {{ secrets['ca']['ssh']['root']['key'] }}
+            dest: "/run/user/{{ nodes[target_host]['uid'] }}/local_ssh_ca_private_key"
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0400"
+          no_log: true
+
+        - name: Sign on the ssh pub file
+          ansible.builtin.shell: |
+            set -euo pipefail
+            ssh-keygen -s /run/user/{{ nodes[target_host]['uid'] }}/local_ssh_ca_private_key \
+            -I "{{ nodes[target_host]['user'] }}" \
+            -n "{{ nodes[target_host]['group'] }}" \
+            {{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519.pub
+            echo "SSH certificate signed"
+          args:
+            executable: "/bin/bash"
+          changed_when: "'SSH certificate signed' in is_ssh_certificate_signed['stdout']"
+          register: "is_ssh_certificate_signed"
+          no_log: true
+      always:
+        - name: Clean temporary files
+          ansible.builtin.file:
+            path: "/run/user/{{ nodes[target_host]['uid'] }}/local_ssh_ca_private_key"
+            state: "absent"
+          no_log: true
+
+    - name: Create the ssh_known_hosts file
+      ansible.builtin.copy:
+        content: |
+          @cert-authority *.{{ site['domain']['internal'] }} {{ secrets['ca']['ssh']['root']['pub'] }}
+        dest: "/etc/ssh/ssh_known_hosts"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      become: true
+      no_log: true
+
+    - name: Create the ssh config file
+      ansible.builtin.copy:
+        content: |
+          {% for host in groups['all'] if host != target_host %}
+          Host {{ host }}
+            HostName {{ hostvars[host]['ansible_host'] }}
+            User {{ hostvars[host]['ansible_user'] }}
+          {% endfor %}
+        dest: "{{ nodes[target_host]['paths']['home'] }}/.ssh/config"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0400"
+      no_log: true
+
+- name: Set the SSH host
+  block:
+    - name: Deploy the SSH CA root pub file
+      ansible.builtin.copy:
+        content: |
+          {{ secrets['ca']['ssh']['root']['pub'] }}
+        dest: "/etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      become: true
+      no_log: true
+
+    - name: Check the ssh host key file
+      ansible.builtin.stat:
+        path: "/etc/ssh/ssh_host_ed25519_key"
+      register: "is_ssh_host_key_file"
+
+    - name: Check the ssh pub file
+      ansible.builtin.stat:
+        path: "/etc/ssh/ssh_host_ed25519_key.pub"
+      register: "is_ssh_host_pub_file"
+
+    - name: Create the key file (Overwrite)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        rm -f /etc/ssh/ssh_host_ed25519_key*
+        /usr/bin/ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N ""
+        echo "SSH key created"
+      args:
+        executable: "/bin/bash"
+      become: true
+      when: not is_ssh_host_key_file['stat']['exists'] or not is_ssh_host_pub_file['stat']['exists']
+      changed_when: "'SSH key created' in is_ssh_host_key_created['stdout']"
+      register: "is_ssh_host_key_created"
+      no_log: true
+
+    - name: Check the SSH certificate file
+      ansible.builtin.stat:
+        path: "/etc/ssh/ssh_host_ed25519_key-cert.pub"
+      register: "is_ssh_host_certificate_file"
+
+    - name: Get the principals of the current SSH host certificate
+      ansible.builtin.shell: |
+        set -o pipefail
+        /usr/bin/ssh-keygen -L \
+          -f /etc/ssh/ssh_host_ed25519_key-cert.pub | \
+        sed -n '/Principals:/,/Critical Options:/p' | \
+        sed '1d;$d' | \
+        sed 's/^[[:space:]]*//'
+      args:
+        executable: "/bin/bash"
+      when: is_ssh_host_certificate_file['stat']['exists']
+      changed_when: false
+      failed_when: false
+      register: "current_ssh_host_principals"
+
+    - name: Compare the signing SSH CA and the repository SSH CA
+      ansible.builtin.shell: |
+        set -o pipefail
+        test "$(/usr/bin/ssh-keygen -L \
+          -f /etc/ssh/ssh_host_ed25519_key-cert.pub | \
+          awk '/Signing CA:/ {print $4}')" = \
+        "$(/usr/bin/ssh-keygen -lf /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }} | \
+          awk '{print $2}')"
+      args:
+        executable: "/bin/bash"
+      when: is_ssh_host_certificate_file['stat']['exists']
+      changed_when: false
+      failed_when: false
+      register: "is_ssh_host_ca_same"
+      no_log: true
+
+    - name: Get the SSH CA and sign on the host ssh pub
+      when: >
+        is_ssh_host_key_created is changed or
+        not is_ssh_host_certificate_file['stat']['exists'] or
+        not [target_host,(target_host ~ '.' ~ site['domain']['internal'])] == (current_ssh_host_principals['stdout_lines'] | default([])) or
+        (is_ssh_host_ca_same['rc'] | default(0)) != 0
+      block:
+        - name: Get the SSH CA
+          delegate_to: "{{ control_host }}"
+          ansible.builtin.copy:
+            content: |
+              {{ secrets['ca']['ssh']['root']['key'] }}
+            dest: "/run/user/{{ nodes[control_host]['uid'] }}/local_ssh_ca_private_key"
+            owner: "{{ nodes[control_host]['user'] }}"
+            group: "{{ nodes[control_host]['group'] }}"
+            mode: "0400"
+          no_log: true
+
+        - name: Get the ssh host pub file from remote server
+          ansible.builtin.fetch:
+            src: "/etc/ssh/ssh_host_ed25519_key.pub"
+            dest: "/run/user/{{ nodes[control_host]['uid'] }}/ssh_host_ed25519_key.pub"
+            flat: true
+          become: true
+
+        - name: Sign on ssh host pub file
+          delegate_to: "{{ control_host }}"
+          ansible.builtin.shell: |
+            set -euo pipefail
+            ssh-keygen -s /run/user/{{ nodes[control_host]['uid'] }}/local_ssh_ca_private_key \
+            -h \
+            -I "{{ nodes[target_host]['user'] }}" \
+            -n "{{ target_host }},{{ target_host }}.{{ site['domain']['internal'] }}" \
+            /run/user/{{ nodes[control_host]['uid'] }}/ssh_host_ed25519_key.pub
+            echo "SSH host certificate signed"
+          args:
+            executable: "/bin/bash"
+          changed_when: "'SSH host certificate signed' in is_ssh_host_certificate_signed['stdout']"
+          register: "is_ssh_host_certificate_signed"
+          no_log: true
+
+        - name: Deploy signed pub file
+          ansible.builtin.copy:
+            src: "/run/user/{{ nodes[control_host]['uid'] }}/ssh_host_ed25519_key-cert.pub"
+            dest: "/etc/ssh/ssh_host_ed25519_key-cert.pub"
+            owner: "root"
+            group: "root"
+            mode: "0644"
+          become: true
+          notify: "notification_restart_sshd"
+      always:
+        - name: Clean temporary files
+          delegate_to: "{{ control_host }}"
+          ansible.builtin.file:
+            path: "/run/user/{{ nodes[control_host]['uid'] }}/{{ item }}"
+            state: "absent"
+          loop:
+            - "local_ssh_ca_private_key"
+            - "ssh_host_ed25519_key.pub"
+            - "ssh_host_ed25519_key-cert.pub"
+          no_log: true
+
+    - name: Set the auth_principals directory
+      ansible.builtin.file:
+        path: "/etc/ssh/auth_principals"
+        state: "directory"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      become: true
+
+    - name: Set the auth_principals file
+      ansible.builtin.copy:
+        content: |
+          {{ nodes[control_host]['group'] }}
+        dest: "/etc/ssh/auth_principals/{{ nodes[target_host]['user'] }}"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      become: true
+
+    - name: Set the sshd_config file
+      ansible.builtin.copy:
+        content: |
+          PermitRootLogin no
+          TrustedUserCAKeys /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub
+          AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
+          AllowGroups {{ nodes[target_host]['group'] }}
+        dest: "/etc/ssh/sshd_config.d/{{ site['org'] }}.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      become: true
+      notify: "notification_restart_sshd"

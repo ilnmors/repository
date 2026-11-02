@@ -1,0 +1,45 @@
+---
+- name: Include the timezone task
+  ansible.builtin.include_tasks:
+    file: "timezone.yaml"
+    apply:
+      tags: ["timezone"]
+  tags: ["timezone"]
+
+- name: Include the ca-certificates task
+  ansible.builtin.include_tasks:
+    file: "ca-certificates.yaml"
+    apply:
+      tags: ["ca-certificates"]
+  tags: ["ca-certificates"]
+
+- name: Include the default-dir task
+  ansible.builtin.include_tasks:
+    file: "default-dir.yaml"
+    apply:
+      tags: ["default-dir"]
+  tags: ["default-dir"]
+
+- name: Include the hosts task
+  ansible.builtin.include_tasks:
+    file: "hosts.yaml"
+    apply:
+      tags: ["hosts"]
+  tags: ["hosts"]
+
+- name: Include the ssh task
+  ansible.builtin.include_tasks:
+    file: "ssh.yaml"
+    apply:
+      tags: ["ssh"]
+  tags: ["ssh"]
+
+- name: Include the linger task
+  ansible.builtin.include_tasks:
+    file: "linger.yaml"
+    apply:
+      tags: ["linger"]
+  tags: ["linger"]
+
+- name: Apply the nodes configuration handlers
+  ansible.builtin.meta: "flush_handlers"

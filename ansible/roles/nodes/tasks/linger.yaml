@@ -1,0 +1,33 @@
+---
+- name: Install dbus-user-session
+  ansible.builtin.apt:
+    name:
+      - "dbus-user-session"
+    state: "present"
+  become: true
+
+- name: Check linger status
+  ansible.builtin.stat:
+    path: "/var/lib/systemd/linger/{{ nodes[target_host]['user'] }}"
+  register: "is_linger_file"
+
+- name: Activate linger
+  when: not is_linger_file['stat']['exists']
+  block:
+    - name: Enable linger
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/loginctl enable-linger {{ nodes[target_host]['user'] }}
+        echo "Linger enabled"
+      args:
+        executable: "/bin/bash"
+      become: true
+      changed_when: "'Linger enabled' in is_linger_enabled['stdout']"
+      register: "is_linger_enabled"
+
+    - name: Reboot system to ensure the DBUS socket activation
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 3
+      become: true
+      when: not nodes[target_host]['control_node']

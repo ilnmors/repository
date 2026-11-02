@@ -1,0 +1,19 @@
+# Managed by Ansible
+
+127.0.0.1       localhost
+127.0.1.1       {{ target_host }}.{{ site['domain']['internal'] }} {{ target_host }}
+::1             localhost
+
+{% set client_segments = networks['segments']['client']['hosts'] %}
+{% set server_segments = networks['segments']['server']['hosts'] %}
+{% for segment in [client_segments, server_segments] %}
+{% for host, address in segment | items
+    if host != target_host and address['domain'] | default(none) %}
+{% if address['ipv4'] | default(none) %}
+{{ address['ipv4'] }} {{ host }} {{ address['domain'] }}.{{ site['domain']['internal'] }}
+{% endif %}
+{% if address['ipv6'] | default(none) %}
+{{ address['ipv6'] }} {{ host }} {{ address['domain'] }}.{{ site['domain']['internal'] }}
+{% endif %}
+{% endfor %}
+{% endfor %}

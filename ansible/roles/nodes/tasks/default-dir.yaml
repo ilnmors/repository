@@ -1,0 +1,57 @@
+---
+- name: Create the secrets directory
+  ansible.builtin.file:
+    path: "/etc/secrets"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0711"
+  become: true
+
+- name: Create the root secrets directory
+  ansible.builtin.file:
+    path: "/etc/secrets/root"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0500"
+  become: true
+
+- name: Create the user secrets directory
+  ansible.builtin.file:
+    path: "/etc/secrets/{{ nodes[target_host]['user'] }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "root"
+    mode: "0500"
+  become: true
+
+- name: Create the user systemd directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+  become: true
+
+- name: Create the data directory
+  when: (nodes[target_host]['paths']['data'] | default('') | length) > 0
+  block:
+    - name: Create the root data directory
+      ansible.builtin.file:
+        path: "/data"
+        state: "directory"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      become: true
+
+    - name: Create the user data directory
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}"
+        state: "directory"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0770"
+      become: true

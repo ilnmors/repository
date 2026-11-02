@@ -1,0 +1,6 @@
+---
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ site['timezone'] }}"
+  become: true
+  tags: ["timezone"]

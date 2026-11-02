@@ -1,0 +1,22 @@
+---
+- name: Update root ca-certificates
+  ansible.builtin.shell: |
+    /usr/sbin/update-ca-certificates
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  listen: "notification_update_ca-certificates"
+  register: "result_update_ca"
+  ignore_errors: true
+
+- name: Restart sshd.service
+  ansible.builtin.systemd_service:
+    name: "sshd.service"
+    state: "restarted"
+    enabled: true
+  become: true
+  changed_when: false
+  listen: "notification_restart_sshd"
+  register: "result_restart_sshd"
+  ignore_errors: true
