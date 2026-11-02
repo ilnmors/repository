@@ -1,0 +1,10 @@
+[Unit]
+Description=Update VMM public DNS every five minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=ddns.service
+
+[Install]
+WantedBy=timers.target

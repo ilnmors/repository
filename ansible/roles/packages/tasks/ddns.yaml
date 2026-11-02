@@ -1,0 +1,49 @@
+---
+- name: Create the DDNS configuration directory
+  ansible.builtin.file:
+    path: "/etc/secrets/{{ nodes[target_host]['user'] }}/ddns"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+  become: true
+
+- name: Deploy the DDNS environment file
+  ansible.builtin.template:
+    src: "ddns/scripts/cloudflare.env.j2"
+    dest: "/etc/secrets/{{ nodes[target_host]['user'] }}/ddns/cloudflare.env"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Deploy the DDNS script
+  ansible.builtin.template:
+    src: "ddns/scripts/ddns.sh.j2"
+    dest: "/usr/local/bin/ddns.sh"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+    validate: "/bin/bash -n %s"
+  become: true
+
+- name: Deploy ddns service files
+  ansible.builtin.template:
+    src: "ddns/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/{{ item }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+    validate: "/usr/bin/systemd-analyze verify %s"
+  loop:
+    - "ddns.service"
+    - "ddns.timer"
+
+- name: Register ddns timer
+  ansible.builtin.systemd_service:
+    name: "ddns.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+    scope: "user"
