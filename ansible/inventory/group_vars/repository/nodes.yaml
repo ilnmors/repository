@@ -74,6 +74,18 @@ nodes:
               profile: "single"
               metadata: "dup"
               min_devices: 1
+        swap:
+          serials: >-
+            {{ hardwares['vmm']['disk']
+              | dict2items
+              | selectattr('value.role', 'defined')
+              | selectattr('value.role', 'equalto', 'swap')
+              | map(attribute='value.serial')
+              | list
+            }}
+          fs:
+            type: "swap"
+            label: "{{ site['org'] }}_swap"
       nic:
         eth0:
           mac: "{{ hardwares['vmm']['nic']['nic01']['mac'] }}"

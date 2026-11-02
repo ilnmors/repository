@@ -67,5 +67,33 @@
     nodes[target_host]['system']['nic']['lan'] is defined
   tags: ["networkd"]
 
+- name: Include the physical-disk task
+  when: >-
+    not nodes[target_host]['virtualization'] and
+    (nodes_physical_disks | length) > 0
+  vars:
+    nodes_physical_disks: >-
+      {{
+        nodes[target_host]['system']['disk'] |
+        default({}) |
+        dict2items |
+        selectattr('value.fs', 'defined') |
+        selectattr('value.fs.type', 'defined') |
+        selectattr('value.fs.type', 'in', ['btrfs', 'swap']) |
+        map(attribute='key') |
+        list
+      }}
+  tags: ["physical-disk"]
+  block:
+    - name: Include the physical-disk task
+      ansible.builtin.include_tasks:
+        file: "physical-disk.yaml"
+        apply:
+          tags: ["physical-disk"]
+      loop: "{{ nodes_physical_disks }}"
+      loop_control:
+        loop_var: "nodes_disk"
+      tags: ["physical-disk"]
+
 - name: Apply the nodes configuration handlers
   ansible.builtin.meta: "flush_handlers"

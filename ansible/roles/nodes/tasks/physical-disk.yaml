@@ -1,0 +1,179 @@
+---
+# A btrfs volume without mount_point is passed to a VM as block devices and is not mounted here.
+- name: Install btrfs
+  ansible.builtin.apt:
+    name:
+      - "btrfs-progs"
+    state: "present"
+  become: true
+  when: nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'btrfs'
+
+- name: Set the hard disk path
+  ansible.builtin.shell: |
+    set -o pipefail
+    ls -1 /dev/disk/by-id/*{{ nodes[target_host]['system']['disk'][nodes_disk]['serials'] | join('* /dev/disk/by-id/*') }}* | \
+    grep -vE -- '-part[0-9]+$' | \
+    xargs -r readlink -f | \
+    sort -u
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  register: "nodes_disk_path"
+
+- name: Load the disk's filesystem
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsblk {{ nodes_disk_path['stdout_lines'] | join(' ') }} -o FSTYPE,LABEL --json
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  register: "nodes_disk_fs_info"
+
+- name: Set the disk's filesystem information
+  ansible.builtin.set_fact:
+    nodes_existing_correct_disk_num: >-
+      {{
+        (nodes_disk_fs_info['stdout'] | from_json)['blockdevices']
+        | selectattr('fstype', 'equalto', nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'])
+        | selectattr("label", 'equalto',  nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'])
+        | list
+        | length
+      }}
+    nodes_existing_empty_disk_num: >-
+      {{
+        (nodes_disk_fs_info['stdout'] | from_json)['blockdevices']
+        | selectattr('fstype', 'equalto', none)
+        | selectattr("label", 'equalto',  none)
+        | list
+        | length
+      }}
+
+- name: Check the disk's filesystem already exists with different label
+  ansible.builtin.assert:
+    that:
+      - (nodes_disk_path['stdout_lines'] | length) > 0
+      - >-
+        ((nodes_disk_fs_info['stdout'] | from_json)['blockdevices'] | length)
+        == (nodes_disk_path['stdout_lines'] | length)
+      - >-
+        nodes_existing_correct_disk_num == (nodes_disk_path['stdout_lines'] | length)
+        or
+        nodes_existing_empty_disk_num == (nodes_disk_path['stdout_lines'] | length)
+    success_msg: "All disks are empty or correct"
+    fail_msg: "One or more than one disk has unexpected condition. Please check and try again."
+
+- name: Check the disk number
+  ansible.builtin.fail:
+    msg: "Below {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['btrfs']['min_devices'] }} disks for RAID, found {{ nodes_disk_path['stdout_lines'] | length }}"
+  when: >-
+    nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'btrfs' and
+    (nodes_disk_path['stdout_lines'] | length)
+      < nodes[target_host]['system']['disk'][nodes_disk]['fs']['btrfs']['min_devices']
+
+- name: Check the swap disk number
+  ansible.builtin.fail:
+    msg: "Swap needs exactly one disk, found {{ nodes_disk_path['stdout_lines'] | length }}"
+  when: >-
+    nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'swap' and
+    (nodes_disk_path['stdout_lines'] | length) != 1
+
+- name: Set the btrfs nodes_disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+    mkfs.btrfs \
+    -L {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }} \
+    -d {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['btrfs']['profile'] }} \
+    -m {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['btrfs']['metadata'] }} \
+    {{ nodes_disk_path['stdout_lines'] | join(' ') }}
+    echo "Btrfs filesystem created"
+  args:
+    executable: "/bin/bash"
+  become: true
+  when:
+    - nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'btrfs'
+    - nodes_existing_empty_disk_num == (nodes_disk_path['stdout_lines'] | length)
+    - (nodes_disk_path['stdout_lines'] | length) >= nodes[target_host]['system']['disk'][nodes_disk]['fs']['btrfs']['min_devices']
+  changed_when: "'Btrfs filesystem created' in nodes_is_mkfs['stdout']"
+  register: "nodes_is_mkfs"
+
+- name: Set the swap nodes_disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+    mkswap \
+    -L {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }} \
+    {{ nodes_disk_path['stdout_lines'] | first }}
+    echo "Swap created"
+  args:
+    executable: "/bin/bash"
+  become: true
+  when:
+    - nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'swap'
+    - nodes_existing_empty_disk_num == (nodes_disk_path['stdout_lines'] | length)
+  changed_when: "'Swap created' in nodes_is_mkswap['stdout']"
+  register: "nodes_is_mkswap"
+
+- name: Mount the btrfs nodes_disk
+  when: nodes[target_host]['system']['disk'][nodes_disk]['fs']['mount_point'] is defined
+  block:
+    - name: Mount the btrfs nodes_disk
+      ansible.posix.mount:
+        path: "{{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['mount_point'] }}"
+        src: "LABEL={{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }}"
+        state: "mounted"
+        fstype: "{{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] }}"
+        opts: "{{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['mount_opts'] | join(',') }}"
+      become: true
+
+    - name: Verify disk is mounted
+      ansible.builtin.shell: |
+        mountpoint -q {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['mount_point'] | quote }}
+      args:
+        executable: "/bin/bash"
+      become: true
+      changed_when: false
+
+    - name: Deploy btrfs scrub service and timer
+      ansible.builtin.template:
+        src: "disk/btrfs/btrfs-scrub.{{ item }}.j2"
+        dest: "/etc/systemd/system/btrfs-scrub-{{ nodes_disk }}.{{ item }}"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      loop:
+        - "service"
+        - "timer"
+      become: true
+
+    - name: Enable auto btrfs scrub
+      ansible.builtin.systemd_service:
+        name: "btrfs-scrub-{{ nodes_disk }}.timer"
+        state: "started"
+        enabled: true
+        daemon_reload: true
+      become: true
+
+- name: Activate the swap nodes_disk
+  when: nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'swap'
+  block:
+    - name: Register the swap in fstab
+      ansible.posix.mount:
+        path: "none"
+        src: "LABEL={{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }}"
+        state: "present"
+        fstype: "swap"
+        opts: "sw"
+      become: true
+
+    - name: Enable the swap
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if ! /usr/sbin/swapon --show=LABEL --noheadings | grep -qxF "{{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }}"; then
+          /usr/sbin/swapon -L {{ nodes[target_host]['system']['disk'][nodes_disk]['fs']['label'] }}
+          echo "Swap enabled"
+        fi
+      args:
+        executable: "/bin/bash"
+      become: true
+      changed_when: "'Swap enabled' in is_swap_enabled['stdout']"
+      register: "is_swap_enabled"
