@@ -1,0 +1,11 @@
+
+{% for vlan in (networks['segments'] | dict2items | selectattr('value.subnet', 'defined') | map(attribute='key') | list) %}
+{% if
+    networks['segments'][vlan]['subnet']['ipv4'] is defined and
+    networks['segments'][vlan]['subnet']['ipv4'] is not none
+%}allow {{ networks['segments'][vlan]['subnet']['ipv4'] }}{% endif %}{{ '' }}
+{% if
+    networks['segments'][vlan]['subnet']['ipv6'] is defined and
+    networks['segments'][vlan]['subnet']['ipv6'] is not none
+%}allow {{ networks['segments'][vlan]['subnet']['ipv6'] }}{% endif %}{{ '' }}
+{% endfor %}
