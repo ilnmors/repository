@@ -103,5 +103,13 @@
         loop_var: "nodes_disk"
       tags: ["physical-disk"]
 
+- name: Include the smart-exporter task
+  ansible.builtin.include_tasks:
+    file: "smart-exporter.yaml"
+    apply:
+      tags: ["smart-exporter"]
+  when: target_host in services['packages']['smart-exporter']['units']['main']['hosts']
+  tags: ["smart-exporter"]
+
 - name: Apply the nodes configuration handlers
   ansible.builtin.meta: "flush_handlers"
