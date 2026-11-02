@@ -67,6 +67,14 @@
     nodes[target_host]['system']['nic']['lan'] is defined
   tags: ["networkd"]
 
+- name: Include the resolved task
+  ansible.builtin.include_tasks:
+    file: "resolved.yaml"
+    apply:
+      tags: ["resolved"]
+  when: target_host in services['packages']['resolved']['units']['main']['hosts']
+  tags: ["resolved"]
+
 - name: Include the physical-disk task
   when: >-
     not nodes[target_host]['virtualization'] and

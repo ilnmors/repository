@@ -62,6 +62,11 @@ services:
         main:
           release: "conntrack"
           hosts: ["vmm"]
+    resolved:
+      units:
+        main:
+          release: "resolved"
+          hosts: ["vmm", "infra", "auth", "app"]
     chrony:
       units:
         main:

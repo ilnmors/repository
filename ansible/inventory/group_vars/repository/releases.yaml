@@ -38,6 +38,9 @@ releases:
     chrony:
       source: "debian"
       name: "chrony"
+    resolved:
+      source: "debian"
+      name: "systemd-resolved"
     bind:
       source: "debian"
       name: "bind9"
