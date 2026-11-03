@@ -1,0 +1,102 @@
+---
+- name: Set the container image facts
+  ansible.builtin.set_fact:
+    containers_build_changed: false
+    containers_container_repository: >-
+      {{
+          site['domain']['internal'] ~ '/' ~ target_host ~ '/' ~ target_container
+          if releases['containers'][target_container]['build']['status'] | default(false)
+          else
+            releases['containers'][target_container]['repository']
+      }}
+
+- name: Check the container archived image
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/archives/containers/{{ containers_container_repository | replace('/', '_') }}_{{ releases['containers'][target_container]['tag'] }}.tar"
+  register: "containers_archived_image"
+
+- name: Check the local container image
+  containers.podman.podman_image_info:
+    name: "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
+  register: "containers_local_image"
+
+- name: Register the archived image
+  containers.podman.podman_load:
+    input: "{{ nodes[target_host]['paths']['data'] }}/archives/containers/{{ containers_container_repository | replace('/', '_') }}_{{ releases['containers'][target_container]['tag'] }}.tar"
+  when:
+    - containers_archived_image['stat']['exists']
+    - (containers_local_image['images'] | length) == 0
+  notify: "{{ containers_image_notifications | default(omit) }}"
+
+- name: Pull the image
+  containers.podman.podman_image:
+    name: "{{ containers_container_repository }}"
+    tag: "{{ releases['containers'][target_container]['tag'] }}"
+    state: "present"
+    pull: true
+  when:
+    - not (releases['containers'][target_container]['build']['status'] | default(false))
+    - not containers_archived_image['stat']['exists']
+  notify: "{{ containers_image_notifications | default(omit) }}"
+
+- name: Build the image
+  when: releases['containers'][target_container]['build']['status'] | default(false)
+  block:
+    - name: Set the build file tree
+      ansible.builtin.set_fact:
+        containers_build_tree: "{{ query('community.general.filetree', role_path ~ '/templates/' ~ target_container ~ '/build/') | sort(attribute='path') }}"
+
+    - name: Create the build directories
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/{{ target_container }}/build/{{ item }}"
+        state: "directory"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0750"
+      loop: "{{ [''] + (containers_build_tree | selectattr('state', 'equalto', 'directory') | map(attribute='path') | list) }}"
+      register: "containers_build_directories_changed"
+
+    - name: Deploy the build templates
+      ansible.builtin.template:
+        src: "{{ item['src'] }}"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/containers/{{ target_container }}/build/{{ item['path'] | regex_replace('[.]j2$', '') }}"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "{{ item['mode'] }}"
+      loop: "{{ containers_build_tree | selectattr('state', 'equalto', 'file') | list }}"
+      loop_control:
+        label: "{{ item['path'] }}"
+      register: "containers_build_templates_changed"
+
+    - name: Set the build context change
+      ansible.builtin.set_fact:
+        containers_build_changed: >-
+          {{
+            containers_build_directories_changed['changed']
+            or containers_build_templates_changed['changed']
+          }}
+
+    - name: Build the container image
+      containers.podman.podman_image:
+        name: "{{ containers_container_repository }}"
+        # check tags from container file
+        tag: "{{ releases['containers'][target_container]['tag'] }}"
+        state: "build"
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/{{ target_container }}/build"
+        force: "{{ containers_build_changed }}"
+      when: not containers_archived_image['stat']['exists'] or containers_build_changed
+      notify: "{{ containers_image_notifications | default(omit) }}"
+
+    - name: Prune the dangling images
+      containers.podman.podman_prune:
+        image: true
+      when: not containers_archived_image['stat']['exists'] or containers_build_changed
+
+- name: Save the container archive image
+  containers.podman.podman_save:
+    image:
+      - "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/archives/containers/{{ containers_container_repository | replace('/', '_') }}_{{ releases['containers'][target_container]['tag'] }}.tar"
+    format: "oci-archive"
+    force: "{{ containers_build_changed }}"
+  when: not containers_archived_image['stat']['exists'] or containers_build_changed
