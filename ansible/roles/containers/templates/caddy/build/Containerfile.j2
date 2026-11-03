@@ -1,0 +1,17 @@
+FROM {{ releases['containers'][target_container]['repository'] }}:{{ releases['containers'][target_container]['tag'] }}-builder-alpine AS builder
+
+RUN xcaddy build{% for item in (
+    services['containers'][target_container]['units']['main']['build']
+    | dict2items
+    | selectattr('value.hosts', 'contains', target_host)
+    | map(attribute='value.release')
+    | list
+    ) %} --with {{ releases['containers'][target_container]['build'][item]['repository'] }}{% endfor %}
+
+FROM {{ releases['containers'][target_container]['repository'] }}:{{ releases['containers'][target_container]['tag'] }}
+
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+RUN <<EOF cat > /usr/local/share/ca-certificates/{{ site['ca']['x509']['root']['certificate_file'] }}
+{{ secrets['ca']['x509']['root']['crt'] }}
+EOF
+RUN update-ca-certificates

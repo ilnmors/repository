@@ -1,0 +1,93 @@
+{% set build = (services['containers'][target_container]['units']['main']['build']) %}
+{% if target_host in build['http-bouncer']['hosts'] and target_host in build['crowdsec-bouncer']['hosts'] %}
+{
+        # CrowdSec LAPI connection
+        crowdsec {
+                api_url https://{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['crowdsec']['units']['lapi']['ports']['https']['ext'] }}
+                api_key "{file./run/secrets/CADDY_CROWDSEC_KEY}"
+        }
+}
+# Snippets
+# CrowdSec log for parser
+(crowdsec_log) {
+        log {
+                output file /log/access.log {
+                        mode 0644
+                        roll_size 100MiB
+                        roll_keep 1
+                }
+                format json
+        }
+}
+{% else %}
+{
+        servers {
+{% if build['crowdsec-bouncer']['hosts'] | length > 0 %}
+                trusted_proxies static{% for item in (build['crowdsec-bouncer']['hosts'] | unique | list) %} {{ networks['segments']['server']['hosts'][item]['ipv4'] }}{% if networks['segments']['server']['hosts'][item]['ipv6'] | default(none) %} {{ networks['segments']['server']['hosts'][item]['ipv6'] }}{% endif %}{% endfor %}
+
+{% endif %}
+        }
+}
+{% endif %}
+# Private TLS ACME with DNS-01-challenge
+(private_tls) {
+        tls {
+                issuer acme {
+                        dir https://{{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['step-ca']['units']['main']['ports']['https']['int'] }}/acme/acme@{{ site['domain']['internal'] }}/directory
+                        dns rfc2136 {
+                                server {{ services['packages']['bind']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['bind']['units']['main']['ports']['dns']['ext'] }}
+                                key_name acme-key
+                                key_alg hmac-sha256
+                                key "{file./run/secrets/CADDY_ACME_KEY}"
+                        }
+                        resolvers {{ services['packages']['bind']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+                }
+        }
+}
+{% set caddy_services = (
+        services['packages']
+        | dict2items
+        | selectattr('value.units', 'defined')
+        | map(attribute='value.units')
+        | map('dict2items')
+        | flatten
+        | selectattr('value.dependency', 'defined')
+        | selectattr('value.dependency.web', 'defined')
+        | selectattr('value.dependency.web.status', 'defined')
+        | selectattr('value.dependency.web.status', 'equalto', true)
+        | map(attribute='value')
+        | list
+    ) + (
+        services['containers']
+        | dict2items
+        | selectattr('value.units', 'defined')
+        | map(attribute='value.units')
+        | map('dict2items')
+        | flatten
+        | selectattr('value.dependency', 'defined')
+        | selectattr('value.dependency.web', 'defined')
+        | selectattr('value.dependency.web.status', 'defined')
+        | selectattr('value.dependency.web.status', 'equalto', true)
+        | map(attribute='value')
+        | list
+    )
+%}
+
+{% for service in caddy_services %}
+{% if target_host in service['hosts'] and (service['domain']['internal'] | default('', true) | length) > 0 %}
+{{ service['domain']['internal'] }}.{{ site['domain']['internal'] }} {
+        import private_tls
+{% if service['ports']['https'] is defined %}
+        reverse_proxy https://{{ service['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ service['ports']['https']['int'] | default(service['ports']['https']['ext']) }}
+{% else %}
+        map {http.request.header.X-Forwarded-Host} {upstream_host} {
+                "" {http.request.hostport}
+                default {http.request.header.X-Forwarded-Host}
+        }
+        reverse_proxy host.containers.internal:{{ service['ports']['http']['int'] | default(service['ports']['http']['ext']) }} {
+                header_up Host {upstream_host}
+        }
+{% endif %}
+}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,95 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "caddy"
+
+- name: Validate the caddy crowdsec modules
+  ansible.builtin.assert:
+    that:
+      - >-
+        (services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts'] | unique | sort)
+        == (services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts'] | unique | sort)
+    success_msg: "The caddy CrowdSec modules are enabled on matching hosts."
+    fail_msg: "Enable the HTTP and CrowdSec bouncers together on the same hosts."
+
+- name: Set the caddy facts
+  ansible.builtin.set_fact:
+    containers_secrets: >-
+      {{
+        [
+          {'name': 'CADDY_ACME_KEY', 'value': secrets['ca']['x509']['acme']['key']},
+          (
+            {'name': 'CADDY_CROWDSEC_KEY', 'value': secrets['crowdsec']['bouncers'][target_host]}
+            if target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts']
+            and target_host in services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts']
+            else none
+          )
+        ] | reject('equalto', none) | list
+      }}
+  no_log: true
+
+- name: Create the caddy directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/caddy"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/etc"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/data"
+  become: true
+
+- name: Create the caddy log directory
+  ansible.builtin.file:
+    path: "/var/log/caddy"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  become: true
+  when: >-
+    target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts']
+    and target_host in services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts']
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_caddy"
+  no_log: true
+
+- name: Deploy the caddy image
+  vars:
+    containers_image_notifications: "notification_restart_caddy"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the Caddyfile
+  ansible.builtin.template:
+    src: "caddy/etc/Caddyfile.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/etc/Caddyfile"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  become: true
+  notify: "notification_restart_caddy"
+  no_log: true
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "caddy/caddy.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/caddy.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_caddy"
+
+- name: Start the caddy
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "caddy.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_caddy_started"
