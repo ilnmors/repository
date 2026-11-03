@@ -64,7 +64,7 @@
             <address type='virtio-serial' controller='0' bus='0' port='1' />
         </channel>
 {% if (nodes[target_vm]['system']['gpu']['type'] | default(none)) == 'vfio' %}
-{% for address in nodes[target_vm]['system']['gpu']['address'] | reject('none') %}
+{% for address in nodes[target_vm]['system']['gpu']['address'] | reject('equalto', none) %}
 {% set pci = address | split(':') %}
         <hostdev mode='subsystem' type='pci' managed='yes'>
             <driver name='vfio'/>
