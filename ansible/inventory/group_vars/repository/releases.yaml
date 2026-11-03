@@ -68,6 +68,9 @@ releases:
     podman:
       source: "debian"
       name: "podman"
+    ksm:
+      source: "debian"
+      name: "ksmtuned"
     firmware-intel-graphics:
       source: "debian"
       name: "firmware-intel-graphics"

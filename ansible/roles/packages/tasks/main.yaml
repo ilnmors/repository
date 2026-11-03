@@ -138,6 +138,20 @@
   when: target_host in services['packages']['podman']['units']['main']['hosts']
   tags: ["podman"]
 
+- name: Include the ksm task
+  ansible.builtin.include_tasks:
+    file: "ksm.yaml"
+    apply:
+      tags: ["ksm"]
+  when: >-
+    target_host in (
+      services['packages']['ksm']['units']
+      | dict2items
+      | map(attribute='value.hosts')
+      | flatten
+    )
+  tags: ["ksm"]
+
 - name: Include the alloy task
   ansible.builtin.include_tasks:
     file: "alloy.yaml"

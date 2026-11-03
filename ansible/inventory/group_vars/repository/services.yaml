@@ -200,6 +200,14 @@ services:
         main:
           release: "podman"
           hosts: ["infra", "auth", "app"]
+    ksm:
+      units:
+        tuned:
+          release: "ksm"
+          hosts: ["vmm"]
+        static:
+          release: "ksm"
+          hosts: ["app"]
     alloy:
       units:
         main:
