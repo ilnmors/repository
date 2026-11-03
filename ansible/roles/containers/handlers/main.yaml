@@ -22,3 +22,15 @@
   register: "result_restart_caddy"
   listen: "notification_restart_caddy"
   ignore_errors: true
+
+- name: Restart the rustfs.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "rustfs.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_rustfs_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_rustfs"
+  listen: "notification_restart_rustfs"
+  ignore_errors: true

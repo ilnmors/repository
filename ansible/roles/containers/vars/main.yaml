@@ -1,4 +1,6 @@
 ---
+containers_service_list: "{{ (services['packages'] | dict2items) + (services['containers'] | dict2items) }}"
+
 containers_step_ca_allowed_domains: >-
   {{
     networks['segments']
@@ -9,3 +11,56 @@ containers_step_ca_allowed_domains: >-
     | map('regex_replace', '$', '.' ~ site['domain']['internal'])
     | list
   }}
+
+containers_rustfs_units: >-
+  {{
+    containers_service_list
+    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
+    | selectattr('value.dependency', 'defined')
+    | selectattr('value.dependency.s3', 'defined')
+    | selectattr('value.dependency.s3.status', 'defined')
+    | selectattr('value.dependency.s3.status', 'equalto', true)
+    | map(attribute='value')
+    | list
+  }}
+
+containers_rustfs_clients: >-
+  {%- set containers_found = namespace(clients=[]) -%}
+  {%- for containers_service in containers_service_list -%}
+  {%-   set containers_units = (
+          containers_service['value']['units'] | default({}) | dict2items
+          | selectattr('value.dependency', 'defined')
+          | selectattr('value.dependency.s3', 'defined')
+          | selectattr('value.dependency.s3.status', 'defined')
+          | selectattr('value.dependency.s3.status', 'equalto', true)
+          | map(attribute='value') | list
+        ) -%}
+  {%-   if (containers_units | length) > 0 -%}
+  {%-     set containers_definitions = containers_units | map(attribute='dependency.s3') | unique | list -%}
+  {%-     set containers_found.clients = containers_found.clients + [{
+            'name': containers_service['key'],
+            'access_key': (containers_definitions | first)['access_key'] | default(containers_service['key']),
+            's3': containers_definitions | first,
+            'definitions': containers_definitions
+          }] -%}
+  {%-   endif -%}
+  {%- endfor -%}
+  {{ containers_found.clients }}
+
+containers_rustfs_cors_origins: >-
+  {%- set containers_found = namespace(origins=[]) -%}
+  {%- for containers_unit in containers_rustfs_units -%}
+  {%-   for containers_scope in ['internal', 'public'] -%}
+  {%-     set containers_domain = containers_unit['domain'][containers_scope] | default('', true) -%}
+  {%-     if (containers_domain | length) > 0 -%}
+  {%-       set containers_found.origins = containers_found.origins + [
+              'https://' ~ (
+                site['domain'][containers_scope]
+                if containers_domain == '@'
+                else containers_domain ~ '.' ~ site['domain'][containers_scope]
+              )
+            ] -%}
+  {%-     endif -%}
+  {%-   endfor -%}
+  {%- endfor -%}
+  {{ containers_found.origins | unique | list }}

@@ -1,0 +1,33 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=RustFS Object Storage
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=rustfs
+HostName=rustfs
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['http']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/rustfs/data:/data:rw
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="RUSTFS_ADDRESS=:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}"
+Environment="RUSTFS_CONSOLE_ENABLE=false"
+Environment="RUSTFS_ACCESS_KEY=rustfs"
+Environment="RUSTFS_OBS_LOGGER_LEVEL=error"
+Environment="RUSTFS_CORS_ALLOWED_ORIGINS={{ containers_rustfs_cors_origins | join(',') }}"
+
+Secret=RUSTFS_SECRET_KEY,type=env,target=RUSTFS_SECRET_KEY
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
