@@ -1,0 +1,11 @@
+---
+containers_step_ca_allowed_domains: >-
+  {{
+    networks['segments']
+    | dict2items
+    | map(attribute='value.hosts') | map('default', {}) | map('dict2items') | flatten
+    | map(attribute='value.alias') | select('defined') | flatten
+    | unique
+    | map('regex_replace', '$', '.' ~ site['domain']['internal'])
+    | list
+  }}

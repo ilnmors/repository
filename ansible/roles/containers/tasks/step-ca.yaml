@@ -1,0 +1,110 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "step-ca"
+
+- name: Set the step-ca facts
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "STEP_CA_PASSWORD"
+        value: "{{ secrets['ca']['x509']['intermediate']['password'] }}"
+  no_log: true
+
+- name: Create the step-ca directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['step-ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/certs"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/secrets"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/templates"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/step-ca"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/step-ca/db"
+  become: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_step_ca"
+  no_log: true
+
+- name: Deploy the step-ca image
+  vars:
+    containers_image_notifications: "notification_restart_step_ca"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the step-ca configuration files
+  ansible.builtin.template:
+    src: "step-ca/config/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/config/{{ item }}"
+    owner: "{{ services['containers']['step-ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  loop:
+    - "ca.json"
+    - "defaults.json"
+  become: true
+  notify: "notification_restart_step_ca"
+
+- name: Deploy the step-ca certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ item['path'] }}/{{ item['name'] }}"
+    owner: "{{ services['containers']['step-ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/certs"
+      mode: "0440"
+    - name: "{{ site['ca']['x509']['intermediate']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['intermediate']['crt'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/certs"
+      mode: "0440"
+    - name: "{{ site['ca']['x509']['intermediate']['private_key_file'] }}"
+      value: "{{ secrets['ca']['x509']['intermediate']['key'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/secrets"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_step_ca"
+  no_log: true
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "step-ca/step-ca.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/step-ca.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_step_ca"
+
+- name: Start the step-ca
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "step-ca.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_step_ca_started"
+
+- name: Apply the step-ca configuration handlers
+  ansible.builtin.meta: "flush_handlers"
+
+- name: Wait for the step-ca server
+  ansible.builtin.uri:
+    url: "https://{{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['step-ca']['units']['main']['ports']['https']['int'] }}/health"
+    ca_path: "{{ nodes[target_host]['paths']['home'] }}/containers/step-ca/certs/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    status_code: 200
+    use_proxy: false
+  until: containers_step_ca_ready['status'] | default(0) == 200
+  retries: 20
+  delay: 3
+  register: "containers_step_ca_ready"

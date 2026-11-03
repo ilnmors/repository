@@ -1,0 +1,6 @@
+{
+	"ca-url": "https://{{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['step-ca']['units']['main']['ports']['https']['int'] }}",
+	"ca-config": "/home/step/config/ca.json",
+	"fingerprint": "",
+	"root": "/home/step/certs/{{ site['ca']['x509']['root']['certificate_file'] }}"
+}

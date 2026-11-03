@@ -1,1 +1,11 @@
 ---
+- name: Include the step-ca task
+  ansible.builtin.include_tasks:
+    file: "step-ca.yaml"
+    apply:
+      tags: ["step-ca"]
+  when: target_host in services['containers']['step-ca']['units']['main']['hosts']
+  tags: ["step-ca"]
+
+- name: Apply the containers configuration handlers
+  ansible.builtin.meta: "flush_handlers"

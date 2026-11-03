@@ -1,0 +1,38 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description={{ target_container }}
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName={{ target_container }}
+HostName={{ target_container }}
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['https']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['https']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['https']['protocol'] }}
+
+Volume=%h/containers/step-ca/certs:/home/step/certs:ro
+Volume=%h/containers/step-ca/secrets:/home/step/secrets:ro
+Volume=%h/containers/step-ca/config:/home/step/config:rw
+Volume=%h/containers/step-ca/templates:/home/step/templates:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/step-ca/db:/home/step/db:rw
+
+Environment="TZ={{ site['timezone'] }}"
+# Since 0.30.0, Docker CMD no longer expands PWDPATH.
+#Environment="PWDPATH=/run/secrets/STEP_CA_PASSWORD"
+
+Secret=STEP_CA_PASSWORD,target=/run/secrets/STEP_CA_PASSWORD
+
+Exec=/usr/local/bin/step-ca --password-file /run/secrets/STEP_CA_PASSWORD /home/step/config/ca.json
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
