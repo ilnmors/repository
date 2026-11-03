@@ -132,7 +132,7 @@ services:
               - "suricata.yaml"
         http-bouncer:
           release: "crowdsec"
-          hosts: []
+          hosts: "{{ services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts'] }}"
           acquisd:
             collection:
               - "crowdsecurity/caddy"
