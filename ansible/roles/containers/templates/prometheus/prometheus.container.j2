@@ -1,0 +1,39 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Prometheus
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=prometheus
+HostName=prometheus
+
+AddHost={{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['https']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['https']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['https']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/prometheus/data:/prometheus:rw
+Volume=%h/containers/prometheus/etc:/etc/prometheus:ro
+Volume=%h/containers/prometheus/ssl:/etc/ssl/prometheus:ro
+
+Environment="TZ={{ site['timezone'] }}"
+
+Exec=--config.file=/etc/prometheus/prometheus.yaml \
+     --web.config.file=/etc/prometheus/web-config.yaml \
+     --web.enable-remote-write-receiver \
+     --storage.tsdb.path=/prometheus \
+     --storage.tsdb.retention.time=30d \
+     --storage.tsdb.retention.size=15GB
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,105 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "prometheus"
+
+- name: Register the missing prometheus certificate # noqa: var-naming[no-role-prefix]
+  vars:
+    target_service: "{{ services['containers']['prometheus']['units']['main'] }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "x509-leaf"
+  when: >-
+    (secrets['ca']['x509']['leaf'][services['containers']['prometheus']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+    (secrets['ca']['x509']['leaf'][services['containers']['prometheus']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Create the prometheus directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['prometheus']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus/etc"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus/ssl"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/prometheus"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/prometheus/data"
+  become: true
+
+- name: Deploy the prometheus configuration
+  ansible.builtin.template:
+    src: "prometheus/etc/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus/etc/{{ item }}"
+    owner: "{{ services['containers']['prometheus']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  loop:
+    - "prometheus.yaml"
+    - "rules.yaml"
+    - "web-config.yaml"
+  become: true
+  notify: "notification_restart_prometheus"
+
+- name: Deploy the prometheus certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus/ssl/{{ item['name'] }}"
+    owner: "{{ services['containers']['prometheus']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      mode: "0440"
+    - name: "{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['containers']['prometheus']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['containers']['prometheus']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_prometheus"
+  no_log: true
+
+- name: Deploy the prometheus image
+  vars:
+    containers_image_notifications: "notification_restart_prometheus"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "prometheus/prometheus.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/prometheus.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_prometheus"
+
+- name: Start the prometheus
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "prometheus.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_prometheus_started"
+
+- name: Apply the prometheus configuration handlers
+  ansible.builtin.meta: "flush_handlers"
+
+- name: Wait for the prometheus server
+  ansible.builtin.uri:
+    url: "https://{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['prometheus']['units']['main']['ports']['https']['int'] }}/-/ready"
+    ca_path: "{{ nodes[target_host]['paths']['home'] }}/containers/prometheus/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    status_code: 200
+    use_proxy: false
+  until: containers_prometheus_ready['status'] | default(0) == 200
+  retries: 20
+  delay: 3
+  register: "containers_prometheus_ready"

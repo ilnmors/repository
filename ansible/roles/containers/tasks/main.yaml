@@ -47,5 +47,13 @@
   when: target_host in services['containers']['ldap']['units']['main']['hosts']
   tags: ["ldap"]
 
+- name: Include the prometheus task
+  ansible.builtin.include_tasks:
+    file: "prometheus.yaml"
+    apply:
+      tags: ["prometheus"]
+  when: target_host in services['containers']['prometheus']['units']['main']['hosts']
+  tags: ["prometheus"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"
