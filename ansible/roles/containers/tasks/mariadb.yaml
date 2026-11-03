@@ -1,0 +1,289 @@
+---
+- name: Validate the MariaDB client names
+  ansible.builtin.assert:
+    that:
+      - item is match('^[a-z][a-z0-9_-]{0,59}$')
+      - item not in ['postgres', 'postgresql', 'mariadb', 'mysql', 'root', 'cluster']
+    fail_msg: "Use a service name of up to 60 lowercase letters, digits, underscores or hyphens for DB clients."
+    success_msg: "The MariaDB client names are valid."
+  loop: "{{ containers_mariadb_services }}"
+
+- name: Register the missing MariaDB passwords on secrets.yaml
+  vars:
+    secrets_target: '["mariadb"]["password"][{{ containers_mariadb_service | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: "{{ containers_mariadb_services }}"
+  loop_control:
+    loop_var: "containers_mariadb_service"
+  when: (secrets['mariadb']['password'][containers_mariadb_service] | default('', true) | length) == 0
+  no_log: true
+
+- name: Configure the MariaDB server
+  when: target_host in services['containers']['mariadb']['units']['main']['hosts']
+  block:
+    - name: Set the target container # noqa: var-naming[no-role-prefix]
+      ansible.builtin.set_fact:
+        target_container: "mariadb"
+
+    - name: Register the missing MariaDB certificate # noqa: var-naming[no-role-prefix]
+      vars:
+        target_service: "{{ services['containers']['mariadb']['units']['main'] }}"
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "x509-leaf"
+      when: >-
+        (secrets['ca']['x509']['leaf'][services['containers']['mariadb']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+        (secrets['ca']['x509']['leaf'][services['containers']['mariadb']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+      no_log: true
+
+    - name: Create the MariaDB directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: "directory"
+        owner: "{{ services['containers']['mariadb']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0770"
+      loop:
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/data"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/config"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/ssl"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/init"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/mariadb"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/mariadb/backups"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/mariadb/backups/sql"
+      become: true
+
+    - name: Deploy the MariaDB image
+      vars:
+        containers_image_notifications: "notification_restart_mariadb"
+      ansible.builtin.include_tasks:
+        file: "deploy.yaml"
+
+    - name: Deploy the MariaDB configuration
+      ansible.builtin.template:
+        src: "mariadb/config/{{ item }}.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/config/{{ item }}"
+        owner: "{{ services['containers']['mariadb']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0600"
+      loop:
+        - "mariadb.cnf"
+      become: true
+      notify: "notification_restart_mariadb"
+
+    - name: Deploy the MariaDB certificate and key
+      ansible.builtin.copy:
+        content: |
+          {{ item['value'] }}
+        dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/ssl/{{ item['name'] }}"
+        owner: "{{ services['containers']['mariadb']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "{{ item['mode'] }}"
+      loop:
+        - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+          value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+          mode: "0440"
+        - name: "{{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.crt"
+          value: |
+            {{ secrets['ca']['x509']['leaf'][services['containers']['mariadb']['units']['main']['domain']['internal']]['crt'] | trim }}
+            {{ secrets['ca']['x509']['intermediate']['crt'] }}
+          mode: "0440"
+        - name: "{{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.key"
+          value: "{{ secrets['ca']['x509']['leaf'][services['containers']['mariadb']['units']['main']['domain']['internal']]['key'] }}"
+          mode: "0400"
+      become: true
+      notify: "notification_restart_mariadb"
+      no_log: true
+
+    - name: Check the MariaDB .init marker
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/.init"
+      register: "containers_mariadb_init_marker"
+
+    - name: Prepare the initial MariaDB database
+      when: not containers_mariadb_init_marker['stat']['exists']
+      block:
+        - name: Check the MariaDB data directory is empty
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/data"
+            file_type: "any"
+            hidden: true
+            recurse: false
+          become: true
+          register: "containers_mariadb_data_directory"
+
+        - name: Validate the initial MariaDB data directory
+          ansible.builtin.assert:
+            that:
+              - (containers_mariadb_data_directory['skipped_paths'] | default({}) | length) == 0
+              - containers_mariadb_data_directory['matched'] == 0
+            fail_msg: "The MariaDB data directory is not empty or could not be inspected, but .init is missing. Verify the previous initialization or restore before retrying."
+            success_msg: "The MariaDB data directory is empty."
+
+        - name: Check the MariaDB SQL backups
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['data'] }}/containers/mariadb/backups/sql"
+            file_type: "file"
+            patterns: "*.sql"
+            hidden: true
+          become: true
+          register: "containers_mariadb_backups"
+
+        - name: Validate the MariaDB SQL backup set
+          ansible.builtin.assert:
+            that:
+              - >-
+                containers_mariadb_backups['matched'] == 0 or
+                (
+                  containers_mariadb_backups['files'] | map(attribute='path') | map('basename')
+                  | symmetric_difference(
+                      containers_mariadb_services | map('regex_replace', '^(.*)$', 'mariadb_\\1.sql') | list
+                  ) | length
+                ) == 0
+            fail_msg: "The MariaDB SQL backups must match the declared DB clients. Restore the complete set before initializing."
+            success_msg: "The MariaDB SQL backup set is valid."
+
+        - name: Check the prepared MariaDB SQL files
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/init"
+            file_type: "file"
+            patterns: "*.sql"
+            hidden: true
+          become: true
+          register: "containers_mariadb_init_files"
+
+        - name: Remove the prepared MariaDB SQL files
+          ansible.builtin.file:
+            path: "{{ item['path'] }}"
+            state: "absent"
+          loop: "{{ containers_mariadb_init_files['files'] }}"
+          loop_control:
+            label: "{{ item['path'] | basename }}"
+          become: true
+
+        - name: Deploy the initial MariaDB restore files
+          ansible.builtin.copy:
+            src: "{{ nodes[target_host]['paths']['data'] }}/containers/mariadb/backups/sql/mariadb_{{ item }}.sql"
+            dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/init/{{ '%02d' | format(containers_mariadb_restore_index) }}_mariadb_{{ item }}.sql"
+            remote_src: true
+            owner: "{{ services['containers']['mariadb']['units']['main']['subuid'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+          loop: "{{ containers_mariadb_services }}"
+          loop_control:
+            index_var: "containers_mariadb_restore_index"
+          become: true
+          when: containers_mariadb_backups['matched'] > 0
+          no_log: true
+
+        - name: Deploy the initial MariaDB accounts
+          ansible.builtin.template:
+            src: "mariadb/init/accounts.sql.j2"
+            dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/init/accounts.sql"
+            owner: "{{ services['containers']['mariadb']['units']['main']['subuid'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+          become: true
+          no_log: true
+
+    - name: Deploy the container file
+      ansible.builtin.template:
+        src: "mariadb/mariadb.container.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/mariadb.container"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      notify: "notification_restart_mariadb"
+
+    - name: Deploy the MariaDB backup units
+      ansible.builtin.template:
+        src: "mariadb/services/{{ item }}.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/{{ item }}"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      loop:
+        - "mariadb-data-backup@.service"
+        - "mariadb-data-backup@.timer"
+
+    - name: Start the MariaDB
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "mariadb.service"
+        state: "started"
+        daemon_reload: true
+      register: "containers_mariadb_started"
+
+    - name: Apply the MariaDB configuration handlers
+      ansible.builtin.meta: "flush_handlers"
+
+    - name: Wait for the initialized MariaDB server
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/podman exec mariadb healthcheck.sh --connect --innodb_initialized
+      args:
+        executable: "/bin/bash"
+      until: containers_mariadb_ready['rc'] == 0
+      retries: 60
+      delay: 3
+      changed_when: false
+      register: "containers_mariadb_ready"
+
+    - name: Check the MariaDB initialization restart count
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/systemctl --user show mariadb.service --property=NRestarts --value
+      args:
+        executable: "/bin/bash"
+      when: not containers_mariadb_init_marker['stat']['exists']
+      changed_when: false
+      register: "containers_mariadb_restarts"
+
+    - name: Validate the MariaDB initialization
+      ansible.builtin.assert:
+        that:
+          - containers_mariadb_started['changed']
+          - (containers_mariadb_restarts['stdout'] | trim) == '0'
+        fail_msg: "MariaDB was already running or restarted before initialization was confirmed. Verify the initialization or restore before creating .init."
+        success_msg: "MariaDB initialized without restarting."
+      when: not containers_mariadb_init_marker['stat']['exists']
+
+    - name: Register the MariaDB databases and accounts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/podman exec --interactive mariadb mariadb --protocol=socket --user=root --batch --skip-column-names
+      args:
+        executable: "/bin/bash"
+        stdin: "{{ lookup('ansible.builtin.template', 'mariadb/init/accounts.sql.j2') }}"
+      when: containers_mariadb_init_marker['stat']['exists']
+      changed_when: (containers_mariadb_services | length) > 0
+      register: "containers_mariadb_registered"
+      no_log: true
+
+    - name: Enable the MariaDB backup timers
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "{{ item }}"
+        enabled: true
+        daemon_reload: true
+      loop: "{{ containers_mariadb_services | map('regex_replace', '^(.*)$', 'mariadb-data-backup@\\1.timer') | list }}"
+
+    - name: Start the MariaDB backup timers
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "{{ item }}"
+        state: "started"
+      loop: "{{ containers_mariadb_services | map('regex_replace', '^(.*)$', 'mariadb-data-backup@\\1.timer') | list }}"
+
+    - name: Create the MariaDB .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/mariadb/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      when: not containers_mariadb_init_marker['stat']['exists']

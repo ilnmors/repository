@@ -1,0 +1,32 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=MariaDB
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=mariadb
+HostName=mariadb
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['tcp']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['tcp']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['tcp']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mariadb/data:/var/lib/mysql:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mariadb/config:/etc/mysql/conf.d:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mariadb/ssl:/etc/ssl/mariadb:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mariadb/init:/docker-entrypoint-initdb.d:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/mariadb/backups:/backups:rw
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="MARIADB_ROOT_HOST=localhost"
+Environment="MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

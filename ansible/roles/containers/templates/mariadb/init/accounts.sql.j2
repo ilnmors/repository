@@ -1,0 +1,8 @@
+SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES';
+
+{% for service in containers_mariadb_services %}
+CREATE USER IF NOT EXISTS '{{ service }}'@'%' IDENTIFIED BY '{{ secrets['mariadb']['password'][service] | replace("'", "''") }}' REQUIRE SSL;
+CREATE DATABASE IF NOT EXISTS `{{ service }}_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON `{{ (service ~ '_db') | replace('_', '\\_') }}`.* TO '{{ service }}'@'%';
+ALTER USER '{{ service }}'@'%' IDENTIFIED BY '{{ secrets['mariadb']['password'][service] | replace("'", "''") }}' REQUIRE SSL;
+{% endfor %}

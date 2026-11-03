@@ -1,0 +1,22 @@
+[mariadb]
+bind-address = 0.0.0.0,::
+max_connections = 250
+port = {{ services['containers']['mariadb']['units']['main']['ports']['tcp']['container'] }}
+
+ssl-ca = /etc/ssl/mariadb/{{ site['ca']['x509']['root']['certificate_file'] }}
+ssl-cert = /etc/ssl/mariadb/{{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.crt
+ssl-key = /etc/ssl/mariadb/{{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.key
+ssl-cipher = HIGH:!aNULL:!MD5
+require_secure_transport = ON
+
+innodb_buffer_pool_size = 512M
+innodb_log_file_size = 5G
+innodb_flush_log_at_trx_commit = 1
+tmp_table_size = 16M
+max_heap_table_size = 16M
+innodb_io_capacity = 200
+innodb_flush_neighbors = 0
+
+[client]
+protocol = socket
+skip-ssl

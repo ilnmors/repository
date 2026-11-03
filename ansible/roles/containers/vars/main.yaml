@@ -13,6 +13,8 @@ containers_unit_entries: >-
 
 containers_postgresql_host: "{{ services['containers']['postgresql']['units']['main']['hosts'] | first }}"
 
+containers_mariadb_host: "{{ services['containers']['mariadb']['units']['main']['hosts'] | first }}"
+
 containers_step_ca_allowed_domains: >-
   {{
     networks['segments']
@@ -31,6 +33,16 @@ containers_postgresql_services: >-
     | selectattr('value.dependency.db.status', 'equalto', true)
     | selectattr('value.dependency.db.type', 'defined')
     | selectattr('value.dependency.db.type', 'equalto', 'postgresql')
+    | map(attribute='service') | unique | list
+  }}
+
+containers_mariadb_services: >-
+  {{
+    containers_unit_entries
+    | selectattr('value.dependency.db.status', 'defined')
+    | selectattr('value.dependency.db.status', 'equalto', true)
+    | selectattr('value.dependency.db.type', 'defined')
+    | selectattr('value.dependency.db.type', 'equalto', 'mariadb')
     | map(attribute='service') | unique | list
   }}
 

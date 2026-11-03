@@ -60,3 +60,16 @@
   register: "result_reload_postgresql"
   listen: "notification_reload_postgresql"
   ignore_errors: true
+
+- name: Restart the mariadb.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "mariadb.service"
+    state: "restarted"
+    daemon_reload: true
+  delegate_to: "{{ containers_mariadb_host }}"
+  when: not (containers_mariadb_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_mariadb"
+  listen: "notification_restart_mariadb"
+  ignore_errors: true
