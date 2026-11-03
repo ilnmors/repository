@@ -52,3 +52,25 @@
   listen: "notification_restart_sshd"
   register: "result_restart_sshd"
   ignore_errors: true
+
+- name: Update initramfs
+  ansible.builtin.shell: |
+    /usr/sbin/update-initramfs -u
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  listen: "notification_update_initramfs"
+  register: "result_update_initramfs"
+  ignore_errors: true
+
+- name: Reboot the node
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 3
+  become: true
+  when: not nodes[target_host]['control_node']
+  changed_when: false
+  listen: "notification_reboot"
+  register: "result_reboot"
+  ignore_errors: true

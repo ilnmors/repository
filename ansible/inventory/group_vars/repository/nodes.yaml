@@ -169,6 +169,14 @@ nodes:
             | map(attribute='value.address')
             | list
           }}
+        drivers: >-
+          {{
+            hardwares['vmm']['gpu']
+            | dict2items
+            | selectattr('value.type', 'defined')
+            | map(attribute='value.driver')
+            | list
+          }}
       disk:
         root:
           size: "1T"

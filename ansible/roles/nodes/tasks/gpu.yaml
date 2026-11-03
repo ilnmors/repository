@@ -1,0 +1,21 @@
+---
+- name: Install the GPU packages
+  ansible.builtin.apt:
+    name: "{{ item['value']['name'] }}"
+    state: "present"
+  loop: "{{ releases['packages'] | dict2items | selectattr('value.gpu', 'defined') | list }}"
+  loop_control:
+    label: "{{ item['value']['name'] }}"
+  when: (item['value']['gpu'] | intersect(nodes[target_host]['system']['gpu']['drivers']) | length) > 0
+  become: true
+  notify:
+    - "notification_update_initramfs"
+    - "notification_reboot"
+
+- name: Add the user in the GPU groups
+  ansible.builtin.user:
+    name: "{{ nodes[target_host]['user'] }}"
+    groups: ["video", "render"]
+    append: true
+  become: true
+  notify: "notification_reboot"

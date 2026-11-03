@@ -77,9 +77,23 @@ releases:
     firmware-intel-graphics:
       source: "debian"
       name: "firmware-intel-graphics"
+      gpu: ["i915"]
+    intel-media-va-driver:
+      source: "debian"
+      name: "intel-media-va-driver-non-free"
+      gpu: ["i915"]
     firmware-amd-graphics:
       source: "debian"
       name: "firmware-amd-graphics"
+      gpu: ["amdgpu"]
+    mesa-va-drivers:
+      source: "debian"
+      name: "mesa-va-drivers"
+      gpu: ["amdgpu"]
+    mesa-vulkan-drivers:
+      source: "debian"
+      name: "mesa-vulkan-drivers"
+      gpu: ["i915", "amdgpu"]
     sops:
       source: "github"
       name: "sops"
