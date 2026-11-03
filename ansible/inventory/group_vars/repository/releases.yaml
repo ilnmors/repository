@@ -23,6 +23,9 @@ releases:
     netcat:
       source: "debian"
       name: "netcat-openbsd"
+    rsync:
+      source: "debian"
+      name: "rsync"
     logrotate:
       source: "debian"
       name: "logrotate"

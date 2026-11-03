@@ -61,6 +61,11 @@ services:
         main:
           release: "netcat"
           hosts: ["vmm", "infra", "auth", "app"]
+    rsync:
+      units:
+        main:
+          release: "rsync"
+          hosts: ["console", "vmm", "app"]
     logrotate:
       units:
         main:
