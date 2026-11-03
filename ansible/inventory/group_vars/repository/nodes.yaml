@@ -116,7 +116,7 @@ nodes:
         lan:
           type: "virtio"
           libvirt_network: "lan-net"
-          port_group: "vlan10-access"
+          port_group: "vlan{{ networks['segments']['server']['vlan'] }}-access"
           mac: "0a:49:6e:4d:01:00"
   auth:
     control_node: false
@@ -141,7 +141,7 @@ nodes:
         lan:
           type: "virtio"
           libvirt_network: "lan-net"
-          port_group: "vlan10-access"
+          port_group: "vlan{{ networks['segments']['server']['vlan'] }}-access"
           mac: "0a:49:6e:4d:02:00"
   app:
     control_node: false
@@ -192,5 +192,5 @@ nodes:
         lan:
           type: "virtio"
           libvirt_network: "lan-net"
-          port_group: "vlan10-access"
+          port_group: "vlan{{ networks['segments']['server']['vlan'] }}-access"
           mac: "0a:49:6e:4d:03:00"

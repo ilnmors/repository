@@ -1,0 +1,70 @@
+---
+- name: Load the render-networkd task
+  vars:
+    target_host: "{{ target_vm }}" # noqa: var-naming[no-role-prefix]
+  ansible.builtin.import_role:
+    name: "nodes"
+    tasks_from: "render-networkd"
+
+- name: Create the temporary meta-data
+  ansible.builtin.copy:
+    content: |
+      instance-id: vm-{{ target_vm }}
+      local-hostname: {{ target_vm }}
+      dsmode: local
+    dest: "/run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-meta-data"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  register: "vm_meta_data"
+  no_log: true
+
+- name: Create the temporary user-data
+  ansible.builtin.template:
+    src: "seeds/user-data.j2"
+    dest: "/run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-user-data"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  register: "vm_user_data"
+  no_log: true
+
+- name: Create the temporary network-config
+  ansible.builtin.copy:
+    content: |
+      version: 2
+      ethernets: {}
+    dest: "/run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-network-config"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  register: "vm_network_config"
+  no_log: true
+
+- name: Check the seed.iso
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['libvirt'] }}/seeds/{{ target_vm }}-seed.iso"
+  register: "is_seediso"
+
+- name: Create the temporary seed.iso
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cloud-localds -N /run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-network-config \
+    {{ nodes[target_host]['paths']['libvirt'] }}/seeds/{{ target_vm }}-seed.iso \
+    /run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-user-data \
+    /run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-meta-data
+    echo "Seed image created"
+  args:
+    executable: "/bin/bash"
+  become: true
+  when: vm_meta_data['changed'] or vm_user_data['changed'] or vm_network_config['changed'] or not is_seediso['stat']['exists']
+  changed_when: "'Seed image created' in is_seediso_created['stdout']"
+  register: "is_seediso_created"
+
+- name: Set the seed.iso permission
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['libvirt'] }}/seeds/{{ target_vm }}-seed.iso"
+    owner: "root"
+    group: "libvirt-qemu"
+    mode: "0640"
+  become: true

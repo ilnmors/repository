@@ -1,0 +1,37 @@
+---
+- name: Include the init task
+  ansible.builtin.include_tasks:
+    file: "init.yaml"
+    apply:
+      tags: ["libvirt"]
+  tags: ["libvirt"]
+
+- name: Include the seeds task
+  ansible.builtin.include_tasks:
+    file: "seeds.yaml"
+    apply:
+      tags: ["libvirt", "seeds"]
+  loop: "{{ libvirt_vm_list }}"
+  loop_control:
+    loop_var: "target_vm"
+  tags: ["libvirt", "seeds"]
+
+- name: Include the disk task
+  ansible.builtin.include_tasks:
+    file: "disk.yaml"
+    apply:
+      tags: ["libvirt", "disk"]
+  loop: "{{ libvirt_vm_list }}"
+  loop_control:
+    loop_var: "target_vm"
+  tags: ["libvirt", "disk"]
+
+- name: Include the register task
+  ansible.builtin.include_tasks:
+    file: "register.yaml"
+    apply:
+      tags: ["libvirt", "register"]
+  loop: "{{ libvirt_vm_list }}"
+  loop_control:
+    loop_var: "target_vm"
+  tags: ["libvirt", "register"]

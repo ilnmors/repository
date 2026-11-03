@@ -15,6 +15,10 @@ hardwares:
         id: null # "8086:46a8"
         address: null # "0000:00:02.0"
       gpu02:
+        # A discrete GPU usually shares its IOMMU group with its HDMI/DP audio function (e.g. 0000:03:00.1).
+        # VFIO needs every endpoint in the group bound to vfio-pci, otherwise the group is "not viable"
+        # and the VM fails to start. Bind the audio function to vfio-pci as well and pass it to the same VM.
+        # The current schema holds one id/address per GPU, so the audio function needs to be added separately.
         type: "egpu"
         model: "RX7900XT"
         vendor: "radeon"

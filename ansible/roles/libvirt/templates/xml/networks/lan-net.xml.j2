@@ -1,0 +1,23 @@
+<!-- LAN network for Hypervisor -->
+<!-- lan-net.xml -->
+{% set native_vlan = networks['segments']['client']['vlan'] %}
+{% set trunk_vlans = nodes[target_host]['system']['nic']['eth1']['vlan'] | sort %}
+<network>
+  <name>lan-net</name>
+  <forward mode='bridge'/>
+  <bridge name='br1'/>
+  <portgroup name='vlan-trunk'>
+    <vlan trunk='yes'>
+{% for vlan in trunk_vlans %}
+      <tag id='{{ vlan }}'{% if vlan == native_vlan %} nativeMode='untagged'{% endif %}/>
+{% endfor %}
+    </vlan>
+  </portgroup>
+{% for vlan in trunk_vlans %}
+  <portgroup name='vlan{{ vlan }}-access'>
+    <vlan>
+      <tag id='{{ vlan }}'/>
+    </vlan>
+  </portgroup>
+{% endfor %}
+</network>

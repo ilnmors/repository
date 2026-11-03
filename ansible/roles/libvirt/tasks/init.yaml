@@ -1,0 +1,138 @@
+---
+- name: Install the packages
+  ansible.builtin.apt:
+    name:
+      - "qemu-system-x86"
+      - "libvirt-daemon-system"
+      - "cloud-image-utils"
+      - "python3-libvirt"
+      - "python3-lxml"
+    state: "present"
+  become: true
+
+- name: Add the user in libvirt group
+  ansible.builtin.user:
+    name: "{{ nodes[target_host]['user'] }}"
+    state: "present"
+    groups:
+      - "libvirt"
+      - "kvm"
+      - "libvirt-qemu"
+    append: true
+  become: true
+
+- name: Create the libvirt directories
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['libvirt'] }}/{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "libvirt-qemu"
+    mode: "0751"
+  loop:
+    - "images"
+    - "seeds"
+  become: true
+
+- name: Deploy the libvirt-guests configuration
+  ansible.builtin.template:
+    src: "libvirt-guests/libvirt-guests.j2"
+    dest: "/etc/default/libvirt-guests"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+
+- name: Enable the libvirt-guests.service
+  ansible.builtin.systemd_service:
+    name: "libvirt-guests.service"
+    state: "started"
+    enabled: true
+  become: true
+
+- name: Set the LIBVIRT_DEFAULT_URI in bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ nodes[target_host]['paths']['home'] }}/.bashrc"
+    state: "present"
+    line: "export LIBVIRT_DEFAULT_URI='qemu:///system'"
+    regexp: '^export LIBVIRT_DEFAULT_URI='
+
+- name: Define the virtual networks
+  community.libvirt.virt_net:
+    name: "{{ item }}"
+    xml: |
+      {{ lookup('template', role_path ~ '/templates/xml/networks/' ~ item ~ '.xml.j2') }}
+    uri: "qemu:///system"
+    command: "define"
+  loop: "{{ libvirt_network_list }}"
+  become: true
+
+- name: Start the virtual networks
+  community.libvirt.virt_net:
+    name: "{{ item }}"
+    state: "active"
+    uri: "qemu:///system"
+  loop: "{{ libvirt_network_list }}"
+  become: true
+
+- name: Autostart the virtual networks
+  community.libvirt.virt_net:
+    name: "{{ item }}"
+    uri: "qemu:///system"
+    autostart: true
+  loop: "{{ libvirt_network_list }}"
+  become: true
+
+- name: Define the virtual storage pools
+  community.libvirt.virt_pool:
+    name: "{{ item }}"
+    xml: |
+      {{ lookup('template', role_path ~ '/templates/xml/pools/' ~ item ~ '.xml.j2') }}
+    uri: "qemu:///system"
+    command: "define"
+  loop: "{{ libvirt_pool_list }}"
+  become: true
+
+- name: Start the virtual storage pools
+  community.libvirt.virt_pool:
+    name: "{{ item }}"
+    state: "active"
+    uri: "qemu:///system"
+  loop: "{{ libvirt_pool_list }}"
+  become: true
+
+- name: Autostart the virtual storage pools
+  community.libvirt.virt_pool:
+    name: "{{ item }}"
+    uri: "qemu:///system"
+    autostart: true
+  loop: "{{ libvirt_pool_list }}"
+  become: true
+
+- name: Create the vm cloud-init image directory
+  delegate_to: "{{ control_host }}"
+  ansible.builtin.file:
+    path: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init"
+    state: "directory"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0755"
+
+- name: Download the vm cloud-init image
+  delegate_to: "{{ control_host }}"
+  ansible.builtin.get_url:
+    url: "{{ libvirt_cloud_init_image['download_url'] }}"
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/{{ libvirt_cloud_init_image['image_name'] }}"
+    owner: "{{ nodes[control_host]['user'] }}"
+    group: "{{ nodes[control_host]['group'] }}"
+    mode: "0644"
+    force: false
+
+- name: Deploy the vm cloud-init image
+  ansible.builtin.copy:
+    src: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/{{ libvirt_cloud_init_image['image_name'] }}"
+    dest: "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ libvirt_cloud_init_image['image_name'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "libvirt-qemu"
+    mode: "0640"
+    force: false
+  become: true

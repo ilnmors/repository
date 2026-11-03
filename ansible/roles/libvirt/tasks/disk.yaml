@@ -1,0 +1,55 @@
+---
+- name: Check the cloud-init image
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ libvirt_cloud_init_image['image_name'] }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  become: true
+  register: "is_cloud_init_file"
+
+- name: Copy the vm cloud-init file
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ libvirt_cloud_init_image['image_name'] }}"
+    dest: "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ target_vm }}.qcow2"
+    owner: "root"
+    group: "libvirt-qemu"
+    mode: "0640"
+    force: false
+  become: true
+
+- name: Check the deployed cloud-init file info
+  ansible.builtin.shell: |
+    qemu-img info --force-share "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ target_vm }}.qcow2" --output json
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  failed_when: false
+  register: "deployed_vm_disk_file_info"
+
+- name: Validate the deployed cloud-init file info
+  ansible.builtin.assert:
+    that:
+      - deployed_vm_disk_file_info['rc'] == 0
+      - (deployed_vm_disk_file_info['stdout'] | from_json)['format'] == 'qcow2'
+    success_msg: "{{ target_vm }}.qcow2 info and format were validated."
+    fail_msg: "{{ target_vm }}.qcow2: info query failed or format is not qcow2. {{ deployed_vm_disk_file_info['stderr'] }}"
+
+- name: Resize the deployed cloud-init file
+  ansible.builtin.shell: |
+    set -euo pipefail
+    active_vms="$(virsh -c qemu:///system list --name)"
+    if grep -Fxq "{{ target_vm }}" <<< "${active_vms}"; then
+      echo "Shut down {{ target_vm }} before resizing its disks." >&2
+      exit 1
+    fi
+    qemu-img resize -f qcow2 "{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ target_vm }}.qcow2" "{{ nodes[target_vm]['system']['disk']['root']['size'] | ansible.builtin.human_to_bytes | int }}"
+    echo "Cloud-init image resized"
+  args:
+    executable: "/bin/bash"
+  when: ((deployed_vm_disk_file_info['stdout'] | from_json)['virtual-size'] | int) < (nodes[target_vm]['system']['disk']['root']['size'] | ansible.builtin.human_to_bytes | int)
+  become: true
+  changed_when: "'Cloud-init image resized' in is_cloud_init_image_resized['stdout']"
+  register: "is_cloud_init_image_resized"

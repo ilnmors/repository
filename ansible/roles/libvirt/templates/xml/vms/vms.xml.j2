@@ -1,0 +1,90 @@
+<domain type='kvm'>
+    <name>{{ target_vm }}</name>
+    <memory unit='KiB'>{{ (nodes[target_vm]['system']['memory'] | ansible.builtin.human_to_bytes) | int // 1024 }}</memory>
+    <vcpu placement='static'>{{ nodes[target_vm]['system']['cpu']['vcpu'] }}</vcpu>
+    <cputune>
+        <shares>{{ nodes[target_vm]['system']['cpu']['shares'] }}</shares>
+{% for pin in nodes[target_vm]['system']['cpu']['pin'] | default([]) %}
+        <vcpupin vcpu='{{ loop.index0 }}' cpuset='{{ pin }}'/>
+{% endfor %}
+{% if (nodes[target_vm]['system']['cpu']['emulator'] | default([]) | length) > 0 %}
+        <emulatorpin cpuset='{{ nodes[target_vm]['system']['cpu']['emulator'] | join(',') }}'/>
+{% endif %}
+    </cputune>
+    <os firmware='efi'>
+        <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
+        <firmware>
+            <feature enabled='yes' name='enrolled-keys'/>
+            <feature enabled='yes' name='secure-boot'/>
+        </firmware>
+        <loader readonly='yes' secure='yes' type='pflash' format='raw'>/usr/share/OVMF/OVMF_CODE_4M.ms.fd</loader>
+        <nvram template='/usr/share/OVMF/OVMF_VARS_4M.ms.fd' templateFormat='raw' format='raw'>{{ nodes[target_host]['paths']['libvirt'] }}/qemu/nvram/{{ target_vm }}_VARS.fd</nvram>
+        <boot dev='hd'/>
+    </os>
+    <features>
+        <acpi/>
+        <apic/>
+    </features>
+    <cpu mode='host-passthrough' check='none' migratable='on'/>
+    <on_poweroff>destroy</on_poweroff>
+    <on_reboot>restart</on_reboot>
+    <on_crash>restart</on_crash>
+    <devices>
+        <disk type='file' device='disk'>
+            <driver name='qemu' type='qcow2' discard='unmap' />
+            <source file='{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ target_vm }}.qcow2' />
+            <target dev='vda' bus='virtio' />
+        </disk>
+        <disk type='file' device='cdrom'>
+            <driver name='qemu' type='raw' cache='none' />
+            <source file='{{ nodes[target_host]['paths']['libvirt'] }}/seeds/{{ target_vm }}-seed.iso' />
+            <target dev='sdb' bus='sata' />
+            <readonly/>
+        </disk>
+{%
+    for item in (
+                nodes[target_vm]['system']['nic'] | default({})
+                | dict2items
+                | selectattr('value.type', 'defined')
+                | selectattr('value.type', 'in', ['virtio'])
+               )
+%}
+{% set nic = item['value'] %}
+        <interface type='network'>
+            <mac address='{{ nic['mac'] }}' />
+            <source network='{{ nic['libvirt_network'] }}' {% if nic['port_group'] is defined %}portgroup='{{ nic['port_group'] }}' {% endif %}/>
+            <model type='{{ nic['type'] }}' />
+        </interface>
+{% endfor %}
+        <console type='pty'>
+            <target type='serial' port='0' />
+        </console>
+        <channel type='unix'>
+            <target type='virtio' name='org.qemu.guest_agent.0' />
+            <address type='virtio-serial' controller='0' bus='0' port='1' />
+        </channel>
+{% if (nodes[target_vm]['system']['gpu']['type'] | default(none)) == 'vfio' %}
+{% for address in nodes[target_vm]['system']['gpu']['address'] | reject('none') %}
+{% set pci = address | split(':') %}
+        <hostdev mode='subsystem' type='pci' managed='yes'>
+            <driver name='vfio'/>
+            <source>
+                <address domain='0x{{ pci[0] }}' bus='0x{{ pci[1] }}' slot='0x{{ (pci[2] | split('.'))[0] }}' function='0x{{ (pci[2] | split('.'))[1] }}' />
+            </source>
+            <address type='pci' domain='0x{{ pci[0] }}' bus='0x{{ pci[1] }}' slot='0x{{ (pci[2] | split('.'))[0] }}' function='0x{{ (pci[2] | split('.'))[1] }}' />
+        </hostdev>
+{% endfor %}
+{% endif %}
+{% for disk_path in libvirt_block_disk_paths | default([]) %}
+        <disk type='block' device='disk'>
+            <driver name='qemu' type='raw' cache='none' io='native' discard='unmap' />
+            <source dev='{{ disk_path['path'] }}' />
+            <target dev='vd{{ "bcdefghijklmnopqrstuvwxyz"[loop.index0] }}' bus='virtio' />
+            <serial>{{ disk_path['serial'] }}</serial>
+        </disk>
+{% endfor %}
+        <tpm model='tpm-crb'>
+            <backend type='emulator' version='2.0'/>
+        </tpm>
+    </devices>
+</domain>

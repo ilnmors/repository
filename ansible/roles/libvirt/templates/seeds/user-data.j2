@@ -1,0 +1,74 @@
+#cloud-config
+
+hostname: {{ target_vm }}
+
+disable_root: true
+groups:
+  - {{ group['name'] }}
+
+users:
+    - name: {{ nodes[target_vm]['user'] }}
+      uid: {{ nodes[target_vm]['uid'] }}
+      gecos: {{ target_vm }}
+      primary_group: {{ nodes[target_vm]['group'] }}
+      groups: sudo
+      lock_passwd: false
+      passwd: {{ secrets['sudo'][target_vm]['hash'] }}
+      shell: /bin/bash
+
+write_files:
+    - path: /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
+      content: |
+        {{ secrets['ca']['ssh']['root']['pub'] | trim }}
+      owner: "root:root"
+      permissions: "0644"
+    - path: /etc/ssh/auth_principals/{{ nodes[target_vm]['user'] }}
+      content: |
+        {{ nodes[control_host]['group'] }}
+      owner: "root:root"
+      permissions: "0644"
+    - path: /etc/ssh/sshd_config.d/{{ site['org'] }}.conf
+      content: |
+        PermitRootLogin no
+        TrustedUserCAKeys /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
+        AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
+        AllowGroups {{ nodes[target_vm]['group'] }}
+      owner: "root:root"
+      permissions: "0644"
+    - path: /etc/apt/sources.list.d/debian.sources
+      content: |
+        Types: deb deb-src
+        URIs: https://deb.debian.org/debian
+        Suites: trixie trixie-updates trixie-backports
+        Components: main contrib non-free non-free-firmware
+        Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+        Types: deb deb-src
+        URIs: https://deb.debian.org/debian-security
+        Suites: trixie-security
+        Components: main contrib non-free non-free-firmware
+        Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+      owner: "root:root"
+      permissions: "0644"
+{% for file, content in nodes_networkd_files | dictsort %}
+    - path: /etc/systemd/network/{{ file }}
+      content: |
+        {{ content | indent(8) | trim }}
+      owner: "root:systemd-network"
+      permissions: "0640"
+{% endfor %}
+
+runcmd:
+    - groupmod -g {{ group['gid'] }} {{ group['name'] }}
+    - chown -R {{ nodes[target_vm]['user'] }}:{{ group['name'] }} {{ nodes[target_vm]['paths']['home'] }}
+    - update-initramfs -u
+    - systemctl disable networking
+    - systemctl enable systemd-networkd
+    - systemctl enable getty@ttyS0
+    - sync
+
+power_state:
+    delay: "now"
+    mode: reboot
+    message: "rebooting after cloud-init configuration"
+    timeout: 30

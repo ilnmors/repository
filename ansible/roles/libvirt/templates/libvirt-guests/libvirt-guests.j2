@@ -1,0 +1,6 @@
+# The VMs are started by the libvirt autostart, so libvirt-guests only shuts them down.
+URIS=qemu:///system
+ON_BOOT=ignore
+ON_SHUTDOWN=shutdown
+PARALLEL_SHUTDOWN={{ libvirt_vm_list | length }}
+SHUTDOWN_TIMEOUT=300

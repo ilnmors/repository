@@ -1,0 +1,8 @@
+<!-- Storage pool define -->
+<!-- images-pool.xml -->
+<pool type='dir'>
+  <name>images-pool</name>
+  <target>
+    <path>{{ nodes[target_host]['paths']['libvirt'] }}/images</path>
+  </target>
+</pool>

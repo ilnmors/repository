@@ -1,0 +1,38 @@
+---
+libvirt_vm_list: >-
+  {{
+    nodes |
+    dict2items |
+    selectattr('value.virtualization', 'defined') |
+    selectattr('value.virtualization', 'equalto', true) |
+    map(attribute='key') |
+    list
+  }}
+
+libvirt_pool_list: >-
+  {{
+    query(
+      'ansible.builtin.fileglob',
+      role_path ~ '/templates/xml/pools/*.xml.j2'
+    )
+    | map('basename')
+    | map('regex_replace', '\.xml.j2$', '')
+    | sort
+    | list
+  }}
+
+libvirt_network_list: >-
+  {{
+    query(
+      'ansible.builtin.fileglob',
+      role_path ~ '/templates/xml/networks/*.xml.j2'
+    )
+    | map('basename')
+    | map('regex_replace', '\.xml.j2$', '')
+    | sort
+    | list
+  }}
+
+libvirt_cloud_init_image:
+  download_url: "https://cdimage.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2"
+  image_name: "debian-13.qcow2"

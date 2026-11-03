@@ -1,0 +1,53 @@
+---
+- name: Find the block data disks
+  vars:
+    libvirt_block_disk_serials: >-
+      {{
+        nodes[target_vm]['system']['disk'] | default({})
+        | dict2items
+        | selectattr('value.type', 'defined')
+        | selectattr('value.type', 'equalto', 'block')
+        | map(attribute='value.serials')
+        | flatten
+        | list
+      }}
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for serial in {{ libvirt_block_disk_serials | map('quote') | join(' ') }}; do
+        disk_path=$(find /dev/disk/by-id -maxdepth 1 -name "*${serial}*" ! -name 'wwn-*' ! -name '*-part*' | sort | head -n 1)
+        if [[ -z "${disk_path}" ]]; then
+            echo "The disk ${serial} for {{ target_vm }} does not exist." >&2
+            exit 1
+        fi
+        /usr/bin/jq -cn --arg serial "${serial}" --arg path "${disk_path}" '{serial: $serial, path: $path}'
+    done | /usr/bin/jq -cs '.'
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  register: "libvirt_block_disks"
+
+- name: Register the VM xml file
+  vars:
+    libvirt_block_disk_paths: "{{ libvirt_block_disks['stdout'] | from_json }}"
+  community.libvirt.virt:
+    name: "{{ target_vm }}"
+    xml: |
+      {{ lookup('template', role_path ~ '/templates/xml/vms/vms.xml.j2') }}
+    uri: "qemu:///system"
+    command: "define"
+  become: true
+
+- name: Enable the autostart of the VM
+  community.libvirt.virt:
+    name: "{{ target_vm }}"
+    uri: "qemu:///system"
+    autostart: true
+  become: true
+
+- name: Start the VM
+  community.libvirt.virt:
+    name: "{{ target_vm }}"
+    uri: "qemu:///system"
+    state: "running"
+  become: true
