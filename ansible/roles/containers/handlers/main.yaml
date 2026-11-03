@@ -73,3 +73,15 @@
   register: "result_restart_mariadb"
   listen: "notification_restart_mariadb"
   ignore_errors: true
+
+- name: Restart the ldap.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ldap.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_ldap_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_ldap"
+  listen: "notification_restart_ldap"
+  ignore_errors: true

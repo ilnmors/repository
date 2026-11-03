@@ -1,0 +1,54 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=LDAP
+
+{% if target_host in services['containers']['postgresql']['units']['main']['hosts'] %}
+After=postgresql.service
+Requires=postgresql.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=ldap
+HostName=ldap
+{% if target_host in services['containers']['postgresql']['units']['main']['hosts'] %}
+AddHost={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+{% endif %}
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['http']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['http']['protocol'] }}
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['ldaps']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['ldaps']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['ldaps']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/ldap/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/ldap/ssl:/etc/ssl/ldap:ro
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="LLDAP_LDAP_BASE_DN={{ site['directory']['base_dn'] }}"
+Environment="LLDAP_HTTP_URL=https://{{ services['containers'][target_container]['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="LLDAP_HTTP_PORT={{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}"
+Environment="LLDAP_LDAPS_OPTIONS__ENABLED=true"
+Environment="LLDAP_LDAPS_OPTIONS__PORT={{ services['containers'][target_container]['units']['main']['ports']['ldaps']['container'] }}"
+Environment="LLDAP_LDAPS_OPTIONS__CERT_FILE=/etc/ssl/ldap/{{ services['containers'][target_container]['units']['main']['domain']['internal'] }}.crt"
+Environment="LLDAP_LDAPS_OPTIONS__KEY_FILE=/etc/ssl/ldap/{{ services['containers'][target_container]['units']['main']['domain']['internal'] }}.key"
+Environment="LLDAP_KEY_SEED_FILE=/run/secrets/LLDAP_KEY_SEED"
+Environment="LLDAP_JWT_SECRET_FILE=/run/secrets/LLDAP_JWT_SECRET"
+Environment="LLDAP_LDAP_USER_PASS_FILE=/run/secrets/LLDAP_LDAP_USER_PASS"
+
+Secret=LLDAP_DATABASE_URL,type=env
+Secret=LLDAP_KEY_SEED,target=/run/secrets/LLDAP_KEY_SEED
+Secret=LLDAP_JWT_SECRET,target=/run/secrets/LLDAP_JWT_SECRET
+Secret=LLDAP_LDAP_USER_PASS,target=/run/secrets/LLDAP_LDAP_USER_PASS
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

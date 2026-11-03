@@ -1,0 +1,145 @@
+---
+- name: Register the ldap database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "ldap"
+
+- name: Register the missing ldap secrets on secrets.yaml
+  vars:
+    secrets_target: '["ldap"][{{ containers_ldap_secret | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop:
+    - "seed_key"
+    - "jwt_secret"
+  loop_control:
+    loop_var: "containers_ldap_secret"
+  when: (secrets['ldap'][containers_ldap_secret] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing ldap admin password on secrets.yaml
+  vars:
+    secrets_target: '["ldap"]["password"]["services"]["admin"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['ldap']['password']['services']['admin'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing ldap certificate # noqa: var-naming[no-role-prefix]
+  vars:
+    target_service: "{{ services['containers']['ldap']['units']['main'] }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "x509-leaf"
+  when: >-
+    (secrets['ca']['x509']['leaf'][services['containers']['ldap']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+    (secrets['ca']['x509']['leaf'][services['containers']['ldap']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the ldap fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "LLDAP_DATABASE_URL"
+        value: "postgres://ldap:{{ secrets['postgresql']['password']['ldap'] | urlencode | replace('/', '%2F') }}\
+          @{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}\
+          :{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/\
+          ldap_db?sslmode=verify-full&sslrootcert=/etc/ssl/ldap/{{ site['ca']['x509']['root']['certificate_file'] }}"
+      - name: "LLDAP_KEY_SEED"
+        value: "{{ secrets['ldap']['seed_key'] }}"
+      - name: "LLDAP_JWT_SECRET"
+        value: "{{ secrets['ldap']['jwt_secret'] }}"
+      - name: "LLDAP_LDAP_USER_PASS"
+        value: "{{ secrets['ldap']['password']['services']['admin'] }}"
+  no_log: true
+
+- name: Create the ldap directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['ldap']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/ssl"
+  become: true
+
+- name: Deploy the ldap certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/ssl/{{ item['name'] }}"
+    owner: "{{ services['containers']['ldap']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      mode: "0440"
+    - name: "{{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['containers']['ldap']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "{{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['containers']['ldap']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_ldap"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_ldap"
+  no_log: true
+
+- name: Deploy the ldap image
+  vars:
+    containers_image_notifications: "notification_restart_ldap"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "ldap/ldap.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/ldap.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_ldap"
+
+- name: Start the ldap
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ldap.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_ldap_started"
+
+- name: Apply the ldap configuration handlers
+  ansible.builtin.meta: "flush_handlers"
+
+- name: Wait for the ldap server
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ services['containers']['ldap']['units']['main']['ports']['http']['int'] }}/health"
+    status_code: 200
+    use_proxy: false
+  until: containers_ldap_ready['status'] | default(0) == 200
+  retries: 20
+  delay: 3
+  register: "containers_ldap_ready"

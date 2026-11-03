@@ -39,5 +39,13 @@
   when: target_host in services['containers']['mariadb']['units']['main']['hosts']
   tags: ["mariadb"]
 
+- name: Include the ldap task
+  ansible.builtin.include_tasks:
+    file: "ldap.yaml"
+    apply:
+      tags: ["ldap"]
+  when: target_host in services['containers']['ldap']['units']['main']['hosts']
+  tags: ["ldap"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"
