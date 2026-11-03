@@ -23,7 +23,6 @@ nodes:
     paths:
       home: "/home/vmm"
       libvirt: "/var/lib/libvirt"
-      data: "/data/vmm"
     system:
       disk:
         root:
@@ -69,7 +68,7 @@ nodes:
           fs:
             type: "btrfs"
             label: "{{ site['org'] }}_backup"
-            mount_point: "/data"
+            mount_point: "/backup"
             mount_opts: ["defaults", "noatime", "nofail"]
             btrfs:
               profile: "single"

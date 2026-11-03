@@ -33,3 +33,5 @@ packages_host_debian_package_list: >-
     | unique
     | list
   }}
+
+packages_backup_path: "{{ nodes[target_host]['system']['disk']['backup']['fs']['mount_point'] }}"

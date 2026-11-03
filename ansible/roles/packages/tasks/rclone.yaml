@@ -11,13 +11,13 @@
 
 - name: Delete the lost+found directory
   ansible.builtin.file:
-    path: "{{ nodes[target_host]['paths']['data'] }}/lost+found"
+    path: "{{ packages_backup_path }}/lost+found"
     state: "absent"
   become: true
 
 - name: Check the local rclone data directory is empty
   ansible.builtin.find:
-    paths: "{{ nodes[target_host]['paths']['data'] }}"
+    paths: "{{ packages_backup_path }}"
     file_type: "any"
     hidden: true
     recurse: false
@@ -81,7 +81,7 @@
           ansible.builtin.shell: |
             set -euo pipefail
             /usr/bin/rclone copy {{ ('gdrive:' ~ site['org']) | quote }} \
-            {{ nodes[target_host]['paths']['data'] | quote }}
+            {{ packages_backup_path | quote }}
           args:
             executable: "/bin/bash"
           changed_when: true

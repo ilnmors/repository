@@ -123,7 +123,7 @@
 
     - name: Create the repository directory
       ansible.builtin.file:
-        path: "{{ nodes[target_host]['paths']['data'] }}/kopia/repository"
+        path: "{{ packages_backup_path }}/kopia/repository"
         state: "directory"
         owner: "{{ nodes[target_host]['user'] }}"
         group: "root"
@@ -132,7 +132,7 @@
 
     - name: Check the repository directory empty
       ansible.builtin.find:
-        paths: "{{ nodes[target_host]['paths']['data'] }}/kopia/repository/"
+        paths: "{{ packages_backup_path }}/kopia/repository/"
         file_type: "any"
         hidden: true
         recurse: false
@@ -142,7 +142,7 @@
       ansible.builtin.shell: |
         set -euo pipefail
         /usr/bin/kopia repository create filesystem \
-        --path="{{ nodes[target_host]['paths']['data'] }}/kopia/repository" \
+        --path="{{ packages_backup_path }}/kopia/repository" \
         --override-username={{ nodes[target_host]['user'] | quote }} \
         --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }} \
         --description="{{ site['org'] }} kopia repository"
@@ -156,7 +156,7 @@
       ansible.builtin.shell: |
         set -euo pipefail
         /usr/bin/kopia repository connect filesystem \
-        --path="{{ nodes[target_host]['paths']['data'] }}/kopia/repository" \
+        --path="{{ packages_backup_path }}/kopia/repository" \
         --override-username={{ nodes[target_host]['user'] | quote }} \
         --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
       args:

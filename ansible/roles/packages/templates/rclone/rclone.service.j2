@@ -3,7 +3,7 @@ Description=Daily Kopia rclone backup service
 Wants=network-online.target
 After=network-online.target
 
-RequiresMountsFor={{ nodes[target_host]['paths']['data'] }}
+RequiresMountsFor={{ packages_backup_path }}
 
 [Service]
 Type=oneshot
@@ -21,13 +21,13 @@ ProtectSystem=strict
 ProtectHome=tmpfs
 InaccessiblePaths=/boot /root
 
-BindReadOnlyPaths={{ nodes[target_host]['paths']['data'] }}
+BindReadOnlyPaths={{ packages_backup_path }}
 
 # In root namescope, %u always bring 0
 BindPaths=/etc/secrets/{{ nodes[target_host]['user'] }}
 Environment="RCLONE_CONFIG=/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
 
-ExecStart=/usr/bin/rclone copy {{ nodes[target_host]['paths']['data'] }} gdrive:{{ site['org'] }} \
+ExecStart=/usr/bin/rclone copy {{ packages_backup_path }} gdrive:{{ site['org'] }} \
     --transfers=4 \
     --checkers=4 \
     --tpslimit=8 \
