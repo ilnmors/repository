@@ -55,5 +55,13 @@
   when: target_host in services['containers']['prometheus']['units']['main']['hosts']
   tags: ["prometheus"]
 
+- name: Include the loki task
+  ansible.builtin.include_tasks:
+    file: "loki.yaml"
+    apply:
+      tags: ["loki"]
+  when: target_host in services['containers']['loki']['units']['main']['hosts']
+  tags: ["loki"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

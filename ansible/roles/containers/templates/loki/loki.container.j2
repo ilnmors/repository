@@ -1,0 +1,32 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Loki
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=loki
+HostName=loki
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['https']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['https']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['https']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/loki/data:/loki:rw
+Volume=%h/containers/loki/etc:/etc/loki:ro
+Volume=%h/containers/loki/ssl:/etc/ssl/loki:ro
+
+Environment="TZ={{ site['timezone'] }}"
+
+Exec=--config.file=/etc/loki/loki.yaml
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
