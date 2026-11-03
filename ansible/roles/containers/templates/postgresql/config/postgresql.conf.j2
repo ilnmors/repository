@@ -1,0 +1,29 @@
+listen_addresses = '*'
+max_connections = 250
+port = {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['container'] }}
+
+ssl = on
+ssl_ca_file = '/etc/ssl/postgresql/{{ site['ca']['x509']['root']['certificate_file'] }}'
+ssl_cert_file = '/etc/ssl/postgresql/{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.crt'
+ssl_key_file = '/etc/ssl/postgresql/{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.key'
+ssl_ciphers = 'HIGH:!aNULL:!MD5'
+ssl_prefer_server_ciphers = on
+password_encryption = 'scram-sha-256'
+
+log_destination = 'stderr'
+log_checkpoints = on
+log_temp_files = 0
+log_min_duration_statement = 500
+track_io_timing = on
+
+shared_preload_libraries = 'vchord.so'
+search_path = '"$user", public'
+max_wal_size = 5GB
+shared_buffers = 512MB
+wal_compression = on
+work_mem = 16MB
+autovacuum_vacuum_scale_factor = 0.1
+autovacuum_analyze_scale_factor = 0.05
+autovacuum_vacuum_cost_limit = 1000
+effective_io_concurrency = 200
+random_page_cost = 1.2

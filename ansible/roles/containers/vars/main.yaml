@@ -1,6 +1,18 @@
 ---
 containers_service_list: "{{ (services['packages'] | dict2items) + (services['containers'] | dict2items) }}"
 
+containers_unit_entries: >-
+  {%- set containers_found = namespace(units=[]) -%}
+  {%- for containers_service in containers_service_list -%}
+  {%-   set containers_found.units = containers_found.units + (
+          containers_service['value']['units'] | default({}) | dict2items
+          | map('combine', {'service': containers_service['key']}) | list
+        ) -%}
+  {%- endfor -%}
+  {{ containers_found.units }}
+
+containers_postgresql_host: "{{ services['containers']['postgresql']['units']['main']['hosts'] | first }}"
+
 containers_step_ca_allowed_domains: >-
   {{
     networks['segments']
@@ -9,6 +21,30 @@ containers_step_ca_allowed_domains: >-
     | map(attribute='value.alias') | select('defined') | flatten
     | unique
     | map('regex_replace', '$', '.' ~ site['domain']['internal'])
+    | list
+  }}
+
+containers_postgresql_services: >-
+  {{
+    containers_unit_entries
+    | selectattr('value.dependency.db.status', 'defined')
+    | selectattr('value.dependency.db.status', 'equalto', true)
+    | selectattr('value.dependency.db.type', 'defined')
+    | selectattr('value.dependency.db.type', 'equalto', 'postgresql')
+    | map(attribute='service') | unique | list
+  }}
+
+containers_postgresql_client_hosts: >-
+  {{
+    containers_service_list
+    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
+    | selectattr('value.dependency', 'defined')
+    | selectattr('value.dependency.db', 'defined')
+    | selectattr('value.dependency.db.status', 'defined')
+    | selectattr('value.dependency.db.status', 'equalto', true)
+    | selectattr('value.dependency.db.type', 'defined')
+    | selectattr('value.dependency.db.type', 'equalto', 'postgresql')
+    | map(attribute='value.hosts') | flatten | unique | sort
     | list
   }}
 

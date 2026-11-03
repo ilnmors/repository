@@ -1,0 +1,35 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=PostgreSQL
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=postgresql
+HostName=postgresql
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['tcp']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['tcp']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['tcp']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postgresql/data:/var/lib/postgresql:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postgresql/config:/config:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postgresql/ssl:/etc/ssl/postgresql:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postgresql/init:/docker-entrypoint-initdb.d:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/postgresql/backups:/backups:rw
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="PGPORT={{ services['containers'][target_container]['units']['main']['ports']['tcp']['container'] }}"
+# Only used by initdb; pg_hba.conf controls authentication after initialization.
+Environment="POSTGRES_HOST_AUTH_METHOD=trust"
+
+Exec=postgres -c config_file=/config/postgresql.conf -c hba_file=/config/pg_hba.conf
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

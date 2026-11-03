@@ -1,0 +1,10 @@
+FROM {{ releases['containers']['postgresql']['repository'] }}:{{ releases['containers']['postgresql']['tag'] }}
+
+ARG VECTORCHORD_VER={{ releases['containers']['postgresql']['build']['vectorchord']['tag'] }}
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget ca-certificates postgresql-${PG_MAJOR}-pgvector && \
+    wget -nv -O /tmp/vchord.deb {{ releases['containers']['postgresql']['build']['vectorchord']['repository'] }}/releases/download/${VECTORCHORD_VER}/postgresql-${PG_MAJOR}-vchord_${VECTORCHORD_VER}-1_$(dpkg --print-architecture).deb && \
+    apt-get install -y --no-install-recommends /tmp/vchord.deb && \
+    apt-get purge -y --auto-remove wget && \
+    rm -rf /tmp/vchord.deb /var/lib/apt/lists/*

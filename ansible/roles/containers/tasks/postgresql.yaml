@@ -1,0 +1,293 @@
+---
+- name: Validate the PostgreSQL client names
+  ansible.builtin.assert:
+    that:
+      - item is match('^[a-z][a-z0-9_-]{0,59}$')
+      - item not in ['postgres', 'postgresql', 'mariadb', 'mysql', 'root', 'cluster']
+    fail_msg: "Use a service name of up to 60 lowercase letters, digits, underscores or hyphens for DB clients."
+    success_msg: "The PostgreSQL client names are valid."
+  loop: "{{ containers_postgresql_services }}"
+
+- name: Register the missing PostgreSQL passwords on secrets.yaml
+  vars:
+    secrets_target: '["postgresql"]["password"][{{ containers_postgresql_service | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: "{{ containers_postgresql_services }}"
+  loop_control:
+    loop_var: "containers_postgresql_service"
+  when: (secrets['postgresql']['password'][containers_postgresql_service] | default('', true) | length) == 0
+  no_log: true
+
+- name: Configure the PostgreSQL server
+  when: target_host in services['containers']['postgresql']['units']['main']['hosts']
+  block:
+    - name: Set the target container # noqa: var-naming[no-role-prefix]
+      ansible.builtin.set_fact:
+        target_container: "postgresql"
+
+    - name: Register the missing PostgreSQL certificate # noqa: var-naming[no-role-prefix]
+      vars:
+        target_service: "{{ services['containers']['postgresql']['units']['main'] }}"
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "x509-leaf"
+      when: >-
+        (secrets['ca']['x509']['leaf'][services['containers']['postgresql']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+        (secrets['ca']['x509']['leaf'][services['containers']['postgresql']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+      no_log: true
+
+    - name: Create the PostgreSQL directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: "directory"
+        owner: "{{ services['containers']['postgresql']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0770"
+      loop:
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/data"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/config"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/ssl"
+        - "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/init"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/postgresql"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/postgresql/backups"
+        - "{{ nodes[target_host]['paths']['data'] }}/containers/postgresql/backups/sql"
+      become: true
+
+    - name: Deploy the PostgreSQL image
+      vars:
+        containers_image_notifications: "notification_restart_postgresql"
+      ansible.builtin.include_tasks:
+        file: "deploy.yaml"
+
+    - name: Deploy the PostgreSQL configuration
+      ansible.builtin.template:
+        src: "postgresql/config/{{ item }}.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/config/{{ item }}"
+        owner: "{{ services['containers']['postgresql']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0600"
+      loop:
+        - "postgresql.conf"
+        - "pg_hba.conf"
+      become: true
+      notify: "notification_reload_postgresql"
+
+    - name: Deploy the PostgreSQL certificate and key
+      ansible.builtin.copy:
+        content: |
+          {{ item['value'] }}
+        dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/ssl/{{ item['name'] }}"
+        owner: "{{ services['containers']['postgresql']['units']['main']['subuid'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "{{ item['mode'] }}"
+      loop:
+        - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+          value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+          mode: "0440"
+        - name: "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.crt"
+          value: |
+            {{ secrets['ca']['x509']['leaf'][services['containers']['postgresql']['units']['main']['domain']['internal']]['crt'] | trim }}
+            {{ secrets['ca']['x509']['intermediate']['crt'] }}
+          mode: "0440"
+        - name: "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.key"
+          value: "{{ secrets['ca']['x509']['leaf'][services['containers']['postgresql']['units']['main']['domain']['internal']]['key'] }}"
+          mode: "0400"
+      become: true
+      notify: "notification_reload_postgresql"
+      no_log: true
+
+    - name: Check the PostgreSQL .init marker
+      ansible.builtin.stat:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/.init"
+      register: "containers_postgresql_init_marker"
+
+    - name: Prepare the initial PostgreSQL database
+      when: not containers_postgresql_init_marker['stat']['exists']
+      block:
+        - name: Check the PostgreSQL data directory is empty
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/data"
+            file_type: "any"
+            hidden: true
+            recurse: false
+          become: true
+          register: "containers_postgresql_data_directory"
+
+        - name: Validate the initial PostgreSQL data directory
+          ansible.builtin.assert:
+            that:
+              - (containers_postgresql_data_directory['skipped_paths'] | default({}) | length) == 0
+              - containers_postgresql_data_directory['matched'] == 0
+            fail_msg: "The PostgreSQL data directory is not empty or could not be inspected, but .init is missing. Verify the previous initialization or restore before retrying."
+            success_msg: "The PostgreSQL data directory is empty."
+
+        - name: Check the PostgreSQL SQL backups
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['data'] }}/containers/postgresql/backups/sql"
+            file_type: "file"
+            patterns: "*.sql"
+            hidden: true
+          become: true
+          register: "containers_postgresql_backups"
+
+        - name: Validate the PostgreSQL SQL backup set
+          ansible.builtin.assert:
+            that:
+              - >-
+                containers_postgresql_backups['matched'] == 0 or
+                (
+                  containers_postgresql_backups['files'] | map(attribute='path') | map('basename')
+                  | symmetric_difference(
+                      (['cluster'] + containers_postgresql_services) | map('regex_replace', '^(.*)$', 'pg_\\1.sql') | list
+                  ) | length
+                ) == 0
+            fail_msg: "The PostgreSQL SQL backups must match the declared DB clients and cluster schema. Restore the complete set before initializing."
+            success_msg: "The PostgreSQL SQL backup set is valid."
+
+        - name: Check the prepared PostgreSQL SQL files
+          ansible.builtin.find:
+            paths: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/init"
+            file_type: "file"
+            patterns: "*.sql"
+            hidden: true
+          become: true
+          register: "containers_postgresql_init_files"
+
+        - name: Remove the prepared PostgreSQL SQL files
+          ansible.builtin.file:
+            path: "{{ item['path'] }}"
+            state: "absent"
+          loop: "{{ containers_postgresql_init_files['files'] }}"
+          loop_control:
+            label: "{{ item['path'] | basename }}"
+          become: true
+
+        - name: Deploy the initial PostgreSQL restore files
+          ansible.builtin.copy:
+            src: "{{ nodes[target_host]['paths']['data'] }}/containers/postgresql/backups/sql/pg_{{ item }}.sql"
+            dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/init/{{ '%02d' | format(containers_postgresql_restore_index) }}_pg_{{ item }}.sql"
+            remote_src: true
+            owner: "{{ services['containers']['postgresql']['units']['main']['subuid'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+          loop: "{{ ['cluster'] + containers_postgresql_services }}"
+          loop_control:
+            index_var: "containers_postgresql_restore_index"
+          become: true
+          when: containers_postgresql_backups['matched'] > 0
+          no_log: true
+
+        - name: Deploy the initial PostgreSQL accounts
+          ansible.builtin.template:
+            src: "postgresql/init/accounts.sql.j2"
+            dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/init/accounts.sql"
+            owner: "{{ services['containers']['postgresql']['units']['main']['subuid'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+            mode: "0600"
+          become: true
+          no_log: true
+
+    - name: Deploy the container file
+      ansible.builtin.template:
+        src: "postgresql/postgresql.container.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/postgresql.container"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      notify: "notification_restart_postgresql"
+
+    - name: Deploy the PostgreSQL backup units
+      ansible.builtin.template:
+        src: "postgresql/services/{{ item }}.j2"
+        dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/{{ item }}"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      loop:
+        - "postgresql-cluster-backup.service"
+        - "postgresql-cluster-backup.timer"
+        - "postgresql-data-backup@.service"
+        - "postgresql-data-backup@.timer"
+
+    - name: Start the PostgreSQL
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "postgresql.service"
+        state: "started"
+        daemon_reload: true
+      register: "containers_postgresql_started"
+
+    - name: Apply the PostgreSQL configuration handlers
+      ansible.builtin.meta: "flush_handlers"
+
+    - name: Wait for the initialized PostgreSQL server
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/podman exec --user postgres postgresql pg_isready --host 127.0.0.1 --username postgres
+      args:
+        executable: "/bin/bash"
+      until: containers_postgresql_ready['rc'] == 0
+      retries: 60
+      delay: 3
+      changed_when: false
+      register: "containers_postgresql_ready"
+
+    - name: Check the PostgreSQL initialization restart count
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/systemctl --user show postgresql.service --property=NRestarts --value
+      args:
+        executable: "/bin/bash"
+      when: not containers_postgresql_init_marker['stat']['exists']
+      changed_when: false
+      register: "containers_postgresql_restarts"
+
+    - name: Validate the PostgreSQL initialization
+      ansible.builtin.assert:
+        that:
+          - containers_postgresql_started['changed']
+          - (containers_postgresql_restarts['stdout'] | trim) == '0'
+        fail_msg: "PostgreSQL was already running or restarted before initialization was confirmed. Verify the initialization or restore before creating .init."
+        success_msg: "PostgreSQL initialized without restarting."
+      when: not containers_postgresql_init_marker['stat']['exists']
+
+    - name: Register the PostgreSQL databases and accounts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/podman exec --interactive --user postgres postgresql \
+          psql --no-psqlrc --username postgres --dbname postgres --set ON_ERROR_STOP=1
+      args:
+        executable: "/bin/bash"
+        stdin: "{{ lookup('ansible.builtin.template', 'postgresql/init/accounts.sql.j2') }}"
+      when: containers_postgresql_init_marker['stat']['exists']
+      changed_when: (containers_postgresql_services | length) > 0
+      register: "containers_postgresql_registered"
+      no_log: true
+
+    - name: Enable the PostgreSQL backup timers
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "{{ item }}"
+        enabled: true
+        daemon_reload: true
+      loop: "{{ ['postgresql-cluster-backup.timer'] + (containers_postgresql_services | map('regex_replace', '^(.*)$', 'postgresql-data-backup@\\1.timer') | list) }}"
+
+    - name: Start the PostgreSQL backup timers
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "{{ item }}"
+        state: "started"
+      loop: "{{ ['postgresql-cluster-backup.timer'] + (containers_postgresql_services | map('regex_replace', '^(.*)$', 'postgresql-data-backup@\\1.timer') | list) }}"
+
+    - name: Create the PostgreSQL .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/postgresql/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+      when: not containers_postgresql_init_marker['stat']['exists']

@@ -1,0 +1,14 @@
+SET standard_conforming_strings = on;
+
+{% for service in containers_postgresql_services %}
+SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ service }}') AS create_role \gset
+\if :create_role
+CREATE ROLE "{{ service }}" WITH LOGIN;
+\endif
+SELECT NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '{{ service }}_db') AS create_database \gset
+\if :create_database
+CREATE DATABASE "{{ service }}_db" OWNER "{{ service }}";
+REVOKE ALL ON DATABASE "{{ service }}_db" FROM PUBLIC;
+\endif
+ALTER USER "{{ service }}" WITH PASSWORD '{{ secrets['postgresql']['password'][service] | replace("'", "''") }}';
+{% endfor %}

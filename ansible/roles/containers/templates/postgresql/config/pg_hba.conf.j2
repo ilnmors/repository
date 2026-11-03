@@ -1,0 +1,16 @@
+# Local administration and backups in the container.
+local all all trust
+
+# Container loopback and rootless host forwarding.
+host all all 127.0.0.1/32 scram-sha-256
+host all all ::1/128 scram-sha-256
+hostssl all all 169.254.1.0/24 scram-sha-256
+hostssl all all fe80::/64 scram-sha-256
+
+{% for host in containers_postgresql_client_hosts %}
+{% for family in ['ipv4', 'ipv6'] %}
+{% if networks['segments']['server']['hosts'][host][family] | default('', true) | length > 0 %}
+hostssl all all {{ networks['segments']['server']['hosts'][host][family] }}/{{ 32 if family == 'ipv4' else 128 }} scram-sha-256
+{% endif %}
+{% endfor %}
+{% endfor %}

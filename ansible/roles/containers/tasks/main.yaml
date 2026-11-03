@@ -23,5 +23,13 @@
   when: target_host in services['containers']['rustfs']['units']['main']['hosts']
   tags: ["rustfs"]
 
+- name: Include the postgresql task
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      tags: ["postgresql"]
+  when: target_host in services['containers']['postgresql']['units']['main']['hosts']
+  tags: ["postgresql"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"
