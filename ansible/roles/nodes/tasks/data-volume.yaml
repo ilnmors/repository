@@ -12,7 +12,7 @@
     success_msg: "The data volume configuration is correct"
     fail_msg: "The data volume needs block disks, a btrfs label and an absolute mount point other than /."
 
-- name: Install btrfs
+- name: Install the btrfs-progs package
   ansible.builtin.apt:
     name:
       - "btrfs-progs"
@@ -71,7 +71,7 @@
   become: true
   changed_when: false
 
-- name: Mount data volume
+- name: Mount the data volume
   ansible.posix.mount:
     path: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] }}"
     src: "LABEL={{ nodes[target_host]['system']['disk']['data']['fs']['label'] }}"
@@ -80,7 +80,7 @@
     opts: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_opts'] | join(',') }}"
   become: true
 
-- name: Verify disk is mounted
+- name: Verify the disk is mounted
   ansible.builtin.shell: |
     mountpoint -q {{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] | quote }}
   args:
@@ -88,7 +88,7 @@
   changed_when: false
   become: true
 
-- name: Set data volume path permissions
+- name: Set the data volume path permissions
   ansible.builtin.file:
     path: "{{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] }}"
     state: "directory"
@@ -97,7 +97,7 @@
     mode: "0755"
   become: true
 
-- name: Deploy btrfs scrub service and timer
+- name: Deploy the btrfs scrub service and timer
   vars:
     nodes_disk: "data"
   ansible.builtin.template:
@@ -111,7 +111,7 @@
     - "timer"
   become: true
 
-- name: Enable auto btrfs scrub
+- name: Enable the btrfs scrub timer
   vars:
     nodes_disk: "data"
   ansible.builtin.systemd_service:

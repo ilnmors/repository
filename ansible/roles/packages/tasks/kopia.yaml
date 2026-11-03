@@ -1,5 +1,5 @@
 ---
-- name: Install kopia
+- name: Install the kopia package
   vars:
     packages_download_url: "https://github.com/kopia/kopia/releases/download/v{{ releases['packages']['kopia']['version'] }}/\
       kopia_{{ releases['packages']['kopia']['version'] }}_linux_{{ packages_host_architecture }}.deb"
@@ -394,7 +394,7 @@
       register: "is_kopia_client_policy_updated"
       notify: "notification_restart_kopia_server"
 
-    - name: Set kopia parameters
+    - name: Set the kopia parameters
       ansible.builtin.shell: |
         set -euo pipefail
         /usr/bin/kopia repository set-parameters \
@@ -404,7 +404,7 @@
       changed_when: false
       no_log: true
 
-    - name: Deploy kopia server service file
+    - name: Deploy the kopia-server.service file
       ansible.builtin.template:
         src: "kopia/server/kopia-server.service.j2"
         dest: "/etc/systemd/system/kopia-server.service"
@@ -415,7 +415,7 @@
       become: true
       notify: "notification_restart_kopia_server"
 
-    - name: Enable kopia server service
+    - name: Enable the kopia-server.service
       ansible.builtin.systemd_service:
         name: "kopia-server.service"
         state: "started"
@@ -502,7 +502,7 @@
           - (is_data_dir_empty['skipped_paths'] | default({}) | length) == 0
         fail_msg: "Unable to inspect the data directory for {{ target_host }}."
 
-    - name: Check whether a kopia restore is pending
+    - name: Check whether the kopia restore is pending
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia/restore-in-progress"
       register: "is_kopia_restore_pending"
@@ -588,7 +588,7 @@
         - "kopia-client.service"
         - "kopia-client.timer"
 
-    - name: Enable the kopia client timer
+    - name: Enable the kopia-client.timer
       ansible.builtin.systemd_service:
         name: "kopia-client.timer"
         state: "started"

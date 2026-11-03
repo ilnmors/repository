@@ -1,5 +1,5 @@
 ---
-- name: Install code-server
+- name: Install the code-server package
   vars:
     packages_download_url: "https://github.com/coder/code-server/releases/download/v{{ releases['packages']['code-server']['version'] }}/\
       code-server_{{ releases['packages']['code-server']['version'] }}_{{ packages_host_architecture }}.deb"
@@ -33,7 +33,7 @@
     validate: "/usr/bin/systemd-analyze verify %s"
   notify: "notification_restart_code-server"
 
-- name: Enable code-server.service
+- name: Enable the code-server.service
   ansible.builtin.systemd_service:
     name: "code-server.service"
     state: "started"

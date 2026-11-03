@@ -20,7 +20,7 @@
     group: "{{ nodes[control_host]['group'] }}"
     mode: "0744"
 
-- name: Copy init configuration files
+- name: Copy the init configuration files
   ansible.builtin.template:
     src: "{{ item['src'] }}"
     dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/{{ item['dest'] }}"

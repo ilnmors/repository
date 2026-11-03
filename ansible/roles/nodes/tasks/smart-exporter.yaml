@@ -39,7 +39,7 @@
     - "smart-exporter.timer"
   become: true
 
-- name: Register the SMART exporter timer
+- name: Register the smart-exporter.timer
   ansible.builtin.systemd_service:
     name: "smart-exporter.timer"
     state: "started"

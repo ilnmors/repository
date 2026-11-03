@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     nodes_networkd_target: "{{ target_host if (role_path ~ '/templates/networkd/' ~ target_host) is directory else 'common' }}"
 
-- name: Set networkd paths
+- name: Set the networkd paths
   ansible.builtin.set_fact:
     nodes_networkd_paths: >-
       {{
@@ -15,7 +15,7 @@
         | sort
       }}
 
-- name: Set rendered the networkd templates
+- name: Set the rendered networkd templates
   ansible.builtin.set_fact:
     nodes_networkd_files: >-
       {{

@@ -9,7 +9,7 @@
   become: true
   notify: "notification_restart_chrony"
 
-- name: Enable chrony service
+- name: Enable the chrony.service
   ansible.builtin.systemd_service:
     name: "chrony.service"
     state: "started"

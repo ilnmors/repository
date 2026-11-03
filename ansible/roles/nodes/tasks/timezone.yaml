@@ -1,5 +1,5 @@
 ---
-- name: Set timezone
+- name: Set the timezone
   community.general.timezone:
     name: "{{ site['timezone'] }}"
   become: true

@@ -28,7 +28,7 @@
     validate: "/bin/bash -n %s"
   become: true
 
-- name: Deploy ddns service files
+- name: Deploy the ddns service files
   ansible.builtin.template:
     src: "ddns/{{ item }}.j2"
     dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/{{ item }}"
@@ -40,7 +40,7 @@
     - "ddns.service"
     - "ddns.timer"
 
-- name: Register ddns timer
+- name: Register the ddns.timer
   ansible.builtin.systemd_service:
     name: "ddns.timer"
     state: "started"

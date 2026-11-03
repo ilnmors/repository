@@ -1,12 +1,12 @@
 ---
-- name: Gather system facts (hardware)
+- name: Gather the system facts (hardware)
   ansible.builtin.setup:
     gather_subset:
       - "hardware"
   become: true
   tags: ["always"]
 
-- name: Set packages_host_architecture
+- name: Set the packages_host_architecture
   ansible.builtin.set_fact:
     packages_host_architecture: >-
       {{
@@ -16,7 +16,7 @@
       }}
   tags: ["always"]
 
-- name: Install packages from the Debian APT repository
+- name: Install the packages from the Debian APT repository
   ansible.builtin.apt:
     name: "{{ packages_host_debian_package_list }}"
   become: true

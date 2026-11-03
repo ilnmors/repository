@@ -1,5 +1,5 @@
 ---
-- name: Deploy root ca-certificates
+- name: Deploy the root ca-certificates
   ansible.builtin.copy:
     content: "{{ secrets['ca']['x509']['root']['crt'] }}"
     dest: "/usr/local/share/ca-certificates/{{ site['ca']['x509']['root']['certificate_file'] }}"

@@ -23,13 +23,13 @@
   become: true
   notify: "notification_restart_networkd"
 
-- name: Disable the networking service
+- name: Disable the networking.service
   ansible.builtin.systemd_service:
     name: "networking.service"
     enabled: false
   become: true
 
-- name: Enable the networkd service
+- name: Enable the systemd-networkd.service
   ansible.builtin.systemd_service:
     name: "systemd-networkd.service"
     enabled: true

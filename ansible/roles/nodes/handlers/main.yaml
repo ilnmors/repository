@@ -1,5 +1,5 @@
 ---
-- name: Update root ca-certificates
+- name: Update the root ca-certificates
   ansible.builtin.shell: |
     /usr/sbin/update-ca-certificates
   args:
@@ -10,7 +10,7 @@
   register: "result_update_ca"
   ignore_errors: true
 
-- name: Reload nftables.service
+- name: Reload the nftables.service
   ansible.builtin.systemd_service:
     name: "nftables.service"
     state: "reloaded"
@@ -21,7 +21,7 @@
   register: "result_reload_nftables"
   ignore_errors: true
 
-- name: Restart systemd-sysctl.service
+- name: Restart the systemd-sysctl.service
   ansible.builtin.systemd_service:
     name: "systemd-sysctl.service"
     state: "restarted"
@@ -31,7 +31,7 @@
   register: "result_restart_sysctl"
   ignore_errors: true
 
-- name: Restart systemd-networkd.service
+- name: Restart the systemd-networkd.service
   ansible.builtin.systemd_service:
     name: "systemd-networkd.service"
     state: "restarted"
@@ -42,7 +42,7 @@
   register: "result_restart_networkd"
   ignore_errors: true
 
-- name: Restart sshd.service
+- name: Restart the sshd.service
   ansible.builtin.systemd_service:
     name: "sshd.service"
     state: "restarted"
@@ -53,7 +53,7 @@
   register: "result_restart_sshd"
   ignore_errors: true
 
-- name: Update initramfs
+- name: Update the initramfs
   ansible.builtin.shell: |
     /usr/sbin/update-initramfs -u
   args:

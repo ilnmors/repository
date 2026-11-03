@@ -29,7 +29,7 @@
       - (is_rclone_data_dir_empty['skipped_paths'] | default({}) | length) == 0
     fail_msg: "Unable to inspect the data directory for {{ target_host }}."
 
-- name: Check whether a rclone restore is pending
+- name: Check whether the rclone restore is pending
   ansible.builtin.stat:
     path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
   register: "is_rclone_restore_pending"
@@ -91,7 +91,7 @@
             path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
             state: "absent"
 
-- name: Deploy rclone backup service files
+- name: Deploy the rclone backup service files
   ansible.builtin.template:
     src: "rclone/{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
@@ -104,7 +104,7 @@
     - "rclone.timer"
   become: true
 
-- name: Enable rclone timer
+- name: Enable the rclone.timer
   ansible.builtin.systemd_service:
     name: "rclone.timer"
     state: "started"

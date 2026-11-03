@@ -1,5 +1,5 @@
 ---
-- name: Install step-cli
+- name: Install the step-cli package
   vars:
     packages_download_url: "https://dl.smallstep.com/gh-release/cli/gh-release-header/v{{ releases['packages']['step']['version'] }}/\
       step-cli_{{ releases['packages']['step']['version'] }}-1_{{ packages_host_architecture }}.deb"

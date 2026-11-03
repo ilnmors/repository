@@ -91,7 +91,7 @@
     label: "{{ packages_wireguard_peer_result['packages_wireguard_peer'] }}"
   no_log: true
 
-- name: Set existing peer list
+- name: Set the existing peer list
   ansible.builtin.set_fact:
     packages_wireguard_peer_list: >-
       {{
@@ -149,7 +149,7 @@
   no_log: true
   notify: "notification_restart_networkd"
 
-- name: Enable networkd for WireGuard
+- name: Enable the systemd-networkd.service for WireGuard
   ansible.builtin.systemd_service:
     name: "systemd-networkd.service"
     enabled: true

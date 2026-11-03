@@ -1,5 +1,5 @@
 ---
-- name: Validate BIND reverse zone prefixes
+- name: Validate the BIND reverse zone prefixes
   ansible.builtin.assert:
     that:
       - >-
@@ -24,7 +24,7 @@
     mode: "0750"
   become: true
 
-- name: Create and register BIND ACME key on secrets.yaml
+- name: Create and register the BIND ACME key on secrets.yaml
   when: >-
     secrets['ca']['x509']['acme']['key'] is not defined
     or secrets['ca']['x509']['acme']['key'] is none
@@ -77,7 +77,7 @@
 - name: Synchronize the BIND zones with inventory
   become: true
   block:
-    - name: Gather service facts for BIND
+    - name: Gather the service facts for BIND
       ansible.builtin.service_facts:
 
     - name: Freeze the BIND zones
@@ -172,7 +172,7 @@
         - "'ipv6' in networks['dns']['zones']['reverse']['families']"
         - (networks['segments'][item]['subnet']['ipv6'] | default(none)) is not none
 
-    - name: Configure BIND
+    - name: Configure the BIND
       ansible.builtin.template:
         src: "bind/named.conf.j2"
         dest: "/etc/bind/named.conf"
@@ -181,7 +181,7 @@
         mode: "0640"
         validate: "/usr/bin/named-checkconf -j -z %s"
   always:
-    - name: Enable and restart BIND
+    - name: Enable and restart the named.service
       ansible.builtin.systemd_service:
         name: "named.service"
         enabled: true

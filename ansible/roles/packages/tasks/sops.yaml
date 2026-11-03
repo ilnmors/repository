@@ -1,5 +1,5 @@
 ---
-- name: Install sops
+- name: Install the sops package
   vars:
     packages_download_url: "https://github.com/getsops/sops/releases/download/v{{ releases['packages']['sops']['version'] }}/\
         sops_{{ releases['packages']['sops']['version'] }}_{{ packages_host_architecture }}.deb"

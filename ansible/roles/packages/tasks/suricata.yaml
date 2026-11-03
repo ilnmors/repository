@@ -105,7 +105,7 @@
     validate: "/usr/sbin/logrotate --debug %s"
   become: true
 
-- name: Enable suricata service
+- name: Enable the suricata.service
   ansible.builtin.systemd_service:
     name: "suricata.service"
     state: "started"
@@ -113,7 +113,7 @@
     daemon_reload: true
   become: true
 
-- name: Enable the suricata-update timer
+- name: Enable the suricata-update.timer
   ansible.builtin.systemd_service:
     name: "suricata-update.timer"
     state: "started"
