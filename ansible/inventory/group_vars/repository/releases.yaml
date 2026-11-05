@@ -171,3 +171,7 @@ releases:
       name: "x509-exporter"
       repository: "docker.io/enix/x509-certificate-exporter"
       tag: "4.1.0"
+    dovecot:
+      name: "dovecot"
+      repository: "docker.io/dovecot/dovecot"
+      tag: "2.4.5"

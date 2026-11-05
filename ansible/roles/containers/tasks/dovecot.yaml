@@ -1,0 +1,152 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "dovecot"
+
+- name: Register the missing mail LDAP password on secrets.yaml
+  vars:
+    secrets_target: '["ldap"]["password"]["services"]["mail"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['ldap']['password']['services']['mail'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing dovecot certificate # noqa: var-naming[no-role-prefix]
+  vars:
+    target_service: "{{ services['containers']['dovecot']['units']['main'] }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "x509-leaf"
+  when: >-
+    (secrets['ca']['x509']['leaf'][services['containers']['dovecot']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+    (secrets['ca']['x509']['leaf'][services['containers']['dovecot']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the dovecot fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "DOVECOT_LDAP_PASSWORD"
+        value: "{{ secrets['ldap']['password']['services']['mail'] }}"
+  no_log: true
+
+- name: Create the dovecot directory
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: "directory"
+    owner: "{{ services['containers']['dovecot']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/dovecot"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/dovecot/conf.d"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/dovecot/ssl"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['data'] }}/containers/dovecot"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['data'] }}/containers/dovecot/vmail"
+      mode: "0700"
+    # Shared with postfix: dovecot (vmail) creates the 0666 auth/lmtp sockets, postfix only traverses.
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/mail"
+      mode: "0755"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/mail/sockets"
+      mode: "0755"
+  loop_control:
+    label: "{{ item['path'] }}"
+  become: true
+
+# crowdsec watches this directory (force_inotify); restart it once the directory exists.
+- name: Create the dovecot log directory
+  ansible.builtin.file:
+    path: "/var/log/dovecot"
+    state: "directory"
+    owner: "{{ services['containers']['dovecot']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  become: true
+  notify: "notification_restart_crowdsec"
+
+- name: Deploy the dovecot certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/dovecot/ssl/{{ item['name'] }}"
+    owner: "{{ services['containers']['dovecot']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      mode: "0440"
+    - name: "{{ services['containers']['dovecot']['units']['main']['domain']['internal'] }}.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['containers']['dovecot']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "{{ services['containers']['dovecot']['units']['main']['domain']['internal'] }}.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['containers']['dovecot']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_dovecot"
+  no_log: true
+
+- name: Deploy the dovecot configuration files
+  ansible.builtin.template:
+    src: "dovecot/conf.d/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/dovecot/conf.d/{{ item }}"
+    owner: "{{ services['containers']['dovecot']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  loop:
+    - "auth.conf"
+    - "ssl.conf"
+    - "zz-local.conf"
+  become: true
+  notify: "notification_restart_dovecot"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_dovecot"
+  no_log: true
+
+- name: Deploy the dovecot logrotate configuration
+  vars:
+    containers_mail_service: "dovecot"
+  ansible.builtin.template:
+    src: "mail/logrotate.j2"
+    dest: "/etc/logrotate.d/dovecot"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+
+- name: Deploy the dovecot image
+  vars:
+    containers_image_notifications: "notification_restart_dovecot"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "dovecot/dovecot.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/dovecot.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_dovecot"
+
+- name: Start the dovecot
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "dovecot.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_dovecot_started"
+
+- name: Apply the dovecot configuration handlers
+  ansible.builtin.meta: "flush_handlers"

@@ -142,6 +142,15 @@ services:
               - "crowdsecurity/nextcloud-whitelist"
             config:
               - "caddy.yaml"
+        dovecot:
+          release: "crowdsec"
+          hosts: "{{ services['containers']['dovecot']['units']['main']['hosts'] }}"
+          acquisd:
+            collection:
+              - "crowdsecurity/dovecot"
+            parser: []
+            config:
+              - "dovecot.yaml"
     suricata:
       units:
         main:
@@ -401,3 +410,24 @@ services:
               protocol: "tcp"
               int: 9793
               container: 9793
+    dovecot:
+      units:
+        main:
+          release: "dovecot"
+          hosts: ["infra"]
+          domain:
+            internal: "imap"
+          # vmail (uid 1000) in the rootless official image.
+          subuid: 100999
+          ports:
+            imaps:
+              protocol: "tcp"
+              ext: 993
+              int: 2993
+              container: 31993
+          mail:
+            # LLDAP groups allowed to log in over IMAP.
+            groups: ["admins", "users"]
+          dependency:
+            pki:
+              cert: true

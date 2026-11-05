@@ -1,0 +1,7 @@
+# Dovecot logs (file log; the non-syslog stage uses the type as the program name)
+filenames:
+  - /var/log/dovecot/*.log
+labels:
+  type: dovecot
+# Watch the directory even before the first log file exists.
+force_inotify: true

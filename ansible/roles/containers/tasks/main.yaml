@@ -47,6 +47,14 @@
   when: target_host in services['containers']['ldap']['units']['main']['hosts']
   tags: ["ldap"]
 
+- name: Include the dovecot task
+  ansible.builtin.include_tasks:
+    file: "dovecot.yaml"
+    apply:
+      tags: ["dovecot"]
+  when: target_host in services['containers']['dovecot']['units']['main']['hosts']
+  tags: ["dovecot"]
+
 - name: Include the prometheus task
   ansible.builtin.include_tasks:
     file: "prometheus.yaml"

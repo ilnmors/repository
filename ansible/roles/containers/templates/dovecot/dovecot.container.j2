@@ -1,0 +1,45 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Dovecot
+
+{% if target_host in services['containers']['ldap']['units']['main']['hosts'] %}
+After=ldap.service
+Wants=ldap.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=dovecot
+HostName={{ services['containers']['dovecot']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+{% if target_host in services['containers']['ldap']['units']['main']['hosts'] %}
+AddHost={{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+{% endif %}
+
+PublishPort={{ services['containers']['dovecot']['units']['main']['ports']['imaps']['int'] }}:{{ services['containers']['dovecot']['units']['main']['ports']['imaps']['container'] }}/{{ services['containers']['dovecot']['units']['main']['ports']['imaps']['protocol'] }}
+
+# The image reads conf.d/*.conf after its own dovecot.conf; auth.conf and ssl.conf replace the image defaults.
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/dovecot/conf.d/auth.conf:/etc/dovecot/conf.d/auth.conf:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/dovecot/conf.d/ssl.conf:/etc/dovecot/conf.d/ssl.conf:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/dovecot/conf.d/zz-local.conf:/etc/dovecot/conf.d/zz-local.conf:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/dovecot/ssl:/etc/dovecot/ssl:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/dovecot/vmail:/srv/vmail:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mail/sockets:/run/mail:rw
+Volume=/var/log/dovecot:/var/log/dovecot:rw
+
+Environment="TZ={{ site['timezone'] }}"
+Secret=DOVECOT_LDAP_PASSWORD,type=env
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['ldap']['units']['main']['ports']['ldaps']['int'] if target_host in services['containers']['ldap']['units']['main']['hosts'] else services['containers']['ldap']['units']['main']['ports']['ldaps']['ext'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
