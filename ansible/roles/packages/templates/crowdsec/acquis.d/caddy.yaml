@@ -3,3 +3,5 @@ filenames:
   - /var/log/caddy/access.log
 labels:
   type: caddy
+# Watch the directory even before the first log file exists.
+force_inotify: true
