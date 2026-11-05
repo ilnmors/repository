@@ -129,7 +129,7 @@
 
     - name: Set the existing crowdsec machine names
       ansible.builtin.set_fact:
-        packages_existing_crowdsec_machine_names: "{{ existing_crowdsec_machines['stdout'] | from_json | map(attribute='machineId') | list }}"
+        packages_existing_crowdsec_machine_names: "{{ existing_crowdsec_machines['stdout'] | from_json | default([], true) | map(attribute='machineId') | list }}"
 
     - name: Set the defined crowdsec machine names
       ansible.builtin.set_fact:
@@ -172,7 +172,7 @@
 
     - name: Set the existing crowdsec bouncer names
       ansible.builtin.set_fact:
-        packages_existing_crowdsec_bouncer_names: "{{ existing_crowdsec_bouncers['stdout'] | from_json | map(attribute='name') | list }}"
+        packages_existing_crowdsec_bouncer_names: "{{ existing_crowdsec_bouncers['stdout'] | from_json | default([], true) | map(attribute='name') | list }}"
       no_log: true
 
     - name: Set the defined crowdsec bouncer names
@@ -223,6 +223,7 @@
           (
             existing_crowdsec_bouncers['stdout']
             | from_json
+            | default([], true)
             | selectattr('name', 'equalto', item)
             | map(attribute='api_key')
             | first
