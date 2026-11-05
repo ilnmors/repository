@@ -86,6 +86,8 @@ services:
         main:
           release: "chrony"
           hosts: ["vmm"]
+          domain:
+            internal: "ntp"
           ports:
             ntp:
               protocol: "udp"

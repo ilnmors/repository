@@ -1,0 +1,34 @@
+---
+# Hosts without chrony synchronize with the local NTP server (chrony on vmm).
+- name: Install the systemd-timesyncd package
+  ansible.builtin.apt:
+    name:
+      - "systemd-timesyncd"
+    state: "present"
+  become: true
+
+- name: Create the timesyncd directory
+  ansible.builtin.file:
+    path: "/etc/systemd/timesyncd.conf.d"
+    state: "directory"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  become: true
+
+- name: Deploy the local NTP conf file
+  ansible.builtin.template:
+    src: "timesyncd/local-ntp.conf.j2"
+    dest: "/etc/systemd/timesyncd.conf.d/local-ntp.conf"
+    owner: "root"
+    group: "systemd-timesync"
+    mode: "0640"
+  become: true
+  register: "timesyncd_configuration"
+
+- name: Enable the systemd-timesyncd.service
+  ansible.builtin.systemd_service:
+    name: "systemd-timesyncd.service"
+    state: "{{ 'restarted' if timesyncd_configuration['changed'] else 'started' }}"
+    enabled: true
+  become: true

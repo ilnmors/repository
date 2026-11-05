@@ -67,6 +67,7 @@ networks:
           alias:
             - "{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}"
             - "{{ services['packages']['kopia']['units']['server']['domain']['internal'] }}"
+            - "{{ services['packages']['chrony']['units']['main']['domain']['internal'] }}"
         bind:
           ipv4: "192.168.10.2"
           ipv6: "fd00:10::2"

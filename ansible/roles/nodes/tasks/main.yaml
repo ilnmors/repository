@@ -75,6 +75,16 @@
   when: target_host in services['packages']['resolved']['units']['main']['hosts']
   tags: ["resolved"]
 
+- name: Include the timesyncd task
+  ansible.builtin.include_tasks:
+    file: "timesyncd.yaml"
+    apply:
+      tags: ["timesyncd"]
+  when:
+    - not nodes[target_host]['control_node']
+    - target_host not in services['packages']['chrony']['units']['main']['hosts']
+  tags: ["timesyncd"]
+
 - name: Include the physical-disk task
   when: >-
     not nodes[target_host]['virtualization'] and
