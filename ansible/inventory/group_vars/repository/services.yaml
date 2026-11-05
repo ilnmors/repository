@@ -390,3 +390,14 @@ services:
             db:
               status: true
               type: "postgresql"
+    x509-exporter:
+      units:
+        main:
+          release: "x509-exporter"
+          hosts: ["infra"]
+          subuid: 165533
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9793
+              container: 9793

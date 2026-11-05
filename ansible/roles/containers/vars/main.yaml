@@ -112,3 +112,22 @@ containers_rustfs_cors_origins: >-
   {%-   endfor -%}
   {%- endfor -%}
   {{ containers_found.origins | unique | list }}
+
+containers_x509_exporter_leaf_domains: >-
+  {{
+    containers_service_list
+    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
+    | selectattr('value.dependency', 'defined')
+    | selectattr('value.dependency.pki', 'defined')
+    | selectattr('value.dependency.pki.cert', 'defined')
+    | selectattr('value.dependency.pki.cert', 'equalto', true)
+    | map(attribute='value.domain.internal')
+    | unique | sort
+    | list
+  }}
+
+containers_x509_exporter_certs: >-
+  {{
+    [site['ca']['x509']['root']['certificate_file'], site['ca']['x509']['intermediate']['certificate_file']]
+    + (containers_x509_exporter_leaf_domains | map('regex_replace', '$', '.crt') | list)
+  }}

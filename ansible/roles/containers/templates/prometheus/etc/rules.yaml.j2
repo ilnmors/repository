@@ -12,6 +12,29 @@ groups:
         summary: "Exporter heartbeat is down: {{ instance }}"
         description: "{{ instance }} exporter is down for 5 mins"
 {% endfor %}
+  - name: certificate_expiry_check
+    rules:
+      - alert: CertificateMetricsMissing
+        expr: |
+          absent_over_time(x509_cert_not_after{job="x509-exporter"}[15m])
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Certificate expiry metrics are missing"
+          description: "No x509_cert_not_after metric has been received for 15 minutes. Check x509-exporter.service and the Alloy x509 scrape on infra."
+{% for filename in containers_x509_exporter_certs %}
+
+      - alert: {{ filename | regex_replace('[^A-Za-z0-9_]', '_') }}_is_expired_soon
+        expr: |
+          min(x509_cert_not_after{job="x509-exporter", filename="{{ filename }}"}) - time() < 2592000
+        for: 1d
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ filename }} expires in 30 days"
+          description: "{{ filename }} expires in 30 days. Reissue it with the secrets role (leaf tag) and redeploy the service."
+{% endfor %}
   - name: smartctl
     rules:
       - alert: SmartctlMetricsMissing

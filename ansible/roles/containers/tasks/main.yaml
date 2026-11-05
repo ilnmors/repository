@@ -71,5 +71,13 @@
   when: target_host in services['containers']['grafana']['units']['main']['hosts']
   tags: ["grafana"]
 
+- name: Include the x509-exporter task
+  ansible.builtin.include_tasks:
+    file: "x509-exporter.yaml"
+    apply:
+      tags: ["x509-exporter"]
+  when: target_host in services['containers']['x509-exporter']['units']['main']['hosts']
+  tags: ["x509-exporter"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

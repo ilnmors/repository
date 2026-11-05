@@ -128,6 +128,22 @@ prometheus.scrape "crowdsec" {
     forward_to   = [prometheus.relabel.service_metrics.receiver]
 }
 {% endif %}
+{% if target_host in services['containers']['x509-exporter']['units']['main']['hosts'] %}
+
+// x509-exporter metrics input
+prometheus.scrape "x509" {
+    targets = [
+        {
+            "__address__" = "127.0.0.1:{{ services['containers']['x509-exporter']['units']['main']['ports']['http']['int'] }}",
+            "job"         = "x509-exporter",
+            "name"        = "x509-exporter",
+        },
+    ]
+
+    honor_labels = true
+    forward_to   = [prometheus.relabel.service_metrics.receiver]
+}
+{% endif %}
 
 
 // Loki

@@ -167,3 +167,7 @@ releases:
       name: "grafana"
       repository: "docker.io/grafana/grafana"
       tag: "13.2.1"
+    x509-exporter:
+      name: "x509-exporter"
+      repository: "docker.io/enix/x509-certificate-exporter"
+      tag: "4.1.0"

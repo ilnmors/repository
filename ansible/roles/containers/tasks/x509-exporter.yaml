@@ -1,0 +1,102 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "x509-exporter"
+
+- name: Create the x509-exporter directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['x509-exporter']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/certs"
+  become: true
+
+- name: Deploy the x509-exporter configuration
+  ansible.builtin.template:
+    src: "x509-exporter/config/config.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/config/config.yaml"
+    owner: "{{ services['containers']['x509-exporter']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_x509-exporter"
+
+# Public certificates only: the CA chain and every issued leaf certificate.
+- name: Deploy the x509-exporter CA certificates
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] | trim }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/certs/{{ item['name'] }}"
+    owner: "{{ services['containers']['x509-exporter']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+    - name: "{{ site['ca']['x509']['intermediate']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['intermediate']['crt'] }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  become: true
+
+- name: Deploy the x509-exporter leaf certificates
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['leaf'][item]['crt'] | trim }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/certs/{{ item }}.crt"
+    owner: "{{ services['containers']['x509-exporter']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  loop: "{{ containers_x509_exporter_leaf_domains | select('in', secrets['ca']['x509']['leaf'] | default({})) | list }}"
+  become: true
+
+- name: Find the deployed x509-exporter certificates
+  ansible.builtin.find:
+    paths: "{{ nodes[target_host]['paths']['home'] }}/containers/x509-exporter/certs"
+    patterns: ["*.crt"]
+  become: true
+  register: "containers_x509_exporter_deployed_certs"
+
+# Removed services would otherwise keep firing expiry alerts.
+- name: Remove the stale x509-exporter certificates
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "absent"
+  loop: >-
+    {{
+      containers_x509_exporter_deployed_certs['files'] | map(attribute='path')
+      | reject('search', '/(' ~ (containers_x509_exporter_certs | map('regex_escape') | join('|')) ~ ')$')
+      | list
+    }}
+  become: true
+
+- name: Deploy the x509-exporter image
+  vars:
+    containers_image_notifications: "notification_restart_x509-exporter"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "x509-exporter/x509-exporter.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/x509-exporter.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_x509-exporter"
+
+- name: Start the x509-exporter
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "x509-exporter.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_x509_exporter_started"
+
+- name: Apply the x509-exporter configuration handlers
+  ansible.builtin.meta: "flush_handlers"

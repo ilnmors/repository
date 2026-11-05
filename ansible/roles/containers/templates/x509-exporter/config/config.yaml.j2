@@ -1,0 +1,9 @@
+server:
+  listen: :{{ services['containers']['x509-exporter']['units']['main']['ports']['http']['container'] }}
+
+sources:
+  - kind: file
+    name: {{ site['org'] }}-certs
+    paths:
+      - /certs/*.crt
+    refreshInterval: 1m
