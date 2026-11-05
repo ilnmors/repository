@@ -74,6 +74,7 @@
   loop:
     - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/style"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/ssl"
   become: true
 
@@ -100,6 +101,16 @@
   become: true
   notify: "notification_restart_ldap"
   no_log: true
+
+- name: Deploy the ldap style file
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/ldap/style/style.css"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ldap/style/style.css"
+    owner: "{{ services['containers']['ldap']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  become: true
+  notify: "notification_restart_ldap"
 
 - name: Register the podman secrets
   ansible.builtin.include_tasks:

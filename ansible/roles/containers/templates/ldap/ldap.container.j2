@@ -25,6 +25,7 @@ PublishPort={{ services['containers'][target_container]['units']['main']['ports'
 PublishPort={{ services['containers'][target_container]['units']['main']['ports']['ldaps']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['ldaps']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['ldaps']['protocol'] }}
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/ldap/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/ldap/style/style.css:/app/app/static/style.css:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/ldap/ssl:/etc/ssl/ldap:ro
 
 Environment="TZ={{ site['timezone'] }}"
