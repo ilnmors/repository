@@ -1,0 +1,133 @@
+---
+- name: Register the grafana database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "grafana"
+
+- name: Register the missing grafana admin password on secrets.yaml
+  vars:
+    secrets_target: '["grafana"]["admin"]["password"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['grafana']['admin']['password'] | default('', true) | length) == 0
+  no_log: true
+
+# The grafana account must exist in LLDAP with this password and the lldap_strict_readonly group.
+- name: Register the missing grafana LDAP password on secrets.yaml
+  vars:
+    secrets_target: '["ldap"]["password"]["services"]["grafana"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['ldap']['password']['services']['grafana'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the grafana fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "GF_DB_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['grafana'] }}"
+      - name: "GF_LDAP_BIND_PASSWORD"
+        value: "{{ secrets['ldap']['password']['services']['grafana'] }}"
+      - name: "GF_ADMIN_PASSWORD"
+        value: "{{ secrets['grafana']['admin']['password'] }}"
+  no_log: true
+
+- name: Create the grafana directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['grafana']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning/datasources"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning/dashboards"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/dashboards"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/ssl"
+  become: true
+
+- name: Deploy the grafana root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['grafana']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_grafana"
+  no_log: true
+
+- name: Deploy the grafana configuration files
+  ansible.builtin.template:
+    src: "grafana/etc/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/{{ item }}"
+    owner: "{{ services['containers']['grafana']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  loop:
+    - "grafana.ini"
+    - "ldap.toml"
+    - "provisioning/datasources/datasources.yaml"
+    - "provisioning/dashboards/dashboards.yaml"
+  become: true
+  notify: "notification_restart_grafana"
+
+- name: Deploy the grafana dashboards
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/grafana/etc/dashboards/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/dashboards/"
+    owner: "{{ services['containers']['grafana']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_grafana"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_grafana"
+  no_log: true
+
+- name: Deploy the grafana image
+  vars:
+    containers_image_notifications: "notification_restart_grafana"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "grafana/grafana.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/grafana.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_grafana"
+
+- name: Start the grafana
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "grafana.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_grafana_started"
+
+- name: Apply the grafana configuration handlers
+  ansible.builtin.meta: "flush_handlers"

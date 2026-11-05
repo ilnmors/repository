@@ -1,0 +1,39 @@
+{% set ldap = services['containers']['ldap']['units']['main'] %}
+{% set base_dn = site['directory']['base_dn'] %}
+# https://github.com/lldap/lldap/blob/main/example_configs/grafana_ldap_config.toml
+[[servers]]
+host = "{{ ldap['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+port = {{ ldap['ports']['ldaps']['int'] if target_host in ldap['hosts'] else ldap['ports']['ldaps']['ext'] }}
+use_ssl = true
+start_tls = false
+tls_ciphers = []
+min_tls_version = ""
+ssl_skip_verify = false
+root_ca_cert = "/etc/ssl/grafana/{{ site['ca']['x509']['root']['certificate_file'] }}"
+
+bind_dn = "uid=grafana,ou=people,{{ base_dn }}"
+bind_password = "$__file{/run/secrets/GF_LDAP_BIND_PASSWORD}"
+
+search_filter = "(&(|(uid=%s)(mail=%s))(|(memberOf=cn=admins,ou=groups,{{ base_dn }})(memberOf=cn=users,ou=groups,{{ base_dn }})))"
+search_base_dns = ["{{ base_dn }}"]
+
+[servers.attributes]
+member_of = "memberOf"
+email = "mail"
+name = "displayName"
+surname = "sn"
+username = "uid"
+
+group_search_filter = "(&(objectClass=groupOfUniqueNames)(uniqueMember=%s))"
+group_search_base_dns = ["ou=groups,{{ base_dn }}"]
+group_search_filter_user_attribute = "uid"
+
+[[servers.group_mappings]]
+group_dn = "cn=admins,ou=groups,{{ base_dn }}"
+org_role = "Admin"
+grafana_admin = false
+
+[[servers.group_mappings]]
+group_dn = "cn=users,ou=groups,{{ base_dn }}"
+org_role = "Viewer"
+grafana_admin = false

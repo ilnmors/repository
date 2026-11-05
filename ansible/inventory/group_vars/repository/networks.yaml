@@ -84,6 +84,7 @@ networks:
             - "{{ services['containers']['ldap']['units']['main']['domain']['internal'] }}"
             - "{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}"
             - "{{ services['containers']['loki']['units']['main']['domain']['internal'] }}"
+            - "{{ services['containers']['grafana']['units']['main']['domain']['internal'] }}"
             - "*.infra"
         auth:
           ipv4: "192.168.10.12"

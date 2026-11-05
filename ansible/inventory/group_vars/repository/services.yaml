@@ -371,3 +371,22 @@ services:
               cert: true
             web:
               status: true
+    grafana:
+      units:
+        main:
+          release: "grafana"
+          hosts: ["infra"]
+          domain:
+            internal: "grafana"
+          subuid: 100471
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3000
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"

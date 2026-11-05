@@ -163,3 +163,7 @@ releases:
       name: "loki"
       repository: "docker.io/grafana/loki"
       tag: "3.7.7"
+    grafana:
+      name: "grafana"
+      repository: "docker.io/grafana/grafana"
+      tag: "13.2.1"

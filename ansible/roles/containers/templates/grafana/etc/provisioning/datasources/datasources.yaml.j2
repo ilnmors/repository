@@ -1,0 +1,31 @@
+{% set prometheus = services['containers']['prometheus']['units']['main'] %}
+{% set loki = services['containers']['loki']['units']['main'] %}
+# https://github.com/grafana/grafana/blob/main/conf/provisioning/datasources/sample.yaml
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: https://{{ prometheus['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ prometheus['ports']['https']['int'] }}
+    access: proxy
+    isDefault: true
+    jsonData:
+      tlsAuth: false
+      tlsAuthWithCACert: true
+      httpMethod: POST
+    secureJsonData:
+      tlsCACert: "$__file{/etc/ssl/grafana/{{ site['ca']['x509']['root']['certificate_file'] }}}"
+
+  - name: Loki
+    type: loki
+    url: https://{{ loki['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ loki['ports']['https']['int'] }}
+    access: proxy
+    jsonData:
+      tlsAuth: false
+      tlsAuthWithCACert: true
+      # The Loki tenant (same as the alloy loki.write tenant_id).
+      httpHeaderName1: "X-Scope-OrgID"
+      maxLines: 1000
+    secureJsonData:
+      tlsCACert: "$__file{/etc/ssl/grafana/{{ site['ca']['x509']['root']['certificate_file'] }}}"
+      httpHeaderValue1: "{{ site['domain']['internal'] }}"

@@ -1,0 +1,49 @@
+{% set grafana = services['containers']['grafana']['units']['main'] %}
+{% set postgresql = services['containers']['postgresql']['units']['main'] %}
+# https://github.com/grafana/grafana/blob/main/conf/defaults.ini
+[paths]
+data = /var/lib/grafana
+logs = /var/log/grafana
+plugins = /var/lib/grafana/plugins
+provisioning = /etc/grafana/provisioning
+
+[server]
+protocol = http
+http_port = {{ grafana['ports']['http']['container'] }}
+domain = {{ grafana['domain']['internal'] }}.{{ site['domain']['internal'] }}
+root_url = https://{{ grafana['domain']['internal'] }}.{{ site['domain']['internal'] }}/
+router_logging = false
+
+[database]
+type = postgres
+host = {{ postgresql['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ postgresql['ports']['tcp']['int'] }}
+name = grafana_db
+user = grafana
+password = $__file{/run/secrets/GF_DB_PASSWORD}
+ssl_mode = verify-full
+ca_cert_path = /etc/ssl/grafana/{{ site['ca']['x509']['root']['certificate_file'] }}
+
+[auth.ldap]
+enabled = true
+config_file = /etc/grafana/ldap.toml
+allow_sign_up = true
+
+[auth]
+disable_login_form = false
+allow_anonymous_device_id_auth = false
+
+[security]
+# local admin
+admin_user = local_admin
+admin_password = $__file{/run/secrets/GF_ADMIN_PASSWORD}
+cookie_secure = true
+cookie_samesite = lax
+allow_embedding = false
+
+[analytics]
+reporting_enabled = false
+check_for_updates = false
+
+[log]
+mode = console
+level = info

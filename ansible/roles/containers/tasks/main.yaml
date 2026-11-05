@@ -63,5 +63,13 @@
   when: target_host in services['containers']['loki']['units']['main']['hosts']
   tags: ["loki"]
 
+- name: Include the grafana task
+  ansible.builtin.include_tasks:
+    file: "grafana.yaml"
+    apply:
+      tags: ["grafana"]
+  when: target_host in services['containers']['grafana']['units']['main']['hosts']
+  tags: ["grafana"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

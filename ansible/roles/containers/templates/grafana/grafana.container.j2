@@ -1,0 +1,50 @@
+{% set ldap = services['containers']['ldap']['units']['main'] %}
+{% set postgresql = services['containers']['postgresql']['units']['main'] %}
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Grafana
+
+{% if target_host in postgresql['hosts'] %}
+After=postgresql.service
+Requires=postgresql.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=grafana
+HostName=grafana
+{% for service in ['postgresql', 'ldap', 'prometheus', 'loki'] %}
+{% if target_host in services['containers'][service]['units']['main']['hosts'] %}
+AddHost={{ services['containers'][service]['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+{% endif %}
+{% endfor %}
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['http']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/grafana/data:/var/lib/grafana:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc:/etc/grafana:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/grafana/ssl:/etc/ssl/grafana:ro
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="GF_PATHS_CONFIG=/etc/grafana/grafana.ini"
+Environment="GF_FEATURE_TOGGLES_EXPAND_ENV_VARS=true"
+
+Secret=GF_DB_PASSWORD,target=/run/secrets/GF_DB_PASSWORD
+Secret=GF_LDAP_BIND_PASSWORD,target=/run/secrets/GF_LDAP_BIND_PASSWORD
+Secret=GF_ADMIN_PASSWORD,target=/run/secrets/GF_ADMIN_PASSWORD
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ postgresql['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ postgresql['ports']['tcp']['int'] }}
+ExecStartPre=/usr/bin/nc -zv {{ ldap['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ ldap['ports']['ldaps']['int'] if target_host in ldap['hosts'] else ldap['ports']['ldaps']['ext'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
