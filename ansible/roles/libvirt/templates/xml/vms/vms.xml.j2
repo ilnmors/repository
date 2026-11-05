@@ -64,6 +64,7 @@
             <address type='virtio-serial' controller='0' bus='0' port='1' />
         </channel>
 {% if (nodes[target_vm]['system']['gpu']['type'] | default(none)) == 'vfio' %}
+{# The guest PCI address is assigned by libvirt (a non-zero host bus needs a pcie-root-port in the guest). #}
 {% for address in nodes[target_vm]['system']['gpu']['address'] | reject('equalto', none) %}
 {% set pci = address | split(':') %}
         <hostdev mode='subsystem' type='pci' managed='yes'>
@@ -71,7 +72,6 @@
             <source>
                 <address domain='0x{{ pci[0] }}' bus='0x{{ pci[1] }}' slot='0x{{ (pci[2] | split('.'))[0] }}' function='0x{{ (pci[2] | split('.'))[1] }}' />
             </source>
-            <address type='pci' domain='0x{{ pci[0] }}' bus='0x{{ pci[1] }}' slot='0x{{ (pci[2] | split('.'))[0] }}' function='0x{{ (pci[2] | split('.'))[1] }}' />
         </hostdev>
 {% endfor %}
 {% endif %}
