@@ -1,0 +1,1 @@
+[{{ services['containers']['postfix']['units']['main']['mail']['relay']['host'] }}]:{{ services['containers']['postfix']['units']['main']['mail']['relay']['port'] }} {{ secrets['postfix']['relay']['username'] }}:{{ secrets['postfix']['relay']['password'] }}

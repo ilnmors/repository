@@ -1,0 +1,14 @@
+{% set ldap = services['containers']['ldap']['units']['main'] %}
+{% set postfix = services['containers']['postfix']['units']['main'] %}
+server_host = ldaps://{{ ldap['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ ldap['ports']['ldaps']['int'] if target_host in ldap['hosts'] else ldap['ports']['ldaps']['ext'] }}
+version = 3
+tls_ca_cert_file = /etc/ssl/postfix/{{ site['ca']['x509']['root']['certificate_file'] }}
+tls_require_cert = yes
+bind = yes
+bind_dn = uid=mail,ou=people,{{ site['directory']['base_dn'] }}
+bind_pw = {{ secrets['ldap']['password']['services']['mail'] }}
+search_base = ou=people,{{ site['directory']['base_dn'] }}
+domain = {{ postfix['mail']['domains'] | join(', ') }}
+query_filter = (&(objectClass=person)(uid=%u)(|{% for group in postfix['mail']['groups'] %}(memberOf=cn={{ group }},ou=groups,{{ site['directory']['base_dn'] }}){% endfor %}))
+result_attribute = uid
+# The sender address <uid>@domain may be used only by the SASL login <uid>.

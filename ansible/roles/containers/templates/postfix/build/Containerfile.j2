@@ -1,0 +1,12 @@
+FROM {{ releases['containers']['postfix']['repository'] }}:{{ releases['containers']['postfix']['build']['base']['tag'] }}
+
+ARG POSTFIX_VERSION={{ releases['containers']['postfix']['build']['package']['version'] }}
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini ca-certificates \
+      postfix=${POSTFIX_VERSION} postfix-ldap=${POSTFIX_VERSION} && \
+    rm -rf /var/lib/apt/lists/* /etc/postfix/main.cf /etc/postfix/master.cf
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/usr/sbin/postfix", "start-fg"]

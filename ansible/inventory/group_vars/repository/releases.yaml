@@ -175,3 +175,14 @@ releases:
       name: "dovecot"
       repository: "docker.io/dovecot/dovecot"
       tag: "2.4.5"
+    postfix:
+      name: "postfix"
+      # Built on the Debian base image; the tag follows the postfix version, so bumping it rebuilds the image.
+      repository: "docker.io/library/debian"
+      tag: "3.10.13"
+      build:
+        status: true
+        base:
+          tag: "13-slim"
+        package:
+          version: "3.10.13-0+deb13u1"

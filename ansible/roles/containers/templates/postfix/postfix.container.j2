@@ -1,0 +1,39 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Postfix
+
+After=dovecot.service
+Requires=dovecot.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=postfix
+HostName={{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+{% if target_host in services['containers']['ldap']['units']['main']['hosts'] %}
+AddHost={{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+{% endif %}
+
+PublishPort={{ services['containers']['postfix']['units']['main']['ports']['submission']['int'] }}:{{ services['containers']['postfix']['units']['main']['ports']['submission']['container'] }}/{{ services['containers']['postfix']['units']['main']['ports']['submission']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/main.cf:/etc/postfix/main.cf:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/master.cf:/etc/postfix/master.cf:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps:/etc/postfix/maps:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/ssl:/etc/ssl/postfix:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/postfix/spool:/var/spool/postfix:rw
+# dovecot creates the auth (SASL) and lmtp sockets here.
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mail/sockets:/run/mail:rw
+Volume=/var/log/postfix:/var/log/postfix:rw
+
+Environment="TZ={{ site['timezone'] }}"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['ldap']['units']['main']['ports']['ldaps']['int'] if target_host in services['containers']['ldap']['units']['main']['hosts'] else services['containers']['ldap']['units']['main']['ports']['ldaps']['ext'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

@@ -98,6 +98,18 @@
   listen: "notification_restart_dovecot"
   ignore_errors: true
 
+- name: Restart the postfix.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "postfix.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_postfix_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_postfix"
+  listen: "notification_restart_postfix"
+  ignore_errors: true
+
 - name: Restart the prometheus.service
   ansible.builtin.systemd_service:
     scope: "user"

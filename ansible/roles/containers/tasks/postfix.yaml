@@ -1,0 +1,168 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "postfix"
+
+- name: Register the missing mail LDAP password on secrets.yaml
+  vars:
+    secrets_target: '["ldap"]["password"]["services"]["mail"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['ldap']['password']['services']['mail'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Validate the postfix relay secrets
+  ansible.builtin.assert:
+    that:
+      - (services['containers']['postfix']['units']['main']['mail']['relay']['host'] | length) > 0
+      - (secrets['postfix']['relay']['username'] | default('', true) | length) > 0
+      - (secrets['postfix']['relay']['password'] | default('', true) | length) > 0
+    fail_msg: "Set the relay host and register secrets postfix.relay.username/password before enabling the relay."
+    success_msg: "The postfix relay settings are valid."
+  when: services['containers']['postfix']['units']['main']['mail']['relay']['status']
+  no_log: true
+
+- name: Register the missing postfix certificate # noqa: var-naming[no-role-prefix]
+  vars:
+    target_service: "{{ services['containers']['postfix']['units']['main'] }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "x509-leaf"
+  when: >-
+    (secrets['ca']['x509']['leaf'][services['containers']['postfix']['units']['main']['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+    (secrets['ca']['x509']['leaf'][services['containers']['postfix']['units']['main']['domain']['internal']]['key'] | default('', true) | length) == 0
+  no_log: true
+
+# postfix runs as root in the container (the rootless user on the host).
+- name: Create the postfix directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/postfix"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/ssl"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/postfix"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/postfix/spool"
+  become: true
+
+# crowdsec watches this directory (force_inotify); restart it once the directory exists.
+- name: Create the postfix log directory
+  ansible.builtin.file:
+    path: "/var/log/postfix"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  become: true
+  notify: "notification_restart_crowdsec"
+
+- name: Deploy the postfix certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/ssl/{{ item['name'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      mode: "0440"
+    - name: "{{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['containers']['postfix']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "{{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['containers']['postfix']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_postfix"
+  no_log: true
+
+- name: Deploy the postfix configuration files
+  ansible.builtin.template:
+    src: "postfix/config/{{ item['src'] }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/{{ item['src'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - src: "main.cf"
+      mode: "0644"
+    - src: "master.cf"
+      mode: "0644"
+    # bind_pw: root only, read through proxy:ldap.
+    - src: "maps/mailboxes.cf"
+      mode: "0600"
+    - src: "maps/senders.cf"
+      mode: "0600"
+  loop_control:
+    label: "{{ item['src'] }}"
+  become: true
+  notify: "notification_restart_postfix"
+  no_log: true
+
+- name: Deploy the postfix relay credentials
+  ansible.builtin.template:
+    src: "postfix/config/maps/relay.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps/relay"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  become: true
+  when: services['containers']['postfix']['units']['main']['mail']['relay']['status']
+  notify: "notification_restart_postfix"
+  no_log: true
+
+- name: Remove the postfix relay credentials
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps/relay"
+    state: "absent"
+  become: true
+  when: not services['containers']['postfix']['units']['main']['mail']['relay']['status']
+  notify: "notification_restart_postfix"
+
+- name: Deploy the postfix logrotate configuration
+  vars:
+    containers_mail_service: "postfix"
+  ansible.builtin.template:
+    src: "mail/logrotate.j2"
+    dest: "/etc/logrotate.d/postfix"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+
+- name: Deploy the postfix image
+  vars:
+    containers_image_notifications: "notification_restart_postfix"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "postfix/postfix.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/postfix.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_postfix"
+
+- name: Start the postfix
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "postfix.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_postfix_started"
+
+- name: Apply the postfix configuration handlers
+  ansible.builtin.meta: "flush_handlers"

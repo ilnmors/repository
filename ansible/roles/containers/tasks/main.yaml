@@ -55,6 +55,14 @@
   when: target_host in services['containers']['dovecot']['units']['main']['hosts']
   tags: ["dovecot"]
 
+- name: Include the postfix task
+  ansible.builtin.include_tasks:
+    file: "postfix.yaml"
+    apply:
+      tags: ["postfix"]
+  when: target_host in services['containers']['postfix']['units']['main']['hosts']
+  tags: ["postfix"]
+
 - name: Include the prometheus task
   ansible.builtin.include_tasks:
     file: "prometheus.yaml"

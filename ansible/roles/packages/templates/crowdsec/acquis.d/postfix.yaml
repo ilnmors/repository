@@ -1,0 +1,7 @@
+# Postfix logs (postlogd, syslog format: postfix/smtpd[pid])
+filenames:
+  - /var/log/postfix/*.log
+labels:
+  type: syslog
+# Watch the directory even before the first log file exists.
+force_inotify: true

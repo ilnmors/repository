@@ -151,6 +151,15 @@ services:
             parser: []
             config:
               - "dovecot.yaml"
+        postfix:
+          release: "crowdsec"
+          hosts: "{{ services['containers']['postfix']['units']['main']['hosts'] }}"
+          acquisd:
+            collection:
+              - "crowdsecurity/postfix"
+            parser: []
+            config:
+              - "postfix.yaml"
     suricata:
       units:
         main:
@@ -428,6 +437,33 @@ services:
           mail:
             # LLDAP groups allowed to log in over IMAP.
             groups: ["admins", "users"]
+          dependency:
+            pki:
+              cert: true
+    postfix:
+      units:
+        main:
+          release: "postfix"
+          hosts: ["infra"]
+          domain:
+            internal: "smtp"
+          ports:
+            submission:
+              protocol: "tcp"
+              ext: 587
+              int: 2587
+              container: 587
+          mail:
+            domains: ["{{ site['domain']['internal'] }}"]
+            # LLDAP groups allowed to authenticate for submission (services: notification senders).
+            groups: ["admins", "users", "services"]
+            # LLDAP uid that receives postmaster@<domain> (RFC 5321) and the postfix notices.
+            postmaster: "il"
+            relay:
+              # Outbound smarthost (e.g. Gmail / a relay provider). Credentials: secrets['postfix']['relay'].
+              status: false
+              host: ""
+              port: 587
           dependency:
             pki:
               cert: true
