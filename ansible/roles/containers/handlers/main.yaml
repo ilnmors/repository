@@ -24,6 +24,7 @@
   ignore_errors: true
 
 - name: Restart the rustfs.service
+  delegate_to: "{{ containers_rustfs_host }}"
   ansible.builtin.systemd_service:
     scope: "user"
     name: "rustfs.service"
