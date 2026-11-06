@@ -1,0 +1,244 @@
+---
+- name: Register the authelia database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "authelia"
+
+- name: Register the missing authelia secrets on secrets.yaml
+  vars:
+    secrets_target: '["authelia"][{{ containers_authelia_secret | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 48') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop:
+    - "jwt_secret"
+    - "session_secret"
+    - "storage_secret"
+  loop_control:
+    loop_var: "containers_authelia_secret"
+  when: (secrets['authelia'][containers_authelia_secret] | default('', true) | length) == 0
+  no_log: true
+
+- name: Validate the authelia OIDC client settings
+  ansible.builtin.assert:
+    that:
+      - (item['definitions'] | length) == 1
+      - item['url'] != 'https://.' ~ site['domain']['public']
+      - item['oidc']['redirect_uris'] is sequence
+      - item['oidc']['redirect_uris'] is not string
+      - (item['oidc']['redirect_uris'] | length) > 0
+      - item['oidc']['scopes'] is sequence
+      - item['oidc']['scopes'] is not string
+      - "'openid' in item['oidc']['scopes']"
+      - item['oidc']['auth_method'] in ['client_secret_basic', 'client_secret_post']
+      - (item['oidc']['policy'] | default('one_factor')) in ['one_factor', 'two_factor']
+    success_msg: "The authelia OIDC client settings are valid."
+    fail_msg: "Define dependency.oidc with redirect_uris, scopes and auth_method on a unit with domain.public."
+  loop: "{{ containers_authelia_oidc_clients }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  no_log: true
+
+- name: Register the missing authelia OIDC secrets on secrets.yaml
+  when: (containers_authelia_oidc_clients | length) > 0
+  block:
+    - name: Register the missing authelia OIDC HMAC secret on secrets.yaml
+      vars:
+        secrets_target: '["authelia"]["oidc"]["hmac_secret"]'
+        secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 48') | to_json }}"
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "update"
+      when: (secrets['authelia']['oidc']['hmac_secret'] | default('', true) | length) == 0
+      no_log: true
+
+    - name: Register the missing authelia OIDC JWKS on secrets.yaml
+      vars:
+        secrets_target: '["authelia"]["oidc"]["jwks"][{{ containers_authelia_jwk["name"] | to_json }}]'
+        secrets_content: "{{ lookup('ansible.builtin.pipe', containers_authelia_jwk['command']) | to_json }}"
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "update"
+      loop:
+        - name: "rs256"
+          command: "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048"
+        - name: "es256"
+          command: "openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256"
+      loop_control:
+        loop_var: "containers_authelia_jwk"
+        label: "{{ containers_authelia_jwk['name'] }}"
+      when: (secrets['authelia']['oidc']['jwks'][containers_authelia_jwk['name']] | default('', true) | length) == 0
+      no_log: true
+
+# The authelia account must exist in LLDAP with this password and the lldap_strict_readonly group.
+- name: Register the missing authelia LDAP password on secrets.yaml
+  vars:
+    secrets_target: '["ldap"]["password"]["services"]["authelia"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['ldap']['password']['services']['authelia'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the authelia facts
+  ansible.builtin.set_fact:
+    containers_secrets: >-
+      {{
+        [
+          {'name': 'AUTHELIA_JWT_SECRET', 'value': secrets['authelia']['jwt_secret']},
+          {'name': 'AUTHELIA_SESSION_SECRET', 'value': secrets['authelia']['session_secret']},
+          {'name': 'AUTHELIA_STORAGE_SECRET', 'value': secrets['authelia']['storage_secret']},
+          {'name': 'AUTHELIA_LDAP_PASSWORD', 'value': secrets['ldap']['password']['services']['authelia']},
+          {'name': 'AUTHELIA_POSTGRES_PASSWORD', 'value': secrets['postgresql']['password']['authelia']},
+          (
+            {'name': 'AUTHELIA_HMAC_SECRET', 'value': secrets['authelia']['oidc']['hmac_secret']}
+            if (containers_authelia_oidc_clients | length) > 0
+            else none
+          ),
+          (
+            {'name': 'AUTHELIA_JWKS_RS256', 'value': secrets['authelia']['oidc']['jwks']['rs256']}
+            if (containers_authelia_oidc_clients | length) > 0
+            else none
+          ),
+          (
+            {'name': 'AUTHELIA_JWKS_ES256', 'value': secrets['authelia']['oidc']['jwks']['es256']}
+            if (containers_authelia_oidc_clients | length) > 0
+            else none
+          )
+        ] | reject('equalto', none) | list
+      }}
+  no_log: true
+
+- name: Create the authelia directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/authelia"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/authelia/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/authelia/ssl"
+  become: true
+
+- name: Deploy the authelia root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/authelia/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_authelia"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_authelia"
+  no_log: true
+
+- name: Deploy the authelia image
+  vars:
+    containers_image_notifications: "notification_restart_authelia"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+# A client gets a new secret and digest together when either of them is missing.
+- name: Generate the missing authelia OIDC client secrets
+  ansible.builtin.shell: |
+    /usr/bin/podman run --rm \
+      {{ (containers_container_repository ~ ':' ~ releases['containers'][target_container]['tag']) | quote }} \
+      authelia crypto hash generate pbkdf2 --variant sha512 \
+        --random --random.length 72 --random.charset rfc3986
+  args:
+    executable: "/bin/bash"
+  loop: "{{ containers_authelia_oidc_clients | map(attribute='name') | list }}"
+  when: >-
+    (secrets[item]['oidc']['secret'] | default('', true) | length) == 0 or
+    (secrets[item]['oidc']['hash'] | default('', true) | length) == 0
+  changed_when: false
+  register: "containers_authelia_oidc_generated"
+  no_log: true
+
+- name: Register the missing authelia OIDC client secrets on secrets.yaml
+  vars:
+    secrets_target: '[{{ containers_authelia_oidc_secret[0]["item"] | to_json }}]["oidc"][{{ containers_authelia_oidc_secret[1]["key"] | to_json }}]'
+    secrets_content: >-
+      {{
+        containers_authelia_oidc_secret[0]['stdout']
+        | regex_search(containers_authelia_oidc_secret[1]['pattern'], '\1')
+        | first
+        | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop: >-
+    {{
+      containers_authelia_oidc_generated['results'] | default([])
+      | selectattr('stdout', 'defined')
+      | product([
+          {'key': 'secret', 'pattern': 'Random Password: (\S+)'},
+          {'key': 'hash', 'pattern': 'Digest: (\S+)'}
+        ])
+      | list
+    }}
+  loop_control:
+    loop_var: "containers_authelia_oidc_secret"
+    label: "{{ containers_authelia_oidc_secret[0]['item'] }} {{ containers_authelia_oidc_secret[1]['key'] }}"
+  no_log: true
+
+- name: Deploy the authelia configuration
+  ansible.builtin.template:
+    src: "authelia/config/authelia.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/authelia/config/authelia.yaml"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  become: true
+  notify: "notification_restart_authelia"
+  no_log: true
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "authelia/authelia.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/authelia.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_authelia"
+
+- name: Start the authelia
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "authelia.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_authelia_started"
+
+- name: Apply the authelia configuration handlers
+  ansible.builtin.meta: "flush_handlers"
+
+- name: Wait for the authelia server
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ services['containers']['authelia']['units']['main']['ports']['http']['int'] }}/api/health"
+    status_code: 200
+    use_proxy: false
+  until: containers_authelia_ready['status'] | default(0) == 200
+  retries: 20
+  delay: 3
+  register: "containers_authelia_ready"

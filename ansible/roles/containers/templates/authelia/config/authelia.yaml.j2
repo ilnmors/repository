@@ -1,0 +1,126 @@
+---
+{% set authelia = services['containers']['authelia']['units']['main'] %}
+{% set ldap = services['containers']['ldap']['units']['main'] %}
+{% set postgresql = services['containers']['postgresql']['units']['main'] %}
+certificates_directory: '/etc/ssl/authelia/'
+
+theme: 'auto'
+
+server:
+  address: 'tcp://:{{ authelia['ports']['http']['container'] }}/'
+
+log:
+  level: 'info'
+
+totp:
+  issuer: '{{ site['domain']['internal'] }}'
+
+identity_validation:
+  reset_password:
+    jwt_secret: '' # AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE
+
+authentication_backend:
+  ldap:
+    address: 'ldaps://{{ ldap['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ ldap['ports']['ldaps']['ext'] }}'
+    implementation: 'lldap'
+    tls:
+      server_name: '{{ ldap['domain']['internal'] }}.{{ site['domain']['internal'] }}'
+      skip_verify: false
+    base_dn: '{{ site['directory']['base_dn'] }}'
+    additional_users_dn: 'ou=people'
+    additional_groups_dn: 'ou=groups'
+    users_filter: '(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person)(|(memberOf=cn=admins,ou=groups,{{ site['directory']['base_dn'] }})(memberOf=cn=users,ou=groups,{{ site['directory']['base_dn'] }})))'
+    groups_filter: '(&(member={dn})(objectClass=groupOfNames))'
+    user: 'uid=authelia,ou=people,{{ site['directory']['base_dn'] }}'
+    password: '' # AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
+
+access_control:
+  default_policy: 'deny'
+  rules:
+    - domain: '{{ authelia['domain']['public'] }}.{{ site['domain']['public'] }}'
+      policy: 'bypass'
+
+session:
+  secret: '' # AUTHELIA_SESSION_SECRET_FILE
+  expiration: '24 hours'
+  inactivity: '24 hours'
+  cookies:
+    - name: 'authelia_public_session'
+      domain: '{{ site['domain']['public'] }}'
+      authelia_url: 'https://{{ authelia['domain']['public'] }}.{{ site['domain']['public'] }}'
+      same_site: 'lax'
+
+storage:
+  encryption_key: '' # AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE
+  postgres:
+    address: 'tcp://{{ postgresql['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ postgresql['ports']['tcp']['int'] }}'
+    database: 'authelia_db'
+    username: 'authelia'
+    password: '' # AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE
+    tls:
+      server_name: '{{ postgresql['domain']['internal'] }}.{{ site['domain']['internal'] }}'
+      skip_verify: false
+
+# The authelia LDAP account sends mail through postfix (it must be in the services group).
+notifier:
+  smtp:
+    address: 'submission://{{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postfix']['units']['main']['ports']['submission']['ext'] }}'
+    timeout: '5 seconds'
+    username: 'authelia'
+    password: '' # AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE
+    sender: 'Authelia <authelia@{{ site['domain']['internal'] }}>'
+    identifier: '{{ authelia['domain']['public'] }}.{{ site['domain']['public'] }}'
+    subject: '[Authelia] {title}'
+    startup_check_address: 'authelia@{{ site['domain']['internal'] }}'
+    disable_require_tls: false
+    disable_starttls: false
+    disable_html_emails: false
+    tls:
+      server_name: '{{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}'
+      skip_verify: false
+{% if (containers_authelia_oidc_clients | length) > 0 %}
+
+identity_providers:
+  oidc:
+    hmac_secret: '' # AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
+    jwks:
+      - algorithm: 'RS256'
+        use: 'sig'
+        key: {% raw %}{{ secret "/run/secrets/AUTHELIA_JWKS_RS256" | mindent 10 "|" | msquote }}{% endraw %}{{ '' }}
+      - algorithm: 'ES256'
+        use: 'sig'
+        key: {% raw %}{{ secret "/run/secrets/AUTHELIA_JWKS_ES256" | mindent 10 "|" | msquote }}{% endraw %}{{ '' }}
+    lifespans:
+      access_token: '1h'
+      id_token: '1h'
+      refresh_token: '720h'
+    clients:
+{% for client in containers_authelia_oidc_clients %}
+      - client_id: '{{ client['name'] }}'
+        client_name: '{{ client['name'] }}'
+        consent_mode: 'implicit'
+        client_secret: '{{ secrets[client['name']]['oidc']['hash'] }}'
+        public: false
+        authorization_policy: '{{ client['oidc']['policy'] | default('one_factor') }}'
+        require_pkce: {{ client['oidc']['pkce'] | default(false) | bool | lower }}
+        pkce_challenge_method: '{{ 'S256' if client['oidc']['pkce'] | default(false) | bool else '' }}'
+        redirect_uris:
+{% for uri in client['oidc']['redirect_uris'] %}
+          - '{{ uri if '://' in uri else client['url'] ~ uri }}'
+{% endfor %}
+        scopes:
+{% for scope in client['oidc']['scopes'] %}
+          - '{{ scope }}'
+{% endfor %}
+        response_types:
+          - 'code'
+        grant_types:
+          - 'authorization_code'
+{% if 'offline_access' in client['oidc']['scopes'] %}
+          - 'refresh_token'
+{% endif %}
+        access_token_signed_response_alg: 'none'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: '{{ client['oidc']['auth_method'] }}'
+{% endfor %}
+{% endif %}

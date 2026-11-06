@@ -95,5 +95,13 @@
   when: target_host in services['containers']['x509-exporter']['units']['main']['hosts']
   tags: ["x509-exporter"]
 
+- name: Include the authelia task
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      tags: ["authelia"]
+  when: target_host in services['containers']['authelia']['units']['main']['hosts']
+  tags: ["authelia"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

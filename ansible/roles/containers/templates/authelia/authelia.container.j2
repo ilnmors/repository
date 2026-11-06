@@ -1,0 +1,56 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Authelia
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=authelia
+HostName=authelia
+
+PublishPort={{ services['containers'][target_container]['units']['main']['ports']['http']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/authelia/config:/config:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/authelia/ssl:/etc/ssl/authelia:ro
+
+Environment="TZ={{ site['timezone'] }}"
+# The Go template filter reads the JWKS files in authelia.yaml.
+Environment="X_AUTHELIA_CONFIG_FILTERS=template"
+Environment="AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE=/run/secrets/AUTHELIA_JWT_SECRET"
+Environment="AUTHELIA_SESSION_SECRET_FILE=/run/secrets/AUTHELIA_SESSION_SECRET"
+Environment="AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/run/secrets/AUTHELIA_STORAGE_SECRET"
+Environment="AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE=/run/secrets/AUTHELIA_LDAP_PASSWORD"
+Environment="AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE=/run/secrets/AUTHELIA_LDAP_PASSWORD"
+Environment="AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE=/run/secrets/AUTHELIA_POSTGRES_PASSWORD"
+{% if (containers_authelia_oidc_clients | length) > 0 %}
+Environment="AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE=/run/secrets/AUTHELIA_HMAC_SECRET"
+{% endif %}
+
+Secret=AUTHELIA_JWT_SECRET,target=/run/secrets/AUTHELIA_JWT_SECRET
+Secret=AUTHELIA_SESSION_SECRET,target=/run/secrets/AUTHELIA_SESSION_SECRET
+Secret=AUTHELIA_STORAGE_SECRET,target=/run/secrets/AUTHELIA_STORAGE_SECRET
+Secret=AUTHELIA_LDAP_PASSWORD,target=/run/secrets/AUTHELIA_LDAP_PASSWORD
+Secret=AUTHELIA_POSTGRES_PASSWORD,target=/run/secrets/AUTHELIA_POSTGRES_PASSWORD
+{% if (containers_authelia_oidc_clients | length) > 0 %}
+Secret=AUTHELIA_HMAC_SECRET,target=/run/secrets/AUTHELIA_HMAC_SECRET
+Secret=AUTHELIA_JWKS_RS256,target=/run/secrets/AUTHELIA_JWKS_RS256
+Secret=AUTHELIA_JWKS_ES256,target=/run/secrets/AUTHELIA_JWKS_ES256
+{% endif %}
+
+Exec=--config /config/authelia.yaml
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['ldap']['units']['main']['ports']['ldaps']['ext'] }}
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postfix']['units']['main']['ports']['submission']['ext'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

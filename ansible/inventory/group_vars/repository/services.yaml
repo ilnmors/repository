@@ -467,3 +467,21 @@ services:
           dependency:
             pki:
               cert: true
+    authelia:
+      units:
+        main:
+          release: "authelia"
+          hosts: ["auth"]
+          domain:
+            public: "authelia"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9091
+              container: 9091
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"

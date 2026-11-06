@@ -131,3 +131,33 @@ containers_x509_exporter_certs: >-
     [site['ca']['x509']['root']['certificate_file'], site['ca']['x509']['intermediate']['certificate_file']]
     + (containers_x509_exporter_leaf_domains | map('regex_replace', '$', '.crt') | list)
   }}
+
+containers_authelia_host: "{{ services['containers']['authelia']['units']['main']['hosts'] | first }}"
+
+containers_authelia_oidc_clients: >-
+  {%- set containers_found = namespace(clients=[]) -%}
+  {%- for containers_service in containers_service_list -%}
+  {%-   set containers_units = (
+          containers_service['value']['units'] | default({}) | dict2items
+          | selectattr('value.dependency', 'defined')
+          | selectattr('value.dependency.oidc', 'defined')
+          | selectattr('value.dependency.oidc.status', 'defined')
+          | selectattr('value.dependency.oidc.status', 'equalto', true)
+          | map(attribute='value') | list
+        ) -%}
+  {%-   if (containers_units | length) > 0 -%}
+  {%-     set containers_unit = containers_units | first -%}
+  {%-     set containers_domain = containers_unit['domain']['public'] | default('', true) -%}
+  {%-     set containers_found.clients = containers_found.clients + [{
+            'name': containers_service['key'],
+            'url': 'https://' ~ (
+              site['domain']['public']
+              if containers_domain == '@'
+              else containers_domain ~ '.' ~ site['domain']['public']
+            ),
+            'oidc': containers_unit['dependency']['oidc'],
+            'definitions': containers_units | map(attribute='dependency.oidc') | unique | list
+          }] -%}
+  {%-   endif -%}
+  {%- endfor -%}
+  {{ containers_found.clients }}
