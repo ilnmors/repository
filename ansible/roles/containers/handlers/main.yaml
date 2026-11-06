@@ -171,3 +171,15 @@
   register: "result_restart_authelia"
   listen: "notification_restart_authelia"
   ignore_errors: true
+
+- name: Restart the valkey service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "valkey_{{ containers_valkey_instance }}.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_valkey_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_valkey"
+  listen: "notification_restart_valkey"
+  ignore_errors: true

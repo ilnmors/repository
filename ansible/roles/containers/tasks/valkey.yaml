@@ -1,0 +1,60 @@
+---
+# Shared valkey instance per service. Include with vars: containers_valkey_service.
+- name: Set the valkey target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "valkey"
+
+# Handlers do not see include vars; keep the current instance as a fact for the restart handler.
+- name: Set the valkey instance fact
+  ansible.builtin.set_fact:
+    containers_valkey_instance: "{{ containers_valkey_service }}"
+
+- name: Create the valkey directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers'][containers_valkey_service]['units']['valkey']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/valkey"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/valkey/{{ containers_valkey_service }}"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/valkey/{{ containers_valkey_service }}/data"
+  become: true
+
+- name: Deploy the valkey configuration
+  ansible.builtin.template:
+    src: "valkey/valkey.conf.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/valkey/{{ containers_valkey_service }}/valkey.conf"
+    owner: "{{ services['containers'][containers_valkey_service]['units']['valkey']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_valkey"
+
+- name: Deploy the valkey image
+  vars:
+    containers_image_notifications: "notification_restart_valkey"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "valkey/valkey.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/valkey_{{ containers_valkey_service }}.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_valkey"
+
+- name: Start the valkey
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "valkey_{{ containers_valkey_service }}.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_valkey_started"
+
+# containers_valkey_service changes per include, so apply the valkey handler before the next include.
+- name: Apply the valkey configuration handlers
+  ansible.builtin.meta: "flush_handlers"

@@ -190,3 +190,7 @@ releases:
       name: "authelia"
       repository: "docker.io/authelia/authelia"
       tag: "4.39.20"
+    valkey:
+      name: "valkey"
+      repository: "docker.io/valkey/valkey"
+      tag: "9.1.3"
