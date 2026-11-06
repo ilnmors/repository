@@ -161,3 +161,27 @@ containers_authelia_oidc_clients: >-
   {%-   endif -%}
   {%- endfor -%}
   {{ containers_found.clients }}
+
+# Podman pasta forwards host.containers.internal traffic from this link-local address (pg_hba.conf uses the same range).
+containers_podman_gateway: "169.254.1.2"
+
+# Reverse proxies the app services trust: the local Caddy (via pasta) and the public CrowdSec bouncer Caddy.
+containers_trusted_proxies: >-
+  {{
+    [containers_podman_gateway]
+    + (
+      services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts']
+      | map('extract', networks['segments']['server']['hosts'])
+      | map(attribute='ipv4')
+      | list
+    )
+    + (
+      services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts']
+      | map('extract', networks['segments']['server']['hosts'])
+      | selectattr('ipv6', 'defined')
+      | map(attribute='ipv6')
+      | list
+    )
+  }}
+
+containers_rustfs_host: "{{ services['containers']['rustfs']['units']['main']['hosts'] | first }}"
