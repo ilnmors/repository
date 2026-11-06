@@ -1,0 +1,92 @@
+#!/usr/sbin/nft -f
+# Convention
+# iifname oifname saddr daddr proto dport ct state action
+flush ruleset
+
+{% set containers = services['containers'] %}
+define NET4_SERVER = {{ networks['segments']['server']['subnet']['ipv4'] }}
+define NET6_SERVER = {{ networks['segments']['server']['subnet']['ipv6'] }}
+define HOSTS4_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv4', 'defined') | map(attribute='value.hosts.console.ipv4') | join(', ') }} }
+define HOSTS6_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv6', 'defined') | map(attribute='value.hosts.console.ipv6') | join(', ') }} }
+define HOSTS4_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv4'] }}
+define HOSTS6_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv6'] }}
+
+define PORTS_SSH = 22
+define PORTS_CA = {{ containers['step-ca']['units']['main']['ports']['https']['int'] }}
+define PORTS_DB = { {{ containers['postgresql']['units']['main']['ports']['tcp']['int'] }}, {{ containers['mariadb']['units']['main']['ports']['tcp']['int'] }} }
+define PORTS_HTTP = {{ containers['caddy']['units']['main']['ports']['http']['ext'] }}
+define PORTS_HTTP_FORWARD = {{ containers['caddy']['units']['main']['ports']['http']['int'] }}
+define PORTS_HTTPS = {{ containers['caddy']['units']['main']['ports']['https']['ext'] }}
+define PORTS_HTTPS_FORWARD = {{ containers['caddy']['units']['main']['ports']['https']['int'] }}
+define PORTS_LDAPS = {{ containers['ldap']['units']['main']['ports']['ldaps']['ext'] }}
+define PORTS_LDAPS_FORWARD = {{ containers['ldap']['units']['main']['ports']['ldaps']['int'] }}
+define PORTS_PROMETHEUS = {{ containers['prometheus']['units']['main']['ports']['https']['int'] }}
+define PORTS_LOKI = {{ containers['loki']['units']['main']['ports']['https']['int'] }}
+define PORTS_SMTP = {{ containers['postfix']['units']['main']['ports']['submission']['ext'] }}
+define PORTS_SMTP_FORWARD = {{ containers['postfix']['units']['main']['ports']['submission']['int'] }}
+define PORTS_IMAPS = {{ containers['dovecot']['units']['main']['ports']['imaps']['ext'] }}
+define PORTS_IMAPS_FORWARD = {{ containers['dovecot']['units']['main']['ports']['imaps']['int'] }}
+
+{# Published container ports whose well-known (ext) port differs from the rootless host port (int). #}
+{% set forwards = (
+    containers | dict2items
+    | map(attribute='value.units') | map('dict2items') | flatten
+    | selectattr('value.hosts', 'contains', target_host)
+    | map(attribute='value.ports') | map('default', {}) | map('dict2items') | flatten
+    | map(attribute='value')
+    | selectattr('ext', 'defined') | selectattr('int', 'defined')
+    | rejectattr('ext', 'equalto', none)
+    | list
+  ) %}
+table inet nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+{% for forward in forwards if forward['ext'] != forward['int'] %}
+        {{ forward['protocol'] }} dport {{ forward['ext'] }} dnat to :{{ forward['int'] }} comment "DNAT {{ forward['ext'] }} to {{ forward['int'] }}"
+{% endfor %}
+    }
+    chain postrouting {
+    }
+    chain output {
+        type nat hook output priority dstnat; policy accept;
+{% for forward in forwards if forward['ext'] != forward['int'] %}
+        oifname "lo" {{ forward['protocol'] }} dport {{ forward['ext'] }} dnat to :{{ forward['int'] }} comment "DNAT {{ forward['ext'] }} to {{ forward['int'] }} out of LOCALHOST"
+{% endfor %}
+    }
+}
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state invalid drop comment "deny invalid connection"
+        ct state established, related accept comment "allow all connection already existing"
+        iifname "lo" accept comment "allow local connection: INFRA > INFRA"
+        meta l4proto { icmp, icmpv6 } accept comment "allow icmp connection: > INFRA"
+        ip saddr $HOSTS4_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv4 ssh connection: CONSOLE > INFRA"
+        ip6 saddr $HOSTS6_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv6 ssh connection: CONSOLE > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_CA accept comment "allow ipv4 ca connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_CA accept comment "allow ipv6 ca connection: SERVER > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_DB accept comment "allow ipv4 db connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_DB accept comment "allow ipv6 db connection: SERVER > INFRA"
+        ip saddr { $HOSTS4_CONSOLE, $HOSTS4_AUTH } tcp dport $PORTS_HTTP_FORWARD ct original proto-dst $PORTS_HTTP accept comment "allow ipv4 http connection: CONSOLE, AUTH > INFRA"
+        ip6 saddr { $HOSTS6_CONSOLE, $HOSTS6_AUTH } tcp dport $PORTS_HTTP_FORWARD ct original proto-dst $PORTS_HTTP accept comment "allow ipv6 http connection: CONSOLE, AUTH > INFRA"
+        ip saddr { $HOSTS4_CONSOLE, $HOSTS4_AUTH } tcp dport $PORTS_HTTPS_FORWARD ct original proto-dst $PORTS_HTTPS accept comment "allow ipv4 https connection: CONSOLE, AUTH > INFRA"
+        ip6 saddr { $HOSTS6_CONSOLE, $HOSTS6_AUTH } tcp dport $PORTS_HTTPS_FORWARD ct original proto-dst $PORTS_HTTPS accept comment "allow ipv6 https connection: CONSOLE, AUTH > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_LDAPS_FORWARD ct original proto-dst $PORTS_LDAPS accept comment "allow ipv4 ldaps connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_LDAPS_FORWARD ct original proto-dst $PORTS_LDAPS accept comment "allow ipv6 ldaps connection: SERVER > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_PROMETHEUS accept comment "allow ipv4 prometheus connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_PROMETHEUS accept comment "allow ipv6 prometheus connection: SERVER > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_LOKI accept comment "allow ipv4 loki connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_LOKI accept comment "allow ipv6 loki connection: SERVER > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv4 smtp connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv6 smtp connection: SERVER > INFRA"
+        ip saddr $NET4_SERVER tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv4 imaps connection: SERVER > INFRA"
+        ip6 saddr $NET6_SERVER tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv6 imaps connection: SERVER > INFRA"
+    }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
