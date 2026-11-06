@@ -1,0 +1,79 @@
+---
+- name: Site console
+  hosts: "console"
+  vars:
+    secrets: "{{ hostvars['console']['secrets'] }}"
+    target_host: "console"
+    control_host: "console"
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Load secrets
+      ansible.builtin.include_role:
+        name: "secrets"
+        apply:
+          tags: ["always"]
+      tags: ["always"]
+    - name: Set become password
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ secrets['sudo']['console']['password'] }}"
+      no_log: true
+      tags: ["always"]
+  tasks:
+    - name: Set nodes
+      ansible.builtin.include_role:
+        name: "nodes"
+        apply:
+          tags: ["site", "init"]
+      tags: ["always"]
+    - name: Set packages
+      ansible.builtin.include_role:
+        name: "packages"
+        apply:
+          tags: ["site", "init"]
+      tags: ["always"]
+  post_tasks:
+    - name: Set the handler results
+      ansible.builtin.set_fact:
+        handler_results: >-
+          {{
+            vars
+            | dict2items
+            | selectattr('key', 'match', '^result_')
+            | selectattr('value.failed', 'defined')
+            | selectattr('value.failed', 'equalto', true)
+            | map(attribute='key')
+            | list
+          }}
+      tags: ["always"]
+    - name: Compile the failures
+      ansible.builtin.assert:
+        that:
+          - (handler_results | length) == 0
+        fail_msg: "{{ handler_results }} failed"
+        success_msg: "Everything passed"
+      tags: ["always"]
+
+- name: Create vmm init files
+  hosts: "console"
+  vars:
+    secrets: "{{ hostvars['console']['secrets'] }}"
+    target_host: "vmm"
+    control_host: "console"
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Set become password
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ secrets['sudo']['console']['password'] }}"
+      no_log: true
+      tags: ["always"]
+  tasks:
+    - name: Include the vmm_init task
+      ansible.builtin.include_role:
+        name: "nodes"
+        tasks_from: "vmm_init"
+        apply:
+          tags: ["vmm_init"]
+      tags: ["always"]
+  tags: ["never", "vmm_init"]

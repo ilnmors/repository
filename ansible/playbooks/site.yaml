@@ -1,0 +1,10 @@
+---
+- name: Load console playbook
+  ansible.builtin.import_playbook:
+    "nodes/console.yaml"
+- name: Load vmm playbook
+  ansible.builtin.import_playbook:
+    "nodes/vmm.yaml"
+- name: Load infra playbook
+  ansible.builtin.import_playbook:
+    "nodes/infra.yaml"

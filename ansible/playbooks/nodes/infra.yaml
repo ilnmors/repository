@@ -1,0 +1,68 @@
+---
+- name: Site infra
+  hosts: "infra"
+  vars:
+    secrets: "{{ hostvars['console']['secrets'] }}"
+    target_host: "infra"
+    control_host: "console"
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Load secrets
+      ansible.builtin.include_role:
+        name: "secrets"
+        apply:
+          tags: ["always"]
+      tags: ["always"]
+    - name: Set become password
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ secrets['sudo']['infra']['password'] }}"
+      no_log: true
+      tags: ["always"]
+    - name: Set the ssh args
+      ansible.builtin.set_fact:
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+      when: "'init' in ansible_run_tags"
+      tags: ["always"]
+  tasks:
+    - name: Set nodes
+      ansible.builtin.include_role:
+        name: "nodes"
+        apply:
+          tags: ["init"]
+      tags: ["always"]
+    - name: Set packages
+      ansible.builtin.include_role:
+        name: "packages"
+        apply:
+          tags: ["init"]
+      tags: ["always"]
+    - name: Set containers
+      ansible.builtin.include_role:
+        name: "containers"
+        apply:
+          tags: ["site", "init"]
+      tags: ["always"]
+  post_tasks:
+    - name: Set the handler results
+      ansible.builtin.set_fact:
+        handler_results: >-
+          {{
+            vars
+            | dict2items
+            | selectattr('key', 'match', '^result_')
+            | selectattr('value.failed', 'defined')
+            | selectattr('value.failed', 'equalto', true)
+            | map(attribute='key')
+            | list
+          }}
+      tags: ["always"]
+    - name: Compile the failures
+      ansible.builtin.assert:
+        that:
+          - (handler_results | length) == 0
+        fail_msg: "{{ handler_results }} failed"
+        success_msg: "Everything passed"
+      tags: ["always"]
