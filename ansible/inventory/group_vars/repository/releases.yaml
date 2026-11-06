@@ -214,3 +214,7 @@ releases:
       name: "collabora"
       repository: "docker.io/collabora/code"
       tag: "26.04.3.2.1"
+    snappymail:
+      name: "snappymail"
+      repository: "ghcr.io/the-djmaze/snappymail"
+      tag: "v2.38.2"

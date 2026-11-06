@@ -1,0 +1,17 @@
+imap_host = "{{ services['containers']['dovecot']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+imap_port = {{ services['containers']['dovecot']['units']['main']['ports']['imaps']['ext'] }}
+imap_secure = "SSL"
+imap_short_login = On
+imap_verify_ssl = On
+imap_allow_self_signed = Off
+
+smtp_host = "{{ services['containers']['postfix']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+smtp_port = {{ services['containers']['postfix']['units']['main']['ports']['submission']['ext'] }}
+smtp_secure = "TLS"
+smtp_auth = On
+smtp_short_login = On
+smtp_verify_ssl = On
+smtp_allow_self_signed = Off
+
+sieve_use = Off
+white_list = ""

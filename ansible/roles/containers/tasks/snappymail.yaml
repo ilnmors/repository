@@ -1,0 +1,75 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "snappymail"
+
+- name: Create the snappymail directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['snappymail']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/snappymail"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/snappymail/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/configs"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/domains"
+  become: true
+
+- name: Deploy the snappymail root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['snappymail']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_snappymail"
+  no_log: true
+
+- name: Deploy the snappymail configuration files
+  ansible.builtin.template:
+    src: "{{ item['src'] }}"
+    dest: "{{ item['dest'] }}"
+    owner: "{{ services['containers']['snappymail']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - src: "snappymail/configs/application.ini.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/configs/application.ini"
+    - src: "snappymail/domains/domain.ini.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/snappymail/domains/{{ site['domain']['internal'] }}.ini"
+  loop_control:
+    label: "{{ item['dest'] | basename }}"
+  become: true
+  notify: "notification_restart_snappymail"
+
+- name: Deploy the snappymail image
+  vars:
+    containers_image_notifications: "notification_restart_snappymail"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "snappymail/snappymail.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/snappymail.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_snappymail"
+
+- name: Start the snappymail
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "snappymail.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_snappymail_started"
+
+- name: Apply the snappymail configuration handlers
+  ansible.builtin.meta: "flush_handlers"
