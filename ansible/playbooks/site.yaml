@@ -8,3 +8,6 @@
 - name: Load infra playbook
   ansible.builtin.import_playbook:
     "nodes/infra.yaml"
+- name: Load auth playbook
+  ansible.builtin.import_playbook:
+    "nodes/auth.yaml"
