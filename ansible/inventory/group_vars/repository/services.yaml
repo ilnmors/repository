@@ -243,7 +243,7 @@ services:
       units:
         main:
           release: "caddy"
-          hosts: ["infra"]
+          hosts: ["infra", "auth"]
           ports:
             http:
               protocol: "tcp"
@@ -258,13 +258,13 @@ services:
           build:
             rfc2136:
               release: "rfc2136"
-              hosts: ["infra"]
+              hosts: ["infra", "auth"]
             http-bouncer:
               release: "http-bouncer"
-              hosts: []
+              hosts: ["auth"]
             crowdsec-bouncer:
               release: "crowdsec-bouncer"
-              hosts: []
+              hosts: ["auth"]
     step-ca:
       units:
         main:

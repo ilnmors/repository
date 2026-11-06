@@ -91,3 +91,30 @@
 }
 {% endif %}
 {% endfor %}
+{% if target_host in build['http-bouncer']['hosts'] and target_host in build['crowdsec-bouncer']['hosts'] %}
+{% for service in caddy_services %}
+{% if (service['domain']['public'] | default('', true) | length) > 0 %}
+{% if service['domain']['public'] == '@' %}
+{{ site['domain']['public'] }}, www.{{ site['domain']['public'] }} {
+{% else %}
+{{ service['domain']['public'] }}.{{ site['domain']['public'] }} {
+{% endif %}
+        import crowdsec_log
+        route {
+                crowdsec
+{% if service['route']['dav'] | default(false) %}
+                redir /.well-known/caldav /dav 301
+                redir /.well-known/carddav /dav 301
+{% endif %}
+{% if target_host in service['hosts'] %}
+                reverse_proxy host.containers.internal:{{ service['ports']['http']['int'] | default(service['ports']['http']['ext']) }}
+{% else %}
+                reverse_proxy https://{{ service['domain']['internal'] }}.{{ site['domain']['internal'] }} {
+                        header_up Host {http.reverse_proxy.upstream.host}
+                }
+{% endif %}
+        }
+}
+{% endif %}
+{% endfor %}
+{% endif %}
