@@ -69,11 +69,11 @@
       no_log: true
       tags: ["always"]
   tasks:
-    - name: Include the vmm_init task
+    - name: Include the vmm-init task
       ansible.builtin.include_role:
         name: "nodes"
-        tasks_from: "vmm_init"
+        tasks_from: "vmm-init"
         apply:
-          tags: ["vmm_init"]
+          tags: ["vmm-init"]
       tags: ["always"]
-  tags: ["never", "vmm_init"]
+  tags: ["never", "vmm-init"]

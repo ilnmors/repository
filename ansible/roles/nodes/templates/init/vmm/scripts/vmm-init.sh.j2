@@ -10,9 +10,9 @@ log() {
     local level="$1"
     local msg="$2"
     if [ "$level" == "error" ]; then
-        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm_init.sh\"">&2
+        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm-init.sh\"">&2
     else
-        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm_init.sh\"">&1
+        echo "time=\"$timestamp\" level=\"$level\" msg=\"$msg\" source=\"vmm-init.sh\"">&1
     fi
 }
 

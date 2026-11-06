@@ -14,8 +14,8 @@
 
 - name: Copy the script
   ansible.builtin.template:
-    src: "init/vmm/scripts/vmm_init.sh.j2"
-    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/vmm_init.sh"
+    src: "init/vmm/scripts/vmm-init.sh.j2"
+    dest: "{{ nodes[control_host]['paths']['repository'] }}/tools/build/vmm/init/vmm-init.sh"
     owner: "{{ nodes[control_host]['user'] }}"
     group: "{{ nodes[control_host]['group'] }}"
     mode: "0744"
