@@ -18,12 +18,12 @@
         group: "{{ nodes[target_host]['group'] }}"
         mode: "0700"
 
-    - name: Check the ssh key file
+    - name: Check the SSH key file
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519"
       register: "nodes_ssh_key_file"
 
-    - name: Check the ssh pub file
+    - name: Check the SSH pub file
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519.pub"
       register: "nodes_ssh_pub_file"
@@ -79,7 +79,7 @@
       register: "nodes_ssh_ca_same"
       no_log: true
 
-    - name: Get the SSH CA and sign on the ssh pub file
+    - name: Get the SSH CA and sign on the SSH pub file
       when: >
         nodes_ssh_key_created is changed or
         not nodes_ssh_certificate_file['stat']['exists'] or
@@ -96,7 +96,7 @@
             mode: "0400"
           no_log: true
 
-        - name: Sign on the ssh pub file
+        - name: Sign on the SSH pub file
           ansible.builtin.shell: |
             set -euo pipefail
             ssh-keygen -s /run/user/{{ nodes[target_host]['uid'] }}/local_ssh_ca_private_key \
@@ -127,7 +127,7 @@
       become: true
       no_log: true
 
-    - name: Create the ssh config file
+    - name: Create the SSH config file
       ansible.builtin.copy:
         content: |
           {% for host in groups['all'] if host != target_host %}
@@ -154,12 +154,12 @@
       become: true
       no_log: true
 
-    - name: Check the ssh host key file
+    - name: Check the SSH host key file
       ansible.builtin.stat:
         path: "/etc/ssh/ssh_host_ed25519_key"
       register: "nodes_ssh_host_key_file"
 
-    - name: Check the ssh pub file
+    - name: Check the SSH pub file
       ansible.builtin.stat:
         path: "/etc/ssh/ssh_host_ed25519_key.pub"
       register: "nodes_ssh_host_pub_file"
@@ -214,7 +214,7 @@
       register: "nodes_ssh_host_ca_same"
       no_log: true
 
-    - name: Get the SSH CA and sign on the host ssh pub
+    - name: Get the SSH CA and sign on the host SSH pub
       when: >
         nodes_ssh_host_key_created is changed or
         not nodes_ssh_host_certificate_file['stat']['exists'] or
@@ -232,14 +232,14 @@
             mode: "0400"
           no_log: true
 
-        - name: Get the ssh host pub file from remote server
+        - name: Get the SSH host pub file from remote server
           ansible.builtin.fetch:
             src: "/etc/ssh/ssh_host_ed25519_key.pub"
             dest: "/run/user/{{ nodes[control_host]['uid'] }}/ssh_host_ed25519_key.pub"
             flat: true
           become: true
 
-        - name: Sign on the ssh host pub file
+        - name: Sign on the SSH host pub file
           delegate_to: "{{ control_host }}"
           ansible.builtin.shell: |
             set -euo pipefail

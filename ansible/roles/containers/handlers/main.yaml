@@ -48,7 +48,7 @@
   listen: "notification_restart_postgresql"
   ignore_errors: true
 
-- name: Reload the postgresql configuration
+- name: Reload the PostgreSQL configuration
   delegate_to: "{{ containers_postgresql_host }}"
   ansible.builtin.shell: |
     set -euo pipefail

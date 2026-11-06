@@ -153,7 +153,7 @@
         daemon_reload: true
       become: true
 
-- name: Activate the swap nodes_disk
+- name: Activate the swap disk
   when: nodes[target_host]['system']['disk'][nodes_disk]['fs']['type'] == 'swap'
   block:
     - name: Register the swap in fstab

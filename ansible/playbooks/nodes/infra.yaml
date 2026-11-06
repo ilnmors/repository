@@ -19,7 +19,7 @@
         ansible_become_pass: "{{ secrets['sudo']['infra']['password'] }}"
       no_log: true
       tags: ["always"]
-    - name: Set the ssh args
+    - name: Set the SSH args
       ansible.builtin.set_fact:
         ansible_ssh_common_args: >-
           -o StrictHostKeyChecking=no
