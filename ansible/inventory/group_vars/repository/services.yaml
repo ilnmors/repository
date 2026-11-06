@@ -285,6 +285,7 @@ services:
           release: "rustfs"
           hosts: ["infra"]
           domain:
+            public: "rustfs"
             internal: "rustfs"
           subuid: 110000
           ports:
