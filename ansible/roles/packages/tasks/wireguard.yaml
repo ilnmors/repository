@@ -119,8 +119,8 @@
     group: "root"
     mode: "0640"
   become: true
-  no_log: true
   notify: "notification_restart_networkd"
+  no_log: true
 
 - name: Deploy the WireGuard peer preshared keys
   ansible.builtin.copy:
@@ -132,8 +132,8 @@
     mode: "0640"
   loop: "{{ packages_wireguard_peer_list }}"
   become: true
-  no_log: true
   notify: "notification_restart_networkd"
+  no_log: true
 
 - name: Deploy the WireGuard networkd configuration
   ansible.builtin.template:
@@ -146,8 +146,8 @@
     - "30-wg0.netdev"
     - "31-wg0.network"
   become: true
-  no_log: true
   notify: "notification_restart_networkd"
+  no_log: true
 
 - name: Enable the systemd-networkd.service for WireGuard
   ansible.builtin.systemd_service:

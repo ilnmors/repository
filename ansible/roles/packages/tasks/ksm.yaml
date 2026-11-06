@@ -11,13 +11,13 @@
     name: "ksmtuned.service"
     state: "started"
     enabled: true
-  when: target_host in services['packages']['ksm']['units']['tuned']['hosts']
   become: true
+  when: target_host in services['packages']['ksm']['units']['tuned']['hosts']
 
 - name: Disable the ksmtuned.service
   ansible.builtin.systemd_service:
     name: "ksmtuned.service"
     state: "stopped"
     enabled: false
-  when: target_host in services['packages']['ksm']['units']['static']['hosts']
   become: true
+  when: target_host in services['packages']['ksm']['units']['static']['hosts']

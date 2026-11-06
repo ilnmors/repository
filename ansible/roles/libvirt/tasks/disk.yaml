@@ -49,7 +49,7 @@
     echo "Cloud-init image resized"
   args:
     executable: "/bin/bash"
-  when: ((libvirt_deployed_vm_disk_file_info['stdout'] | from_json)['virtual-size'] | int) < (nodes[target_vm]['system']['disk']['root']['size'] | ansible.builtin.human_to_bytes | int)
   become: true
+  when: ((libvirt_deployed_vm_disk_file_info['stdout'] | from_json)['virtual-size'] | int) < (nodes[target_vm]['system']['disk']['root']['size'] | ansible.builtin.human_to_bytes | int)
   changed_when: "'Cloud-init image resized' in libvirt_cloud_init_image_resized['stdout']"
   register: "libvirt_cloud_init_image_resized"

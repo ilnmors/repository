@@ -515,8 +515,8 @@
         --json --max-results=1
       args:
         executable: "/bin/bash"
-      when: packages_data_dir_empty['matched'] == 0 or packages_kopia_restore_pending['stat']['exists']
       become: false
+      when: packages_data_dir_empty['matched'] == 0 or packages_kopia_restore_pending['stat']['exists']
       changed_when: false
       register: "packages_snapshot_exist"
       no_log: true

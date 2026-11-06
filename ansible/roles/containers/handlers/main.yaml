@@ -36,12 +36,12 @@
   ignore_errors: true
 
 - name: Restart the postgresql.service
+  delegate_to: "{{ containers_postgresql_host }}"
   ansible.builtin.systemd_service:
     scope: "user"
     name: "postgresql.service"
     state: "restarted"
     daemon_reload: true
-  delegate_to: "{{ containers_postgresql_host }}"
   when: not (containers_postgresql_started['changed'] | default(false))
   changed_when: false
   register: "result_restart_postgresql"
@@ -49,12 +49,12 @@
   ignore_errors: true
 
 - name: Reload the postgresql configuration
+  delegate_to: "{{ containers_postgresql_host }}"
   ansible.builtin.shell: |
     set -euo pipefail
     /usr/bin/podman exec -u postgres postgresql sh -c "pg_ctl reload"
   args:
     executable: "/bin/bash"
-  delegate_to: "{{ containers_postgresql_host }}"
   when: not (containers_postgresql_started['changed'] | default(false))
   changed_when: false
   register: "result_reload_postgresql"
@@ -62,12 +62,12 @@
   ignore_errors: true
 
 - name: Restart the mariadb.service
+  delegate_to: "{{ containers_mariadb_host }}"
   ansible.builtin.systemd_service:
     scope: "user"
     name: "mariadb.service"
     state: "restarted"
     daemon_reload: true
-  delegate_to: "{{ containers_mariadb_host }}"
   when: not (containers_mariadb_started['changed'] | default(false))
   changed_when: false
   register: "result_restart_mariadb"
@@ -159,12 +159,12 @@
   ignore_errors: true
 
 - name: Restart the authelia.service
+  delegate_to: "{{ containers_authelia_host }}"
   ansible.builtin.systemd_service:
     scope: "user"
     name: "authelia.service"
     state: "restarted"
     daemon_reload: true
-  delegate_to: "{{ containers_authelia_host }}"
   when: not (containers_authelia_started['changed'] | default(false))
   changed_when: false
   register: "result_restart_authelia"

@@ -6,8 +6,8 @@
   loop: "{{ releases['packages'] | dict2items | selectattr('value.gpu', 'defined') | list }}"
   loop_control:
     label: "{{ item['value']['name'] }}"
-  when: (item['value']['gpu'] | intersect(nodes[target_host]['system']['gpu']['drivers']) | length) > 0
   become: true
+  when: (item['value']['gpu'] | intersect(nodes[target_host]['system']['gpu']['drivers']) | length) > 0
   notify:
     - "notification_update_initramfs"
     - "notification_reboot"

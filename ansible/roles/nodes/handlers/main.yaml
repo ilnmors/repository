@@ -6,8 +6,8 @@
     executable: "/bin/bash"
   become: true
   changed_when: false
-  listen: "notification_update_ca-certificates"
   register: "result_update_ca"
+  listen: "notification_update_ca-certificates"
   ignore_errors: true
 
 - name: Reload the nftables.service
@@ -17,8 +17,8 @@
     enabled: true
   become: true
   changed_when: false
-  listen: "notification_reload_nftables"
   register: "result_reload_nftables"
+  listen: "notification_reload_nftables"
   ignore_errors: true
 
 - name: Restart the systemd-sysctl.service
@@ -27,8 +27,8 @@
     state: "restarted"
   become: true
   changed_when: false
-  listen: "notification_restart_sysctl"
   register: "result_restart_sysctl"
+  listen: "notification_restart_sysctl"
   ignore_errors: true
 
 - name: Restart the systemd-networkd.service
@@ -38,8 +38,8 @@
     enabled: true
   become: true
   changed_when: false
-  listen: "notification_restart_networkd"
   register: "result_restart_networkd"
+  listen: "notification_restart_networkd"
   ignore_errors: true
 
 - name: Restart the sshd.service
@@ -49,8 +49,8 @@
     enabled: true
   become: true
   changed_when: false
-  listen: "notification_restart_sshd"
   register: "result_restart_sshd"
+  listen: "notification_restart_sshd"
   ignore_errors: true
 
 - name: Update the initramfs
@@ -60,8 +60,8 @@
     executable: "/bin/bash"
   become: true
   changed_when: false
-  listen: "notification_update_initramfs"
   register: "result_update_initramfs"
+  listen: "notification_update_initramfs"
   ignore_errors: true
 
 - name: Reboot the node
@@ -71,6 +71,6 @@
   become: true
   when: not nodes[target_host]['control_node']
   changed_when: false
-  listen: "notification_reboot"
   register: "result_reboot"
+  listen: "notification_reboot"
   ignore_errors: true

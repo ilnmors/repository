@@ -75,11 +75,11 @@
     fi
   args:
     executable: "/bin/bash"
+  become: true
   when: >-
     not packages_suricata_rules_file['stat']['exists']
     or packages_suricata_rule_configuration['changed']
     or packages_suricata_local_rules['changed']
-  become: true
   changed_when: "'Suricata rules updated' in packages_suricata_rules_updated['stdout']"
   register: "packages_suricata_rules_updated"
   notify: "notification_restart_suricata"
@@ -119,5 +119,5 @@
     state: "started"
     enabled: true
     daemon_reload: true
-  when: target_host in services['packages']['suricata']['units']['update']['hosts']
   become: true
+  when: target_host in services['packages']['suricata']['units']['update']['hosts']

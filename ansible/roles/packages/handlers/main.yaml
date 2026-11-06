@@ -7,8 +7,8 @@
     daemon_reload: true
     scope: "user"
   changed_when: false
-  listen: "notification_restart_code-server"
   register: "result_restart_code_server"
+  listen: "notification_restart_code-server"
   ignore_errors: true
 
 - name: Restart the systemd-networkd.service
@@ -18,8 +18,8 @@
     enabled: true
   become: true
   changed_when: false
-  listen: "notification_restart_networkd"
   register: "result_restart_networkd"
+  listen: "notification_restart_networkd"
   ignore_errors: true
 
 - name: Restart the named.service
@@ -30,8 +30,8 @@
     daemon_reload: true
   become: true
   changed_when: false
-  listen: "notification_restart_bind"
   register: "result_restart_bind"
+  listen: "notification_restart_bind"
   ignore_errors: true
 
 - name: Restart the kea-dhcp4-server.service
@@ -42,8 +42,8 @@
     daemon_reload: true
   become: true
   changed_when: false
-  listen: "notification_restart_kea"
   register: "result_restart_kea"
+  listen: "notification_restart_kea"
   ignore_errors: true
 
 - name: Restart the chrony.service
@@ -54,8 +54,8 @@
     daemon_reload: true
   become: true
   changed_when: false
-  listen: "notification_restart_chrony"
   register: "result_restart_chrony"
+  listen: "notification_restart_chrony"
   ignore_errors: true
 
 - name: Restart the crowdsec.service
@@ -66,8 +66,8 @@
     daemon_reload: true
   become: true
   changed_when: false
-  listen: "notification_restart_crowdsec"
   register: "result_restart_crowdsec"
+  listen: "notification_restart_crowdsec"
   ignore_errors: true
 
 - name: Restart the crowdsec-firewall-bouncer.service
@@ -76,11 +76,11 @@
     state: "restarted"
     enabled: true
     daemon_reload: true
-  when: target_host in services['packages']['crowdsec']['units']['fw-bouncer']['hosts']
   become: true
+  when: target_host in services['packages']['crowdsec']['units']['fw-bouncer']['hosts']
   changed_when: false
-  listen: "notification_restart_crowdsec_bouncer"
   register: "result_restart_crowdsec_bouncer"
+  listen: "notification_restart_crowdsec_bouncer"
   ignore_errors: true
 
 - name: Restart the suricata.service
@@ -91,8 +91,8 @@
     daemon_reload: true
   become: true
   changed_when: false
-  listen: "notification_restart_suricata"
   register: "result_restart_suricata"
+  listen: "notification_restart_suricata"
   ignore_errors: true
 
 - name: Restart the suricata-update.timer
@@ -101,11 +101,11 @@
     state: "restarted"
     enabled: true
     daemon_reload: true
-  when: target_host in services['packages']['suricata']['units']['update']['hosts']
   become: true
+  when: target_host in services['packages']['suricata']['units']['update']['hosts']
   changed_when: false
-  listen: "notification_restart_suricata_update_timer"
   register: "result_restart_suricata_update_timer"
+  listen: "notification_restart_suricata_update_timer"
   ignore_errors: true
 
 - name: Restart the kopia-server.service
@@ -114,11 +114,11 @@
     state: "restarted"
     enabled: true
     daemon_reload: true
-  when: target_host in services['packages']['kopia']['units']['server']['hosts']
   become: true
+  when: target_host in services['packages']['kopia']['units']['server']['hosts']
   changed_when: false
-  listen: "notification_restart_kopia_server"
   register: "result_restart_kopia_server"
+  listen: "notification_restart_kopia_server"
   ignore_errors: true
 
 - name: Restart the alloy.service
@@ -126,9 +126,9 @@
     name: "alloy.service"
     state: "restarted"
     daemon_reload: true
-  when: not (packages_alloy_started['changed'] | default(false))
   become: true
+  when: not (packages_alloy_started['changed'] | default(false))
   changed_when: false
-  listen: "notification_restart_alloy"
   register: "result_restart_alloy"
+  listen: "notification_restart_alloy"
   ignore_errors: true

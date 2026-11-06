@@ -85,8 +85,8 @@
     mountpoint -q {{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] | quote }}
   args:
     executable: "/bin/bash"
-  changed_when: false
   become: true
+  changed_when: false
 
 - name: Set the data volume path permissions
   ansible.builtin.file:

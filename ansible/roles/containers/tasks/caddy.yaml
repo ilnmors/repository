@@ -49,10 +49,10 @@
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0770"
   become: true
-  notify: "notification_restart_crowdsec"
   when: >-
     target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts']
     and target_host in services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts']
+  notify: "notification_restart_crowdsec"
 
 - name: Register the podman secrets
   ansible.builtin.include_tasks:

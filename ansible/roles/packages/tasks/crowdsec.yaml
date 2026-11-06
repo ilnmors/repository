@@ -166,8 +166,8 @@
       args:
         executable: "/bin/bash"
       become: true
-      register: "packages_existing_crowdsec_bouncers"
       changed_when: false
+      register: "packages_existing_crowdsec_bouncers"
       no_log: true
 
     - name: Set the existing crowdsec bouncer names
@@ -409,11 +409,11 @@
         mode: "0600"
         validate: "/usr/bin/crowdsec-firewall-bouncer -c %s -t"
       become: true
-      register: "packages_crowdsec_firewall_bouncer_configuration"
       changed_when: >-
         packages_crowdsec_firewall_bouncer_configuration['changed']
         or result_reload_nftables is defined
         or result_update_ca is defined
+      register: "packages_crowdsec_firewall_bouncer_configuration"
       notify: "notification_restart_crowdsec_bouncer"
       no_log: true
 
