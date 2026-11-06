@@ -198,3 +198,7 @@ releases:
       name: "linkding"
       repository: "ghcr.io/sissbruecker/linkding"
       tag: "1.46.2"
+    vaultwarden:
+      name: "vaultwarden"
+      repository: "docker.io/vaultwarden/server"
+      tag: "1.37.2"

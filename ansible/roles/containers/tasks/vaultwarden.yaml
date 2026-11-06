@@ -1,0 +1,125 @@
+---
+- name: Register the vaultwarden database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "vaultwarden"
+
+# The authelia image on the authelia host hashes the admin token (argon2id PHC string accepted by vaultwarden).
+- name: Generate the missing vaultwarden admin token
+  delegate_to: "{{ containers_authelia_host }}"
+  ansible.builtin.shell: |
+    /usr/bin/podman run --rm \
+      {{ (releases['containers']['authelia']['repository'] ~ ':' ~ releases['containers']['authelia']['tag']) | quote }} \
+      authelia crypto hash generate argon2 \
+        --random --random.length 48 --random.charset alphanumeric
+  args:
+    executable: "/bin/bash"
+  when: >-
+    (secrets['vaultwarden']['admin']['password'] | default('', true) | length) == 0 or
+    (secrets['vaultwarden']['admin']['hash'] | default('', true) | length) == 0
+  changed_when: false
+  register: "containers_vaultwarden_admin_generated"
+  no_log: true
+
+- name: Register the missing vaultwarden admin token on secrets.yaml
+  vars:
+    secrets_target: '["vaultwarden"]["admin"][{{ containers_vaultwarden_admin["key"] | to_json }}]'
+    secrets_content: >-
+      {{
+        containers_vaultwarden_admin_generated['stdout']
+        | regex_search(containers_vaultwarden_admin['pattern'], '\1')
+        | first
+        | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop:
+    - key: "password"
+      pattern: "Random Password: (\\S+)"
+    - key: "hash"
+      pattern: "Digest: (\\S+)"
+  loop_control:
+    loop_var: "containers_vaultwarden_admin"
+    label: "{{ containers_vaultwarden_admin['key'] }}"
+  when: containers_vaultwarden_admin_generated['stdout'] is defined
+  no_log: true
+
+- name: Set the vaultwarden fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "VW_ADMIN_TOKEN"
+        value: "{{ secrets['vaultwarden']['admin']['hash'] }}"
+      - name: "VW_DATABASE_URL"
+        value: "postgresql://vaultwarden:{{ secrets['postgresql']['password']['vaultwarden'] | urlencode | replace('/', '%2F') }}\
+          @{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}\
+          :{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/\
+          vaultwarden_db?sslmode=verify-full&sslrootcert=/etc/ssl/vaultwarden/{{ site['ca']['x509']['root']['certificate_file'] }}"
+  no_log: true
+
+- name: Create the vaultwarden directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/vaultwarden"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/vaultwarden/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/vaultwarden"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/vaultwarden/ssl"
+  become: true
+
+- name: Deploy the vaultwarden root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/vaultwarden/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_vaultwarden"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_vaultwarden"
+  no_log: true
+
+- name: Deploy the vaultwarden image
+  vars:
+    containers_image_notifications: "notification_restart_vaultwarden"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "vaultwarden/vaultwarden.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/vaultwarden.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_vaultwarden"
+
+- name: Start the vaultwarden
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "vaultwarden.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_vaultwarden_started"
+
+- name: Apply the vaultwarden configuration handlers
+  ansible.builtin.meta: "flush_handlers"

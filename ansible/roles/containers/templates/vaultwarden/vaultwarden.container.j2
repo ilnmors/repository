@@ -1,0 +1,34 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Vaultwarden
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=vaultwarden
+HostName=vaultwarden
+
+PublishPort={{ services['containers']['vaultwarden']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['vaultwarden']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['vaultwarden']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/vaultwarden/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/vaultwarden/ssl:/etc/ssl/vaultwarden:ro
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="DOMAIN=https://{{ services['containers']['vaultwarden']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="SIGNUPS_ALLOWED=false"
+Secret=VW_ADMIN_TOKEN,type=env,target=ADMIN_TOKEN
+Secret=VW_DATABASE_URL,type=env,target=DATABASE_URL
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

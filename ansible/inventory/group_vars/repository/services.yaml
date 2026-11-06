@@ -511,3 +511,22 @@ services:
               redirect_uris: ["/oidc/callback/"]
               scopes: ["openid", "email", "profile"]
               auth_method: "client_secret_post"
+    vaultwarden:
+      units:
+        main:
+          release: "vaultwarden"
+          hosts: ["app"]
+          domain:
+            public: "vaultwarden"
+            internal: "vaultwarden.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8000
+              container: 80
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
