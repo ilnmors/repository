@@ -183,3 +183,15 @@
   register: "result_restart_valkey"
   listen: "notification_restart_valkey"
   ignore_errors: true
+
+- name: Restart the linkding.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "linkding.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_linkding_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_linkding"
+  listen: "notification_restart_linkding"
+  ignore_errors: true

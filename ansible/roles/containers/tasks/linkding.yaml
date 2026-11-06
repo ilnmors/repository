@@ -1,0 +1,90 @@
+---
+- name: Register the linkding database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the linkding authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "linkding"
+
+- name: Set the linkding fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "LINKDING_DB_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['linkding'] }}"
+      - name: "LINKDING_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['linkding']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the linkding directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['linkding']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/linkding"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/linkding/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/linkding"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/linkding/ssl"
+  become: true
+
+- name: Deploy the linkding root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/linkding/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['linkding']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_linkding"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_linkding"
+  no_log: true
+
+- name: Deploy the linkding image
+  vars:
+    containers_image_notifications: "notification_restart_linkding"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "linkding/linkding.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/linkding.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_linkding"
+
+- name: Start the linkding
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "linkding.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_linkding_started"
+
+- name: Apply the linkding configuration handlers
+  ansible.builtin.meta: "flush_handlers"

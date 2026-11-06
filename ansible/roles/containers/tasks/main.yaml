@@ -103,5 +103,13 @@
   when: target_host in services['containers']['authelia']['units']['main']['hosts']
   tags: ["authelia"]
 
+- name: Include the linkding task
+  ansible.builtin.include_tasks:
+    file: "linkding.yaml"
+    apply:
+      tags: ["linkding"]
+  when: target_host in services['containers']['linkding']['units']['main']['hosts']
+  tags: ["linkding"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"
