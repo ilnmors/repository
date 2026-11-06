@@ -21,7 +21,7 @@ services:
       units:
         main:
           release: "acl"
-          hosts: ["console", "vmm", "infra"]
+          hosts: ["console", "vmm", "infra", "auth", "app"]
     jq:
       units:
         main:
