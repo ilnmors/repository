@@ -1,0 +1,53 @@
+#!/usr/sbin/nft -f
+# Convention
+# iifname oifname saddr daddr proto dport ct state action
+flush ruleset
+
+{% set caddy = services['containers']['caddy']['units']['main'] %}
+define HOSTS4_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv4', 'defined') | map(attribute='value.hosts.console.ipv4') | join(', ') }} }
+define HOSTS6_CONSOLE = { {{ networks['segments'] | dict2items | selectattr('value.hosts.console', 'defined') | selectattr('value.hosts.console.ipv6', 'defined') | map(attribute='value.hosts.console.ipv6') | join(', ') }} }
+define HOSTS4_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv4'] }}
+define HOSTS6_AUTH = {{ networks['segments']['server']['hosts']['auth']['ipv6'] }}
+
+define PORTS_SSH = 22
+define PORTS_HTTP = {{ caddy['ports']['http']['ext'] }}
+define PORTS_HTTP_FORWARD = {{ caddy['ports']['http']['int'] }}
+define PORTS_HTTPS = {{ caddy['ports']['https']['ext'] }}
+define PORTS_HTTPS_FORWARD = {{ caddy['ports']['https']['int'] }}
+
+table inet nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        tcp dport $PORTS_HTTP dnat to :$PORTS_HTTP_FORWARD comment "DNAT http ports to $PORTS_HTTP_FORWARD"
+        tcp dport $PORTS_HTTPS dnat to :$PORTS_HTTPS_FORWARD comment "DNAT https ports to $PORTS_HTTPS_FORWARD"
+    }
+    chain postrouting {
+    }
+    chain output {
+        type nat hook output priority dstnat; policy accept;
+        oifname "lo" tcp dport $PORTS_HTTP dnat to :$PORTS_HTTP_FORWARD comment "DNAT http ports to $PORTS_HTTP_FORWARD out of LOCALHOST"
+        oifname "lo" tcp dport $PORTS_HTTPS dnat to :$PORTS_HTTPS_FORWARD comment "DNAT https ports to $PORTS_HTTPS_FORWARD out of LOCALHOST"
+    }
+}
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state invalid drop comment "deny invalid connection"
+        ct state established, related accept comment "allow all connection already existing"
+        iifname "lo" accept comment "allow local connection: APP > APP"
+        meta l4proto { icmp, icmpv6 } accept comment "allow icmp connection: > APP"
+        ip saddr $HOSTS4_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv4 ssh connection: CONSOLE > APP"
+        ip6 saddr $HOSTS6_CONSOLE tcp dport $PORTS_SSH accept comment "allow ipv6 ssh connection: CONSOLE > APP"
+        ip saddr { $HOSTS4_CONSOLE, $HOSTS4_AUTH } tcp dport $PORTS_HTTP_FORWARD ct original proto-dst $PORTS_HTTP accept comment "allow ipv4 http connection: CONSOLE, AUTH > APP"
+        ip6 saddr { $HOSTS6_CONSOLE, $HOSTS6_AUTH } tcp dport $PORTS_HTTP_FORWARD ct original proto-dst $PORTS_HTTP accept comment "allow ipv6 http connection: CONSOLE, AUTH > APP"
+        ip saddr { $HOSTS4_CONSOLE, $HOSTS4_AUTH } tcp dport $PORTS_HTTPS_FORWARD ct original proto-dst $PORTS_HTTPS accept comment "allow ipv4 https connection: CONSOLE, AUTH > APP"
+        ip6 saddr { $HOSTS6_CONSOLE, $HOSTS6_AUTH } tcp dport $PORTS_HTTPS_FORWARD ct original proto-dst $PORTS_HTTPS accept comment "allow ipv6 https connection: CONSOLE, AUTH > APP"
+    }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
