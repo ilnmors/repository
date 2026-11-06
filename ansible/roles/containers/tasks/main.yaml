@@ -119,5 +119,13 @@
   when: target_host in services['containers']['vaultwarden']['units']['main']['hosts']
   tags: ["vaultwarden"]
 
+- name: Include the forgejo task
+  ansible.builtin.include_tasks:
+    file: "forgejo.yaml"
+    apply:
+      tags: ["forgejo"]
+  when: target_host in services['containers']['forgejo']['units']['main']['hosts']
+  tags: ["forgejo"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

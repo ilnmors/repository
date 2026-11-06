@@ -202,3 +202,7 @@ releases:
       name: "vaultwarden"
       repository: "docker.io/vaultwarden/server"
       tag: "1.37.2"
+    forgejo:
+      name: "forgejo"
+      repository: "codeberg.org/forgejo/forgejo"
+      tag: "15.0.11"

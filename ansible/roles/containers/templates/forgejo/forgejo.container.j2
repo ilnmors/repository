@@ -1,0 +1,58 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Forgejo
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=forgejo
+HostName=forgejo
+
+PublishPort={{ services['containers']['forgejo']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['forgejo']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['forgejo']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/forgejo/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/forgejo/ssl:/etc/ssl/forgejo:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="FORGEJO__security__INSTALL_LOCK=true"
+Environment="FORGEJO__server__DOMAIN={{ services['containers']['forgejo']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="FORGEJO__server__ROOT_URL=https://{{ services['containers']['forgejo']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/"
+Environment="FORGEJO__server__DISABLE_SSH=true"
+Environment="FORGEJO__server__REVERSE_PROXY_LIMIT=2"
+Environment="FORGEJO__server__REVERSE_PROXY_TRUSTED_PROXIES={{ containers_trusted_proxies | join(',') }}"
+# Database
+Environment="FORGEJO__database__DB_TYPE=postgres"
+Environment="FORGEJO__database__HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="FORGEJO__database__NAME=forgejo_db"
+Environment="FORGEJO__database__USER=forgejo"
+Secret=FORGEJO__database__PASSWD,type=env
+Environment="FORGEJO__database__SSL_MODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/forgejo/{{ site['ca']['x509']['root']['certificate_file'] }}"
+# OAuth2 client
+Environment="FORGEJO__oauth2_client__ACCOUNT_LINKING=auto"
+# OIDC configuration
+Environment="FORGEJO__openid__ENABLE_OPENID_SIGNIN=false"
+Environment="FORGEJO__openid__ENABLE_OPENID_SIGNUP=true"
+Environment="FORGEJO__openid__WHITELISTED_URIS={{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+# automatic create user via authelia
+Environment="FORGEJO__service__ENABLE_INTERNAL_SIGNIN=false"
+Environment="FORGEJO__service__ENABLE_BASIC_AUTHENTICATION=false"
+Environment="FORGEJO__service__DISABLE_REGISTRATION=false"
+Environment="FORGEJO__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=true"
+Environment="FORGEJO__service__SHOW_REGISTRATION_BUTTON=false"
+
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

@@ -530,3 +530,28 @@ services:
             db:
               status: true
               type: "postgresql"
+    forgejo:
+      units:
+        main:
+          release: "forgejo"
+          hosts: ["app"]
+          domain:
+            public: "forgejo"
+            internal: "forgejo.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3001
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/user/oauth2/authelia/callback"]
+              scopes: ["openid", "email", "profile"]
+              auth_method: "client_secret_basic"

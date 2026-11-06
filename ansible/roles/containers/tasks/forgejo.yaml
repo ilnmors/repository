@@ -1,0 +1,88 @@
+---
+- name: Register the forgejo database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the forgejo authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "forgejo"
+
+- name: Set the forgejo fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "FORGEJO__database__PASSWD"
+        value: "{{ secrets['postgresql']['password']['forgejo'] }}"
+  no_log: true
+
+- name: Create the forgejo directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['forgejo']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/forgejo"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/forgejo/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/forgejo"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/forgejo/ssl"
+  become: true
+
+- name: Deploy the forgejo root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/forgejo/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['forgejo']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_forgejo"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_forgejo"
+  no_log: true
+
+- name: Deploy the forgejo image
+  vars:
+    containers_image_notifications: "notification_restart_forgejo"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "forgejo/forgejo.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/forgejo.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_forgejo"
+
+- name: Start the forgejo
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "forgejo.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_forgejo_started"
+
+- name: Apply the forgejo configuration handlers
+  ansible.builtin.meta: "flush_handlers"

@@ -207,3 +207,15 @@
   register: "result_restart_vaultwarden"
   listen: "notification_restart_vaultwarden"
   ignore_errors: true
+
+- name: Restart the forgejo.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "forgejo.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_forgejo_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_forgejo"
+  listen: "notification_restart_forgejo"
+  ignore_errors: true
