@@ -1,0 +1,25 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Collabora Online
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=collabora
+HostName=collabora
+
+PublishPort={{ services['containers']['collabora']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['collabora']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['collabora']['units']['main']['ports']['http']['protocol'] }}
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="aliasgroup1=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:server_name={{ services['containers']['collabora']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }} --o:admin_console.enable=false"
+
+[Service]
+MemoryKSM=yes
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

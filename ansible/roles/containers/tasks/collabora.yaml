@@ -1,0 +1,30 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "collabora"
+
+- name: Deploy the collabora image
+  vars:
+    containers_image_notifications: "notification_restart_collabora"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "collabora/collabora.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/collabora.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_collabora"
+
+- name: Start the collabora
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "collabora.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_collabora_started"
+
+- name: Apply the collabora configuration handlers
+  ansible.builtin.meta: "flush_handlers"

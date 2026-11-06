@@ -135,5 +135,13 @@
   when: target_host in services['containers']['oxicloud']['units']['main']['hosts']
   tags: ["oxicloud"]
 
+- name: Include the collabora task
+  ansible.builtin.include_tasks:
+    file: "collabora.yaml"
+    apply:
+      tags: ["collabora"]
+  when: target_host in services['containers']['collabora']['units']['main']['hosts']
+  tags: ["collabora"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

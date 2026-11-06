@@ -210,3 +210,7 @@ releases:
       name: "oxicloud"
       repository: "docker.io/diocrafts/oxicloud"
       tag: "0.10.0"
+    collabora:
+      name: "collabora"
+      repository: "docker.io/collabora/code"
+      tag: "26.04.3.2.1"

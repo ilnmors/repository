@@ -231,3 +231,15 @@
   register: "result_restart_oxicloud"
   listen: "notification_restart_oxicloud"
   ignore_errors: true
+
+- name: Restart the collabora.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "collabora.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_collabora_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_collabora"
+  listen: "notification_restart_collabora"
+  ignore_errors: true

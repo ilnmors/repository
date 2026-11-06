@@ -582,3 +582,20 @@ services:
               scopes: ["openid", "profile", "email", "groups"]
               auth_method: "client_secret_post"
               pkce: true
+    collabora:
+      units:
+        main:
+          release: "collabora"
+          hosts: ["app"]
+          domain:
+            public: "collabora"
+            internal: "collabora.app"
+          subuid: 101000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9980
+              container: 9980
+          dependency:
+            web:
+              status: true
