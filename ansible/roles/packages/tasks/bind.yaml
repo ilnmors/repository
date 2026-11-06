@@ -39,22 +39,22 @@
         executable: "/bin/bash"
         creates: "/etc/bind/acme.key"
       become: true
-      changed_when: "'BIND ACME key created' in is_bind_acme_key_created['stdout']"
-      register: "is_bind_acme_key_created"
+      changed_when: "'BIND ACME key created' in packages_bind_acme_key_created['stdout']"
+      register: "packages_bind_acme_key_created"
       no_log: true
 
     - name: Register the BIND ACME key as variable
       ansible.builtin.slurp:
         src: "/etc/bind/acme.key"
       become: true
-      register: "bind_acme_key"
+      register: "packages_bind_acme_key"
       no_log: true
 
     - name: Set the BIND ACME key in secrets.yaml
       vars:
         secrets_target: '["ca"]["x509"]["acme"]["key"]'
         secrets_content: |
-          {{ bind_acme_key['content'] | b64decode | regex_findall('secret\s+"([^"]+)"') | first | to_json }}
+          {{ packages_bind_acme_key['content'] | b64decode | regex_findall('secret\s+"([^"]+)"') | first | to_json }}
       ansible.builtin.include_role:
         name: "secrets"
         tasks_from: "update"
@@ -88,21 +88,21 @@
       args:
         executable: "/bin/bash"
       when: ((ansible_facts['services']['named.service'] | default({}))['state'] | default(none)) == 'running'
-      changed_when: "'BIND zones frozen' in is_bind_zones_frozen['stdout']"
-      register: "is_bind_zones_frozen"
+      changed_when: "'BIND zones frozen' in packages_bind_zones_frozen['stdout']"
+      register: "packages_bind_zones_frozen"
 
     - name: Find the BIND zone journal files
       ansible.builtin.find:
         paths: "/var/lib/bind"
         patterns: "*.jnl"
         file_type: "file"
-      register: "bind_zone_journals"
+      register: "packages_bind_zone_journals"
 
     - name: Delete the BIND zone journal files
       ansible.builtin.file:
         path: "{{ item }}"
         state: "absent"
-      loop: "{{ bind_zone_journals['files'] | map(attribute='path') | list }}"
+      loop: "{{ packages_bind_zone_journals['files'] | map(attribute='path') | list }}"
 
     - name: Configure the BIND internal zone
       ansible.builtin.template:

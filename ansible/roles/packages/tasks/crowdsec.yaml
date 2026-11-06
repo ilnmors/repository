@@ -125,11 +125,11 @@
         executable: "/bin/bash"
       become: true
       changed_when: false
-      register: "existing_crowdsec_machines"
+      register: "packages_existing_crowdsec_machines"
 
     - name: Set the existing crowdsec machine names
       ansible.builtin.set_fact:
-        packages_existing_crowdsec_machine_names: "{{ existing_crowdsec_machines['stdout'] | from_json | default([], true) | map(attribute='machineId') | list }}"
+        packages_existing_crowdsec_machine_names: "{{ packages_existing_crowdsec_machines['stdout'] | from_json | default([], true) | map(attribute='machineId') | list }}"
 
     - name: Set the defined crowdsec machine names
       ansible.builtin.set_fact:
@@ -144,8 +144,8 @@
         executable: "/bin/bash"
       loop: "{{ packages_existing_crowdsec_machine_names | difference(packages_defined_crowdsec_machine_names) }}"
       become: true
-      changed_when: "'Crowdsec machine deleted' in is_crowdsec_machine_deleted['stdout']"
-      register: "is_crowdsec_machine_deleted"
+      changed_when: "'Crowdsec machine deleted' in packages_crowdsec_machine_deleted['stdout']"
+      register: "packages_crowdsec_machine_deleted"
 
     - name: Register the crowdsec machines on the LAPI server
       ansible.builtin.shell: |
@@ -156,7 +156,7 @@
       loop: "{{ packages_defined_crowdsec_machine_names }}"
       become: true
       changed_when: false
-      register: "is_crowdsec_machine_registered"
+      register: "packages_crowdsec_machine_registered"
       no_log: true
     # Bouncer configuration
 
@@ -166,13 +166,13 @@
       args:
         executable: "/bin/bash"
       become: true
-      register: "existing_crowdsec_bouncers"
+      register: "packages_existing_crowdsec_bouncers"
       changed_when: false
       no_log: true
 
     - name: Set the existing crowdsec bouncer names
       ansible.builtin.set_fact:
-        packages_existing_crowdsec_bouncer_names: "{{ existing_crowdsec_bouncers['stdout'] | from_json | default([], true) | map(attribute='name') | list }}"
+        packages_existing_crowdsec_bouncer_names: "{{ packages_existing_crowdsec_bouncers['stdout'] | from_json | default([], true) | map(attribute='name') | list }}"
       no_log: true
 
     - name: Set the defined crowdsec bouncer names
@@ -188,8 +188,8 @@
         executable: "/bin/bash"
       loop: "{{ packages_existing_crowdsec_bouncer_names | difference(packages_defined_crowdsec_bouncer_names) }}"
       become: true
-      changed_when: "'Crowdsec bouncer deleted' in is_crowdsec_bouncer_deleted['stdout']"
-      register: "is_crowdsec_bouncer_deleted"
+      changed_when: "'Crowdsec bouncer deleted' in packages_crowdsec_bouncer_deleted['stdout']"
+      register: "packages_crowdsec_bouncer_deleted"
 
     - name: Register the crowdsec bouncers
       ansible.builtin.shell: |
@@ -201,8 +201,8 @@
       loop: "{{ packages_defined_crowdsec_bouncer_names }}"
       become: true
       when: (item) not in (packages_existing_crowdsec_bouncer_names)
-      changed_when: "'Crowdsec bouncer registered' in is_crowdsec_bouncer_registered['stdout']"
-      register: "is_crowdsec_bouncer_registered"
+      changed_when: "'Crowdsec bouncer registered' in packages_crowdsec_bouncer_registered['stdout']"
+      register: "packages_crowdsec_bouncer_registered"
       no_log: true
 
     - name: Update the crowdsec bouncers whose API key has changed
@@ -221,15 +221,15 @@
           (secrets['crowdsec']['bouncers'][item] | hash('sha512'))
           !=
           (
-            existing_crowdsec_bouncers['stdout']
+            packages_existing_crowdsec_bouncers['stdout']
             | from_json
             | default([], true)
             | selectattr('name', 'equalto', item)
             | map(attribute='api_key')
             | first
           )
-      changed_when: "'Crowdsec bouncer updated' in is_crowdsec_bouncer_updated['stdout']"
-      register: "is_crowdsec_bouncer_updated"
+      changed_when: "'Crowdsec bouncer updated' in packages_crowdsec_bouncer_updated['stdout']"
+      register: "packages_crowdsec_bouncer_updated"
       no_log: true
 
 - name: Set the crowdsec acquisition configuration
@@ -257,8 +257,8 @@
       args:
         executable: "/bin/bash"
       become: true
-      changed_when: "'Crowdsec hub updated' in is_hub_updated['stdout']"
-      register: "is_hub_updated"
+      changed_when: "'Crowdsec hub updated' in packages_hub_updated['stdout']"
+      register: "packages_hub_updated"
       notify: "notification_restart_crowdsec"
 
     - name: Install the crowdsec collections
@@ -284,11 +284,11 @@
           | unique
         }}
       become: true
-      changed_when: "'Crowdsec collection installed' in is_collection_installed['stdout']"
+      changed_when: "'Crowdsec collection installed' in packages_collection_installed['stdout']"
       failed_when:
-        - is_collection_installed['rc'] != 0
-        - "'already installed' not in (is_collection_installed['stdout'] ~ is_collection_installed['stderr'])"
-      register: "is_collection_installed"
+        - packages_collection_installed['rc'] != 0
+        - "'already installed' not in (packages_collection_installed['stdout'] ~ packages_collection_installed['stderr'])"
+      register: "packages_collection_installed"
       notify: "notification_restart_crowdsec"
 
     - name: Install the crowdsec parsers
@@ -314,11 +314,11 @@
           | unique
         }}
       become: true
-      changed_when: "'Crowdsec parser installed' in is_parser_installed['stdout']"
+      changed_when: "'Crowdsec parser installed' in packages_parser_installed['stdout']"
       failed_when:
-        - is_parser_installed['rc'] != 0
-        - "'already installed' not in (is_parser_installed['stdout'] ~ is_parser_installed['stderr'])"
-      register: "is_parser_installed"
+        - packages_parser_installed['rc'] != 0
+        - "'already installed' not in (packages_parser_installed['stdout'] ~ packages_parser_installed['stderr'])"
+      register: "packages_parser_installed"
       notify: "notification_restart_crowdsec"
 
     - name: Create the crowdsec acquis.d directory
@@ -409,9 +409,9 @@
         mode: "0600"
         validate: "/usr/bin/crowdsec-firewall-bouncer -c %s -t"
       become: true
-      register: "crowdsec_firewall_bouncer_configuration"
+      register: "packages_crowdsec_firewall_bouncer_configuration"
       changed_when: >-
-        crowdsec_firewall_bouncer_configuration['changed']
+        packages_crowdsec_firewall_bouncer_configuration['changed']
         or result_reload_nftables is defined
         or result_update_ca is defined
       notify: "notification_restart_crowdsec_bouncer"

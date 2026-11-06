@@ -136,7 +136,7 @@
         file_type: "any"
         hidden: true
         recurse: false
-      register: "is_kopia_repository_empty"
+      register: "packages_kopia_repository_empty"
 
     - name: Create the kopia repository
       ansible.builtin.shell: |
@@ -148,7 +148,7 @@
         --description="{{ site['org'] }} kopia repository"
       args:
         executable: "/bin/bash"
-      when: is_kopia_repository_empty.matched == 0
+      when: packages_kopia_repository_empty.matched == 0
       changed_when: true
       no_log: true
 
@@ -161,12 +161,12 @@
         --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
       args:
         executable: "/bin/bash"
-      when: is_kopia_repository_empty.matched > 0
+      when: packages_kopia_repository_empty.matched > 0
       changed_when: false
       failed_when:
-        - is_kopia_repository_empty.matched > 0
-        - is_repository_connected.rc != 0
-      register: "is_repository_connected"
+        - packages_kopia_repository_empty.matched > 0
+        - packages_repository_connected.rc != 0
+      register: "packages_repository_connected"
       no_log: true
 
     - name: Check the kopia user definitions
@@ -192,7 +192,7 @@
       args:
         executable: "/bin/bash"
       changed_when: false
-      register: "existing_kopia_users"
+      register: "packages_existing_kopia_users"
       no_log: true
 
     - name: Enable the kopia ACLs
@@ -206,8 +206,8 @@
         fi
       args:
         executable: "/bin/bash"
-      changed_when: "'Kopia ACLs enabled' in is_kopia_acl_enabled['stdout']"
-      register: "is_kopia_acl_enabled"
+      changed_when: "'Kopia ACLs enabled' in packages_kopia_acl_enabled['stdout']"
+      register: "packages_kopia_acl_enabled"
       notify: "notification_restart_kopia_server"
 
     - name: Get the existing kopia ACLs
@@ -216,7 +216,7 @@
       args:
         executable: "/bin/bash"
       changed_when: false
-      register: "existing_kopia_acls"
+      register: "packages_existing_kopia_acls"
 
     - name: Set the kopia global policy
       ansible.builtin.shell: |
@@ -229,8 +229,8 @@
         fi
       args:
         executable: "/bin/bash"
-      changed_when: "'Kopia global policy updated' in is_kopia_global_policy_updated['stdout']"
-      register: "is_kopia_global_policy_updated"
+      changed_when: "'Kopia global policy updated' in packages_kopia_global_policy_updated['stdout']"
+      register: "packages_kopia_global_policy_updated"
       notify: "notification_restart_kopia_server"
 
     - name: Create the kopia users
@@ -248,9 +248,9 @@
       loop_control:
         loop_var: "packages_kopia_user"
         label: "{{ packages_kopia_user['key'] }}"
-      when: packages_kopia_identity not in (existing_kopia_users['stdout'] | from_json | map(attribute='username') | list)
-      changed_when: "'Kopia user created' in is_kopia_user_created['stdout']"
-      register: "is_kopia_user_created"
+      when: packages_kopia_identity not in (packages_existing_kopia_users['stdout'] | from_json | map(attribute='username') | list)
+      changed_when: "'Kopia user created' in packages_kopia_user_created['stdout']"
+      register: "packages_kopia_user_created"
       notify: "notification_restart_kopia_server"
       no_log: true
 
@@ -269,7 +269,7 @@
         loop_var: "packages_kopia_user"
         label: "{{ packages_kopia_user['key'] }}"
       changed_when: false
-      register: "is_kopia_user_updated"
+      register: "packages_kopia_user_updated"
       notify: "notification_restart_kopia_server"
       no_log: true
 
@@ -288,14 +288,14 @@
       loop: ["snapshot", "policy", "user", "acl", "content"]
       when: >-
         (
-          existing_kopia_acls['stdout'] | from_json
+          packages_existing_kopia_acls['stdout'] | from_json
           | selectattr('user', 'equalto', packages_kopia_identity)
           | selectattr('target', 'equalto', {'type': item})
           | selectattr('access', 'equalto', 'FULL')
           | list | length
         ) == 0
-      changed_when: "'Kopia master ACL updated' in is_kopia_master_acl_updated['stdout']"
-      register: "is_kopia_master_acl_updated"
+      changed_when: "'Kopia master ACL updated' in packages_kopia_master_acl_updated['stdout']"
+      register: "packages_kopia_master_acl_updated"
       notify: "notification_restart_kopia_server"
 
     - name: Set the kopia backup client ACLs
@@ -330,14 +330,14 @@
         label: "{{ packages_kopia_acl[0] }}: {{ packages_kopia_acl[1]['target'] }}"
       when: >-
         (
-          existing_kopia_acls['stdout'] | from_json
+          packages_existing_kopia_acls['stdout'] | from_json
           | selectattr('user', 'equalto', packages_kopia_identity)
           | selectattr('target', 'equalto', packages_kopia_acl[1]['labels'])
           | selectattr('access', 'equalto', packages_kopia_acl[1]['access'])
           | list | length
         ) == 0
-      changed_when: "'Kopia backup client ACL updated' in is_kopia_client_acl_updated['stdout']"
-      register: "is_kopia_client_acl_updated"
+      changed_when: "'Kopia backup client ACL updated' in packages_kopia_client_acl_updated['stdout']"
+      register: "packages_kopia_client_acl_updated"
       notify: "notification_restart_kopia_server"
 
     - name: Set the kopia backup client policy ACLs
@@ -361,14 +361,14 @@
         loop_var: "packages_kopia_client"
       when: >-
         (
-          existing_kopia_acls['stdout'] | from_json
+          packages_existing_kopia_acls['stdout'] | from_json
           | selectattr('user', 'equalto', packages_kopia_identity)
           | selectattr('target', 'equalto', packages_kopia_policy_labels)
           | selectattr('access', 'equalto', 'FULL')
           | list | length
         ) == 0
-      changed_when: "'Kopia backup client policy ACL updated' in is_kopia_client_policy_acl_updated['stdout']"
-      register: "is_kopia_client_policy_acl_updated"
+      changed_when: "'Kopia backup client policy ACL updated' in packages_kopia_client_policy_acl_updated['stdout']"
+      register: "packages_kopia_client_policy_acl_updated"
       notify: "notification_restart_kopia_server"
 
     - name: Set the kopia backup client policies
@@ -390,8 +390,8 @@
       loop: "{{ secrets['kopia']['users'] | list | reject('equalto', control_host) | list }}"
       loop_control:
         loop_var: "packages_kopia_client"
-      changed_when: "'Kopia backup client policy updated' in is_kopia_client_policy_updated['stdout']"
-      register: "is_kopia_client_policy_updated"
+      changed_when: "'Kopia backup client policy updated' in packages_kopia_client_policy_updated['stdout']"
+      register: "packages_kopia_client_policy_updated"
       notify: "notification_restart_kopia_server"
 
     - name: Set the kopia parameters
@@ -454,7 +454,7 @@
       args:
         executable: "/bin/bash"
       changed_when: false
-      register: "is_kopia_connected"
+      register: "packages_kopia_connected"
       no_log: true
       ignore_errors: "{{ target_host == control_host }}"
 
@@ -480,12 +480,12 @@
     - name: Check the kopia client data directory
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['data'] }}"
-      register: "is_data_dir"
+      register: "packages_data_dir"
 
     - name: Check the kopia client data directory is ready
       ansible.builtin.assert:
         that:
-          - is_data_dir['stat']['isdir'] | default(false)
+          - packages_data_dir['stat']['isdir'] | default(false)
         fail_msg: "Create the data directory for {{ target_host }} with the nodes role before setting kopia."
 
     - name: Check the kopia client data directory is empty
@@ -494,18 +494,18 @@
         file_type: "any"
         hidden: true
         recurse: false
-      register: "is_data_dir_empty"
+      register: "packages_data_dir_empty"
 
     - name: Check the kopia client data directory was inspected
       ansible.builtin.assert:
         that:
-          - (is_data_dir_empty['skipped_paths'] | default({}) | length) == 0
+          - (packages_data_dir_empty['skipped_paths'] | default({}) | length) == 0
         fail_msg: "Unable to inspect the data directory for {{ target_host }}."
 
     - name: Check whether the kopia restore is pending
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/kopia/restore-in-progress"
-      register: "is_kopia_restore_pending"
+      register: "packages_kopia_restore_pending"
 
     - name: Check whether the kopia client snapshot exists
       ansible.builtin.shell: |
@@ -515,23 +515,23 @@
         --json --max-results=1
       args:
         executable: "/bin/bash"
-      when: is_data_dir_empty['matched'] == 0 or is_kopia_restore_pending['stat']['exists']
+      when: packages_data_dir_empty['matched'] == 0 or packages_kopia_restore_pending['stat']['exists']
       become: false
       changed_when: false
-      register: "is_snapshot_exist"
+      register: "packages_snapshot_exist"
       no_log: true
 
     - name: Check the pending kopia restore source is available
       ansible.builtin.assert:
         that:
-          - (is_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
+          - (packages_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
         fail_msg: "The previous kopia restore is incomplete, but the client snapshot is missing."
-      when: is_kopia_restore_pending['stat']['exists']
+      when: packages_kopia_restore_pending['stat']['exists']
 
     - name: Restore the kopia client data directory
       when:
-        - is_data_dir_empty['matched'] == 0 or is_kopia_restore_pending['stat']['exists']
-        - (is_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
+        - packages_data_dir_empty['matched'] == 0 or packages_kopia_restore_pending['stat']['exists']
+        - (packages_snapshot_exist['stdout'] | default('[]', true) | from_json | length) > 0
       block:
         - name: Create the kopia state directory
           ansible.builtin.file:
@@ -568,7 +568,7 @@
           args:
             executable: "/bin/bash"
           changed_when: true
-          register: "is_kopia_restored"
+          register: "packages_kopia_restored"
           no_log: true
 
         - name: Clear the pending kopia restore

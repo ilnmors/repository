@@ -21,12 +21,12 @@
     - name: Check the ssh key file
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519"
-      register: "is_ssh_key_file"
+      register: "nodes_ssh_key_file"
 
     - name: Check the ssh pub file
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519.pub"
-      register: "is_ssh_pub_file"
+      register: "nodes_ssh_pub_file"
 
     - name: Create the key file (Overwrite)
       ansible.builtin.shell: |
@@ -36,15 +36,15 @@
         echo "SSH key created"
       args:
         executable: "/bin/bash"
-      when: not is_ssh_key_file['stat']['exists'] or not is_ssh_pub_file['stat']['exists']
-      changed_when: "'SSH key created' in is_ssh_key_created['stdout']"
-      register: "is_ssh_key_created"
+      when: not nodes_ssh_key_file['stat']['exists'] or not nodes_ssh_pub_file['stat']['exists']
+      changed_when: "'SSH key created' in nodes_ssh_key_created['stdout']"
+      register: "nodes_ssh_key_created"
       no_log: true
 
     - name: Check the SSH certificate file
       ansible.builtin.stat:
         path: "{{ nodes[target_host]['paths']['home'] }}/.ssh/id_ed25519-cert.pub"
-      register: "is_ssh_certificate_file"
+      register: "nodes_ssh_certificate_file"
 
     - name: Get the principals of the current signed pub file
       ansible.builtin.shell: |
@@ -55,10 +55,10 @@
         sed 's/^[[:space:]]*//'
       args:
         executable: "/bin/bash"
-      when: is_ssh_certificate_file['stat']['exists']
+      when: nodes_ssh_certificate_file['stat']['exists']
       changed_when: false
       failed_when: false
-      register: "current_ssh_principals"
+      register: "nodes_current_ssh_principals"
       no_log: true
 
     - name: Compare the signing SSH CA and the repository SSH CA
@@ -73,18 +73,18 @@
           awk '{print $2}')"
       args:
         executable: "/bin/bash"
-      when: is_ssh_certificate_file['stat']['exists']
+      when: nodes_ssh_certificate_file['stat']['exists']
       changed_when: false
       failed_when: false
-      register: "is_ssh_ca_same"
+      register: "nodes_ssh_ca_same"
       no_log: true
 
     - name: Get the SSH CA and sign on the ssh pub file
       when: >
-        is_ssh_key_created is changed or
-        not is_ssh_certificate_file['stat']['exists'] or
-        nodes[target_host]['group'] not in (current_ssh_principals['stdout_lines'] | default([])) or
-        (is_ssh_ca_same['rc'] | default(0)) != 0
+        nodes_ssh_key_created is changed or
+        not nodes_ssh_certificate_file['stat']['exists'] or
+        nodes[target_host]['group'] not in (nodes_current_ssh_principals['stdout_lines'] | default([])) or
+        (nodes_ssh_ca_same['rc'] | default(0)) != 0
       block:
         - name: Get the SSH CA
           ansible.builtin.copy:
@@ -106,8 +106,8 @@
             echo "SSH certificate signed"
           args:
             executable: "/bin/bash"
-          changed_when: "'SSH certificate signed' in is_ssh_certificate_signed['stdout']"
-          register: "is_ssh_certificate_signed"
+          changed_when: "'SSH certificate signed' in nodes_ssh_certificate_signed['stdout']"
+          register: "nodes_ssh_certificate_signed"
           no_log: true
       always:
         - name: Clean the temporary files
@@ -157,12 +157,12 @@
     - name: Check the ssh host key file
       ansible.builtin.stat:
         path: "/etc/ssh/ssh_host_ed25519_key"
-      register: "is_ssh_host_key_file"
+      register: "nodes_ssh_host_key_file"
 
     - name: Check the ssh pub file
       ansible.builtin.stat:
         path: "/etc/ssh/ssh_host_ed25519_key.pub"
-      register: "is_ssh_host_pub_file"
+      register: "nodes_ssh_host_pub_file"
 
     - name: Create the key file (Overwrite)
       ansible.builtin.shell: |
@@ -173,15 +173,15 @@
       args:
         executable: "/bin/bash"
       become: true
-      when: not is_ssh_host_key_file['stat']['exists'] or not is_ssh_host_pub_file['stat']['exists']
-      changed_when: "'SSH key created' in is_ssh_host_key_created['stdout']"
-      register: "is_ssh_host_key_created"
+      when: not nodes_ssh_host_key_file['stat']['exists'] or not nodes_ssh_host_pub_file['stat']['exists']
+      changed_when: "'SSH key created' in nodes_ssh_host_key_created['stdout']"
+      register: "nodes_ssh_host_key_created"
       no_log: true
 
     - name: Check the SSH certificate file
       ansible.builtin.stat:
         path: "/etc/ssh/ssh_host_ed25519_key-cert.pub"
-      register: "is_ssh_host_certificate_file"
+      register: "nodes_ssh_host_certificate_file"
 
     - name: Get the principals of the current SSH host certificate
       ansible.builtin.shell: |
@@ -193,10 +193,10 @@
         sed 's/^[[:space:]]*//'
       args:
         executable: "/bin/bash"
-      when: is_ssh_host_certificate_file['stat']['exists']
+      when: nodes_ssh_host_certificate_file['stat']['exists']
       changed_when: false
       failed_when: false
-      register: "current_ssh_host_principals"
+      register: "nodes_current_ssh_host_principals"
 
     - name: Compare the signing SSH CA and the repository SSH CA
       ansible.builtin.shell: |
@@ -208,18 +208,18 @@
           awk '{print $2}')"
       args:
         executable: "/bin/bash"
-      when: is_ssh_host_certificate_file['stat']['exists']
+      when: nodes_ssh_host_certificate_file['stat']['exists']
       changed_when: false
       failed_when: false
-      register: "is_ssh_host_ca_same"
+      register: "nodes_ssh_host_ca_same"
       no_log: true
 
     - name: Get the SSH CA and sign on the host ssh pub
       when: >
-        is_ssh_host_key_created is changed or
-        not is_ssh_host_certificate_file['stat']['exists'] or
-        not [target_host,(target_host ~ '.' ~ site['domain']['internal'])] == (current_ssh_host_principals['stdout_lines'] | default([])) or
-        (is_ssh_host_ca_same['rc'] | default(0)) != 0
+        nodes_ssh_host_key_created is changed or
+        not nodes_ssh_host_certificate_file['stat']['exists'] or
+        not [target_host,(target_host ~ '.' ~ site['domain']['internal'])] == (nodes_current_ssh_host_principals['stdout_lines'] | default([])) or
+        (nodes_ssh_host_ca_same['rc'] | default(0)) != 0
       block:
         - name: Get the SSH CA
           delegate_to: "{{ control_host }}"
@@ -251,8 +251,8 @@
             echo "SSH host certificate signed"
           args:
             executable: "/bin/bash"
-          changed_when: "'SSH host certificate signed' in is_ssh_host_certificate_signed['stdout']"
-          register: "is_ssh_host_certificate_signed"
+          changed_when: "'SSH host certificate signed' in nodes_ssh_host_certificate_signed['stdout']"
+          register: "nodes_ssh_host_certificate_signed"
           no_log: true
 
         - name: Deploy the signed pub file

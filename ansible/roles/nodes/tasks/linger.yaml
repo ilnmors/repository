@@ -9,10 +9,10 @@
 - name: Check the linger status
   ansible.builtin.stat:
     path: "/var/lib/systemd/linger/{{ nodes[target_host]['user'] }}"
-  register: "is_linger_file"
+  register: "nodes_linger_file"
 
 - name: Activate the linger
-  when: not is_linger_file['stat']['exists']
+  when: not nodes_linger_file['stat']['exists']
   block:
     - name: Enable the linger
       ansible.builtin.shell: |
@@ -22,8 +22,8 @@
       args:
         executable: "/bin/bash"
       become: true
-      changed_when: "'Linger enabled' in is_linger_enabled['stdout']"
-      register: "is_linger_enabled"
+      changed_when: "'Linger enabled' in nodes_linger_enabled['stdout']"
+      register: "nodes_linger_enabled"
 
     - name: Reboot the system to ensure the DBUS socket activation
       ansible.builtin.reboot:

@@ -16,7 +16,7 @@
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0600"
-  register: "vm_meta_data"
+  register: "libvirt_vm_meta_data"
   no_log: true
 
 - name: Create the temporary user-data
@@ -26,7 +26,7 @@
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0600"
-  register: "vm_user_data"
+  register: "libvirt_vm_user_data"
   no_log: true
 
 - name: Create the temporary network-config
@@ -38,13 +38,13 @@
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0600"
-  register: "vm_network_config"
+  register: "libvirt_vm_network_config"
   no_log: true
 
 - name: Check the seed.iso
   ansible.builtin.stat:
     path: "{{ nodes[target_host]['paths']['libvirt'] }}/seeds/{{ target_vm }}-seed.iso"
-  register: "is_seediso"
+  register: "libvirt_seediso"
 
 - name: Create the temporary seed.iso
   ansible.builtin.shell: |
@@ -57,9 +57,9 @@
   args:
     executable: "/bin/bash"
   become: true
-  when: vm_meta_data['changed'] or vm_user_data['changed'] or vm_network_config['changed'] or not is_seediso['stat']['exists']
-  changed_when: "'Seed image created' in is_seediso_created['stdout']"
-  register: "is_seediso_created"
+  when: libvirt_vm_meta_data['changed'] or libvirt_vm_user_data['changed'] or libvirt_vm_network_config['changed'] or not libvirt_seediso['stat']['exists']
+  changed_when: "'Seed image created' in libvirt_seediso_created['stdout']"
+  register: "libvirt_seediso_created"
 
 - name: Set the seed.iso permission
   ansible.builtin.file:

@@ -37,7 +37,7 @@
     - "disable.conf"
     - "enable.conf"
   become: true
-  register: "suricata_rule_configuration"
+  register: "packages_suricata_rule_configuration"
 
 - name: Deploy the suricata local rules
   ansible.builtin.copy:
@@ -47,14 +47,14 @@
     group: "root"
     mode: "0644"
   become: true
-  register: "suricata_local_rules"
+  register: "packages_suricata_local_rules"
 
 - name: Check the suricata rules file
   ansible.builtin.stat:
     path: "/var/lib/suricata/rules/suricata.rules"
     get_checksum: false
   become: true
-  register: "is_suricata_rules_file"
+  register: "packages_suricata_rules_file"
 
 - name: Update the suricata rules
   ansible.builtin.shell: |
@@ -76,12 +76,12 @@
   args:
     executable: "/bin/bash"
   when: >-
-    not is_suricata_rules_file['stat']['exists']
-    or suricata_rule_configuration['changed']
-    or suricata_local_rules['changed']
+    not packages_suricata_rules_file['stat']['exists']
+    or packages_suricata_rule_configuration['changed']
+    or packages_suricata_local_rules['changed']
   become: true
-  changed_when: "'Suricata rules updated' in is_suricata_rules_updated['stdout']"
-  register: "is_suricata_rules_updated"
+  changed_when: "'Suricata rules updated' in packages_suricata_rules_updated['stdout']"
+  register: "packages_suricata_rules_updated"
   notify: "notification_restart_suricata"
 
 - name: Deploy the suricata configuration

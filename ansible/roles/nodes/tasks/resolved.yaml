@@ -23,12 +23,12 @@
     group: "systemd-resolve"
     mode: "0640"
   become: true
-  register: "resolved_configuration"
+  register: "nodes_resolved_configuration"
 
 - name: Enable the systemd-resolved.service
   ansible.builtin.systemd_service:
     name: "systemd-resolved.service"
-    state: "{{ 'restarted' if resolved_configuration['changed'] else 'started' }}"
+    state: "{{ 'restarted' if nodes_resolved_configuration['changed'] else 'started' }}"
     enabled: true
   become: true
 

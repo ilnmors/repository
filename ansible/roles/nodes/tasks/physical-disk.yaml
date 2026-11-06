@@ -175,5 +175,5 @@
       args:
         executable: "/bin/bash"
       become: true
-      changed_when: "'Swap enabled' in is_swap_enabled['stdout']"
-      register: "is_swap_enabled"
+      changed_when: "'Swap enabled' in nodes_swap_enabled['stdout']"
+      register: "nodes_swap_enabled"

@@ -21,21 +21,21 @@
     file_type: "any"
     hidden: true
     recurse: false
-  register: "is_rclone_data_dir_empty"
+  register: "packages_rclone_data_dir_empty"
 
 - name: Check the local rclone data directory was inspected
   ansible.builtin.assert:
     that:
-      - (is_rclone_data_dir_empty['skipped_paths'] | default({}) | length) == 0
+      - (packages_rclone_data_dir_empty['skipped_paths'] | default({}) | length) == 0
     fail_msg: "Unable to inspect the data directory for {{ target_host }}."
 
 - name: Check whether the rclone restore is pending
   ansible.builtin.stat:
     path: "{{ nodes[target_host]['paths']['home'] }}/.local/state/rclone/restore-in-progress"
-  register: "is_rclone_restore_pending"
+  register: "packages_rclone_restore_pending"
 
 - name: Restore the rclone data directory
-  when: is_rclone_data_dir_empty['matched'] == 0 or is_rclone_restore_pending['stat']['exists']
+  when: packages_rclone_data_dir_empty['matched'] == 0 or packages_rclone_restore_pending['stat']['exists']
   environment:
     RCLONE_CONFIG: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
   block:
@@ -45,21 +45,21 @@
       args:
         executable: "/bin/bash"
       changed_when: false
-      failed_when: is_rclone_remote_dir_empty['rc'] not in [0, 3]
-      register: "is_rclone_remote_dir_empty"
+      failed_when: packages_rclone_remote_dir_empty['rc'] not in [0, 3]
+      register: "packages_rclone_remote_dir_empty"
 
     - name: Check the pending rclone restore source is available
       ansible.builtin.assert:
         that:
-          - is_rclone_remote_dir_empty['rc'] == 0
-          - (is_rclone_remote_dir_empty['stdout'] | length) > 0
+          - packages_rclone_remote_dir_empty['rc'] == 0
+          - (packages_rclone_remote_dir_empty['stdout'] | length) > 0
         fail_msg: "The previous rclone restore is incomplete, but the remote data directory is empty or missing."
-      when: is_rclone_restore_pending['stat']['exists']
+      when: packages_rclone_restore_pending['stat']['exists']
 
     - name: Restore the remote rclone data directory
       when:
-        - is_rclone_remote_dir_empty['rc'] == 0
-        - (is_rclone_remote_dir_empty['stdout'] | length) > 0
+        - packages_rclone_remote_dir_empty['rc'] == 0
+        - (packages_rclone_remote_dir_empty['stdout'] | length) > 0
       block:
         - name: Create the rclone state directory
           ansible.builtin.file:

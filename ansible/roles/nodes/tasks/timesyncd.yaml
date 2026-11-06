@@ -24,11 +24,11 @@
     group: "systemd-timesync"
     mode: "0640"
   become: true
-  register: "timesyncd_configuration"
+  register: "nodes_timesyncd_configuration"
 
 - name: Enable the systemd-timesyncd.service
   ansible.builtin.systemd_service:
     name: "systemd-timesyncd.service"
-    state: "{{ 'restarted' if timesyncd_configuration['changed'] else 'started' }}"
+    state: "{{ 'restarted' if nodes_timesyncd_configuration['changed'] else 'started' }}"
     enabled: true
   become: true
