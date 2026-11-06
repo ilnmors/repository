@@ -84,6 +84,12 @@
                 "" {http.request.hostport}
                 default {http.request.header.X-Forwarded-Host}
         }
+{% if service['route']['api'] is defined %}
+        @api path {{ service['route']['api'] }}
+        reverse_proxy @api host.containers.internal:{{ service['ports']['api']['int'] }} {
+                header_up Host {upstream_host}
+        }
+{% endif %}
         reverse_proxy host.containers.internal:{{ service['ports']['http']['int'] | default(service['ports']['http']['ext']) }} {
                 header_up Host {upstream_host}
         }

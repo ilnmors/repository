@@ -151,5 +151,13 @@
   when: target_host in services['containers']['snappymail']['units']['main']['hosts']
   tags: ["snappymail"]
 
+- name: Include the mastodon task
+  ansible.builtin.include_tasks:
+    file: "mastodon.yaml"
+    apply:
+      tags: ["mastodon"]
+  when: target_host in services['containers']['mastodon']['units']['main']['hosts']
+  tags: ["mastodon"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

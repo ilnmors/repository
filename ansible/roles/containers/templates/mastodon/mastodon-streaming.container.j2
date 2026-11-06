@@ -1,0 +1,48 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Mastodon Streaming
+
+After=network-online.target valkey_mastodon.service
+Wants=network-online.target valkey_mastodon.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=mastodon-streaming
+HostName=mastodon-streaming
+
+PublishPort={{ services['containers']['mastodon']['units']['main']['ports']['api']['int'] }}:{{ services['containers']['mastodon']['units']['main']['ports']['api']['container'] }}/{{ services['containers']['mastodon']['units']['main']['ports']['api']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl:/etc/ssl/mastodon:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="LOCAL_DOMAIN={{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="LOG_LEVEL=info"
+Environment="TRUSTED_PROXY_IP={{ containers_trusted_proxies | join(',') }}"
+
+# PostgreSQL
+Environment="DB_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DB_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DB_NAME=mastodon_db"
+Environment="DB_USER=mastodon"
+Environment="DB_SSLMODE=verify-full"
+Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/mastodon/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=MASTODON_POSTGRES_PASSWORD,type=env,target=DB_PASS
+
+# Redis
+Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['mastodon']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# Process
+Exec=node ./streaming/index.js
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

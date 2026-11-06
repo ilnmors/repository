@@ -218,3 +218,11 @@ releases:
       name: "snappymail"
       repository: "ghcr.io/the-djmaze/snappymail"
       tag: "v2.38.2"
+    mastodon:
+      name: "mastodon"
+      repository: "ghcr.io/mastodon/mastodon"
+      tag: "v4.7.2"
+    mastodon-streaming:
+      name: "mastodon-streaming"
+      repository: "ghcr.io/mastodon/mastodon-streaming"
+      tag: "v4.7.2"

@@ -1,0 +1,322 @@
+---
+- name: Register the mastodon database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the mastodon rustfs client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_rustfs_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "rustfs.yaml"
+    apply:
+      delegate_to: "{{ containers_rustfs_host }}"
+
+- name: Register the mastodon authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the mastodon valkey
+  vars:
+    containers_valkey_service: "mastodon"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "mastodon"
+
+- name: Register the missing mastodon secret key on secrets.yaml
+  vars:
+    secrets_target: '["mastodon"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['mastodon']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing mastodon encryption primary key on secrets.yaml
+  vars:
+    secrets_target: '["mastodon"]["encryption"]["primary_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['mastodon']['encryption']['primary_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing mastodon encryption deterministic key on secrets.yaml
+  vars:
+    secrets_target: '["mastodon"]["encryption"]["deterministic_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['mastodon']['encryption']['deterministic_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing mastodon encryption salt on secrets.yaml
+  vars:
+    secrets_target: '["mastodon"]["encryption"]["salt"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['mastodon']['encryption']['salt'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Deploy the mastodon image
+  vars:
+    containers_image_notifications: "notification_restart_mastodon"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+# The rake task has no :environment dependency, so it runs without the database or the Rails secrets.
+- name: Generate the missing mastodon VAPID keys
+  ansible.builtin.shell: |
+    /usr/bin/podman run --rm \
+      {{ (containers_container_repository ~ ':' ~ releases['containers'][target_container]['tag']) | quote }} \
+      bundle exec rails mastodon:webpush:generate_vapid_key
+  args:
+    executable: "/bin/bash"
+  when: >-
+    (secrets['mastodon']['vapid']['private_key'] | default('', true) | length) == 0 or
+    (secrets['mastodon']['vapid']['public_key'] | default('', true) | length) == 0
+  changed_when: false
+  register: "containers_mastodon_vapid_generated"
+  no_log: true
+
+- name: Register the missing mastodon VAPID keys on secrets.yaml
+  vars:
+    secrets_target: '["mastodon"]["vapid"][{{ containers_mastodon_vapid["key"] | to_json }}]'
+    secrets_content: >-
+      {{
+        containers_mastodon_vapid_generated['stdout']
+        | regex_search(containers_mastodon_vapid['pattern'], '\1')
+        | first
+        | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  loop:
+    - key: "private_key"
+      pattern: "VAPID_PRIVATE_KEY=(\\S+)"
+    - key: "public_key"
+      pattern: "VAPID_PUBLIC_KEY=(\\S+)"
+  loop_control:
+    loop_var: "containers_mastodon_vapid"
+    label: "{{ containers_mastodon_vapid['key'] }}"
+  when: containers_mastodon_vapid_generated['stdout'] is defined
+  no_log: true
+
+- name: Set the mastodon secrets fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "MASTODON_SECRET_KEY_BASE"
+        value: "{{ secrets['mastodon']['secret_key'] }}"
+      - name: "MASTODON_ENCRYPTION_PRIMARY_KEY"
+        value: "{{ secrets['mastodon']['encryption']['primary_key'] }}"
+      - name: "MASTODON_ENCRYPTION_DETERMINISTIC_KEY"
+        value: "{{ secrets['mastodon']['encryption']['deterministic_key'] }}"
+      - name: "MASTODON_ENCRYPTION_SALT"
+        value: "{{ secrets['mastodon']['encryption']['salt'] }}"
+      - name: "MASTODON_POSTGRES_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['mastodon'] }}"
+      - name: "MASTODON_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['mastodon']['oidc']['secret'] }}"
+      - name: "MASTODON_S3_SECRET_KEY"
+        value: "{{ secrets['rustfs']['password']['mastodon'] }}"
+      - name: "MASTODON_VAPID_PRIVATE_KEY"
+        value: "{{ secrets['mastodon']['vapid']['private_key'] }}"
+      - name: "MASTODON_VAPID_PUBLIC_KEY"
+        value: "{{ secrets['mastodon']['vapid']['public_key'] }}"
+  no_log: true
+
+- name: Create the mastodon directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['mastodon']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl"
+  become: true
+
+- name: Deploy the mastodon root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['mastodon']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_mastodon"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_mastodon"
+  no_log: true
+
+- name: Check the mastodon .init marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon/.init"
+  register: "containers_mastodon_init_marker"
+
+- name: Check the mastodon .migrated marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon/.migrated_{{ releases['containers']['mastodon']['tag'] }}"
+  register: "containers_mastodon_migrated_marker"
+
+- name: Initialize the mastodon database
+  when: not containers_mastodon_init_marker['stat']['exists']
+  block:
+    - name: Run the mastodon database preparation
+      containers.podman.podman_container:
+        name: "mastodon_init"
+        image: "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
+        command: "bundle exec rails db:prepare"
+        state: "started"
+        rm: true
+        detach: false
+        env:
+          SAFETY_ASSURED: "1"
+          LOCAL_DOMAIN: "{{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+          DB_HOST: "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+          DB_PORT: "{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+          DB_NAME: "mastodon_db"
+          DB_USER: "mastodon"
+          DB_PASS: "{{ secrets['postgresql']['password']['mastodon'] }}"
+          DB_SSLMODE: "verify-full"
+          PGSSLROOTCERT: "/etc/ssl/mastodon/{{ site['ca']['x509']['root']['certificate_file'] }}"
+          REDIS_URL: "redis://host.containers.internal:{{ services['containers']['mastodon']['units']['valkey']['ports']['tcp']['int'] }}"
+          SECRET_KEY_BASE: "{{ secrets['mastodon']['secret_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY: "{{ secrets['mastodon']['encryption']['primary_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY: "{{ secrets['mastodon']['encryption']['deterministic_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT: "{{ secrets['mastodon']['encryption']['salt'] }}"
+        volume:
+          - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl:/etc/ssl/mastodon:ro"
+      no_log: true
+
+    - name: Create the mastodon .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+
+- name: Migrate the mastodon database
+  when:
+    - containers_mastodon_init_marker['stat']['exists']
+    - not containers_mastodon_migrated_marker['stat']['exists']
+  block:
+    - name: Stop the mastodon services
+      ansible.builtin.systemd_service:
+        scope: "user"
+        name: "{{ item }}"
+        state: "stopped"
+      loop:
+        - "mastodon-web.service"
+        - "mastodon-worker.service"
+        - "mastodon-streaming.service"
+      failed_when: false
+
+    - name: Run the mastodon database migration
+      containers.podman.podman_container:
+        name: "mastodon_migrate"
+        image: "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
+        command: "bundle exec rails db:migrate"
+        state: "started"
+        rm: true
+        detach: false
+        env:
+          LOCAL_DOMAIN: "{{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+          DB_HOST: "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+          DB_PORT: "{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+          DB_NAME: "mastodon_db"
+          DB_USER: "mastodon"
+          DB_PASS: "{{ secrets['postgresql']['password']['mastodon'] }}"
+          DB_SSLMODE: "verify-full"
+          PGSSLROOTCERT: "/etc/ssl/mastodon/{{ site['ca']['x509']['root']['certificate_file'] }}"
+          REDIS_URL: "redis://host.containers.internal:{{ services['containers']['mastodon']['units']['valkey']['ports']['tcp']['int'] }}"
+          SECRET_KEY_BASE: "{{ secrets['mastodon']['secret_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY: "{{ secrets['mastodon']['encryption']['primary_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY: "{{ secrets['mastodon']['encryption']['deterministic_key'] }}"
+          ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT: "{{ secrets['mastodon']['encryption']['salt'] }}"
+        volume:
+          - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl:/etc/ssl/mastodon:ro"
+      no_log: true
+
+- name: Create the mastodon .migrated marker
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon/.migrated_{{ releases['containers']['mastodon']['tag'] }}"
+    state: "touch"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  when: not containers_mastodon_migrated_marker['stat']['exists']
+
+- name: Deploy the container files
+  ansible.builtin.template:
+    src: "mastodon/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/{{ item }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - "mastodon-web.container"
+    - "mastodon-worker.container"
+  notify: "notification_restart_mastodon"
+
+- name: Set the mastodon-streaming target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "mastodon-streaming"
+
+- name: Deploy the mastodon-streaming image
+  vars:
+    containers_image_notifications: "notification_restart_mastodon"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "mastodon/mastodon-streaming.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/mastodon-streaming.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_mastodon"
+
+- name: Start the mastodon
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "{{ item }}"
+    state: "started"
+    daemon_reload: true
+  loop:
+    - "mastodon-web.service"
+    - "mastodon-worker.service"
+    - "mastodon-streaming.service"
+  register: "containers_mastodon_started"
+
+- name: Apply the mastodon configuration handlers
+  ansible.builtin.meta: "flush_handlers"

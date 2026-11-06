@@ -616,3 +616,59 @@ services:
           dependency:
             web:
               status: true
+    mastodon:
+      units:
+        main:
+          release: "mastodon"
+          hosts: ["app"]
+          domain:
+            public: "mastodon"
+            internal: "mastodon.app"
+          subuid: 100990
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3002
+              container: 3000
+            api:
+              protocol: "tcp"
+              int: 4000
+              container: 4000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            s3:
+              status: true
+              buckets:
+                - name: "mastodon"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/auth/auth/openid_connect/callback"]
+              scopes: ["openid", "groups", "email", "profile"]
+              auth_method: "client_secret_basic"
+              pkce: true
+          route:
+            api: "/api/v1/streaming*"
+        streaming:
+          release: "mastodon-streaming"
+          hosts: ["app"]
+          subuid: 100990
+        worker:
+          release: "mastodon"
+          hosts: ["app"]
+          subuid: 100990
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6379
+              container: 6379

@@ -1,0 +1,87 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Mastodon Web
+
+After=network-online.target valkey_mastodon.service
+Wants=network-online.target valkey_mastodon.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=mastodon-web
+HostName=mastodon-web
+
+PublishPort={{ services['containers']['mastodon']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['mastodon']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['mastodon']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl:/etc/ssl/mastodon:ro
+
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="LOCAL_DOMAIN={{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="LIMITED_FEDERATION_MODE=true"
+Environment="DISALLOW_UNAUTHENTICATED_API_ACCESS=true"
+Environment="ES_ENABLED=false"
+Environment="RAILS_LOG_LEVEL=info"
+Environment="TRUSTED_PROXY_IP={{ containers_trusted_proxies | join(',') }}"
+
+# PostgreSQL
+Environment="DB_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DB_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DB_NAME=mastodon_db"
+Environment="DB_USER=mastodon"
+Environment="DB_SSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/mastodon/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=MASTODON_POSTGRES_PASSWORD,type=env,target=DB_PASS
+
+# Redis
+Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['mastodon']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# Rails secrets
+Secret=MASTODON_SECRET_KEY_BASE,type=env,target=SECRET_KEY_BASE
+Secret=MASTODON_ENCRYPTION_PRIMARY_KEY,type=env,target=ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY
+Secret=MASTODON_ENCRYPTION_DETERMINISTIC_KEY,type=env,target=ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY
+Secret=MASTODON_ENCRYPTION_SALT,type=env,target=ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT
+Secret=MASTODON_VAPID_PRIVATE_KEY,type=env,target=VAPID_PRIVATE_KEY
+Secret=MASTODON_VAPID_PUBLIC_KEY,type=env,target=VAPID_PUBLIC_KEY
+
+# OIDC - Authelia
+Environment="OIDC_ENABLED=true"
+Environment="OIDC_DISPLAY_NAME=Sign in with Authelia"
+Environment="OIDC_ISSUER=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OIDC_DISCOVERY=true"
+Environment="OIDC_SCOPE=openid,groups,profile,email"
+Environment="OIDC_UID_FIELD=preferred_username"
+Environment="OIDC_CLIENT_ID=mastodon"
+Environment="OIDC_REDIRECT_URI=https://{{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/auth/auth/openid_connect/callback"
+Environment="OIDC_SECURITY_ASSUME_EMAIL_IS_VERIFIED=false"
+Environment="OMNIAUTH_ONLY=true"
+Environment="ONE_CLICK_SSO_LOGIN=true"
+Environment="OIDC_USE_PKCE=true"
+Secret=MASTODON_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# S3
+Environment="S3_ENABLED=true"
+Environment="S3_BUCKET=mastodon"
+Environment="S3_REGION=us-east-1"
+Environment="S3_ENDPOINT=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="S3_OVERRIDE_PATH_STYLE=false"
+Environment="S3_PROTOCOL=https"
+Environment="S3_HOSTNAME={{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="S3_PERMISSION="
+Environment="AWS_ACCESS_KEY_ID=mastodon"
+Secret=MASTODON_S3_SECRET_KEY,type=env,target=AWS_SECRET_ACCESS_KEY
+
+# Process
+Exec=bundle exec puma -C config/puma.rb
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
