@@ -206,3 +206,7 @@ releases:
       name: "forgejo"
       repository: "codeberg.org/forgejo/forgejo"
       tag: "15.0.11"
+    oxicloud:
+      name: "oxicloud"
+      repository: "docker.io/diocrafts/oxicloud"
+      tag: "0.10.0"

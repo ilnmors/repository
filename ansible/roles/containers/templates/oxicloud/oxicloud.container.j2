@@ -1,0 +1,54 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=OxiCloud
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=oxicloud
+HostName=oxicloud
+
+PublishPort={{ services['containers']['oxicloud']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['oxicloud']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['oxicloud']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/oxicloud/storage:/app/storage:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/oxicloud/ssl:/etc/ssl/oxicloud:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="OXICLOUD_BASE_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OXICLOUD_TRUST_PROXY_CIDR={{ containers_trusted_proxies | map('regex_replace', '^([^:]+)$', '\\1/32') | map('regex_replace', '^(.*:.*)$', '\\1/128') | join(',') }}"
+Secret=OXICLOUD_JWT_SECRET,type=env,target=OXICLOUD_JWT_SECRET
+
+# PostgreSQL
+Secret=OXICLOUD_DB_CONNECTION_STRING,type=env,target=OXICLOUD_DB_CONNECTION_STRING
+
+# OIDC (DAV clients use the app passwords from Profile > App Passwords)
+Environment="OXICLOUD_AUTH_METHODS=oidc"
+Environment="OXICLOUD_OIDC_ENABLED=true"
+Environment="OXICLOUD_OIDC_ISSUER_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OXICLOUD_OIDC_CLIENT_ID=oxicloud"
+Environment="OXICLOUD_OIDC_REDIRECT_URI=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/auth/oidc/callback"
+Environment="OXICLOUD_OIDC_FRONTEND_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OXICLOUD_OIDC_SCOPES=openid profile email groups"
+Environment="OXICLOUD_OIDC_ADMIN_GROUPS=admins"
+Environment="OXICLOUD_OIDC_PROVIDER_NAME=Authelia"
+Secret=OXICLOUD_OIDC_CLIENT_SECRET,type=env,target=OXICLOUD_OIDC_CLIENT_SECRET
+
+# WOPI (Collabora)
+Environment="OXICLOUD_WOPI_ENABLED=true"
+Environment="OXICLOUD_WOPI_DISCOVERY_URL=http://host.containers.internal:{{ services['containers']['collabora']['units']['main']['ports']['http']['int'] }}/hosting/discovery"
+Environment="OXICLOUD_WOPI_PUBLIC_BASE_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

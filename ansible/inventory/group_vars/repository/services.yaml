@@ -555,3 +555,30 @@ services:
               redirect_uris: ["/user/oauth2/authelia/callback"]
               scopes: ["openid", "email", "profile"]
               auth_method: "client_secret_basic"
+    oxicloud:
+      units:
+        main:
+          release: "oxicloud"
+          hosts: ["app"]
+          domain:
+            public: "oxicloud"
+            internal: "oxicloud.app"
+          # oxicloud (uid 1001) in the official image.
+          subuid: 101000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8007
+              container: 8086
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/auth/oidc/callback"]
+              scopes: ["openid", "profile", "email", "groups"]
+              auth_method: "client_secret_post"
+              pkce: true
