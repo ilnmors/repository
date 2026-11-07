@@ -222,6 +222,10 @@ releases:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
       tag: "v4.7.2"
+    kaneo:
+      name: "kaneo"
+      repository: "ghcr.io/usekaneo/kaneo"
+      tag: "2.23.2"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"

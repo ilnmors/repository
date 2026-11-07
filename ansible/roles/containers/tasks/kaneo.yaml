@@ -1,0 +1,111 @@
+---
+- name: Register the kaneo database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the kaneo rustfs client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_rustfs_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "rustfs.yaml"
+    apply:
+      delegate_to: "{{ containers_rustfs_host }}"
+
+- name: Register the kaneo authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "kaneo"
+
+- name: Register the missing kaneo secret key on secrets.yaml
+  vars:
+    secrets_target: '["kaneo"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['kaneo']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the kaneo fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "KANEO_AUTH_SECRET"
+        value: "{{ secrets['kaneo']['secret_key'] }}"
+      - name: "KANEO_DB_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['kaneo'] }}"
+      - name: "KANEO_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['kaneo']['oidc']['secret'] }}"
+      - name: "KANEO_S3_SECRET_KEY"
+        value: "{{ secrets['rustfs']['password']['kaneo'] }}"
+  no_log: true
+
+- name: Create the kaneo directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['kaneo']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/kaneo"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/kaneo/ssl"
+  become: true
+
+- name: Deploy the kaneo root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/kaneo/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['kaneo']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_kaneo"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_kaneo"
+  no_log: true
+
+- name: Deploy the kaneo image
+  vars:
+    containers_image_notifications: "notification_restart_kaneo"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "kaneo/kaneo.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/kaneo.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_kaneo"
+
+- name: Start the kaneo
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "kaneo.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_kaneo_started"
+
+- name: Apply the kaneo configuration handlers
+  ansible.builtin.meta: "flush_handlers"

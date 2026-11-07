@@ -1,0 +1,58 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Kaneo
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=kaneo
+HostName=kaneo
+
+PublishPort={{ services['containers']['kaneo']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['kaneo']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['kaneo']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/kaneo/ssl:/etc/ssl/kaneo:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/kaneo/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Environment="DISABLE_LOGIN_FORM=true"
+Environment="DISABLE_PASSWORD_REGISTRATION=true"
+Environment="DISABLE_REGISTRATION=false"
+Environment="DISABLE_GUEST_ACCESS=true"
+Environment="KANEO_CLIENT_URL=https://{{ services['containers']['kaneo']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Secret=KANEO_AUTH_SECRET,type=env,target=AUTH_SECRET
+
+# PostgreSQL
+Environment="POSTGRES_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="POSTGRES_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="POSTGRES_DB=kaneo_db"
+Environment="POSTGRES_USER=kaneo"
+Environment="PGSSLMODE=verify-full"
+Secret=KANEO_DB_PASSWORD,type=env,target=POSTGRES_PASSWORD
+
+# OIDC
+Environment="CUSTOM_OAUTH_CLIENT_ID=kaneo"
+Environment="CUSTOM_OAUTH_DISCOVERY_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration"
+Environment="CUSTOM_OAUTH_SCOPES=openid,profile,email"
+Environment="CUSTOM_AUTH_PKCE=true"
+Secret=KANEO_OIDC_CLIENT_SECRET,type=env,target=CUSTOM_OAUTH_CLIENT_SECRET
+
+# S3 (RustFS)
+Environment="S3_ENDPOINT=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="S3_BUCKET=kaneo"
+Environment="S3_ACCESS_KEY_ID=kaneo"
+Environment="S3_REGION=us-east-1"
+Environment="S3_FORCE_PATH_STYLE=true"
+Secret=KANEO_S3_SECRET_KEY,type=env,target=S3_SECRET_ACCESS_KEY
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

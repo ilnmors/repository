@@ -159,5 +159,13 @@
   when: target_host in services['containers']['mastodon']['units']['main']['hosts']
   tags: ["mastodon"]
 
+- name: Include the kaneo task
+  ansible.builtin.include_tasks:
+    file: "kaneo.yaml"
+    apply:
+      tags: ["kaneo"]
+  when: target_host in services['containers']['kaneo']['units']['main']['hosts']
+  tags: ["kaneo"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

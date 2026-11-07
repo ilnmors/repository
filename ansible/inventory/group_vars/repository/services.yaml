@@ -672,3 +672,36 @@ services:
               protocol: "tcp"
               int: 6379
               container: 6379
+    kaneo:
+      units:
+        main:
+          release: "kaneo"
+          hosts: ["app"]
+          domain:
+            public: "kaneo"
+            internal: "kaneo.app"
+          subuid: 101000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8006
+              container: 5173
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/auth/oauth2/callback/custom"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+              pkce: true
+            s3:
+              status: true
+              buckets:
+              - "name": "kaneo"
+                actions:
+                  bucket: ["ListBucket", "GetBucketLocation"]
+                  object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
