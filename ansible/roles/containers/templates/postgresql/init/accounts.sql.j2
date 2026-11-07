@@ -1,5 +1,11 @@
 SET standard_conforming_strings = on;
 
+SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'alloy') AS create_role \gset
+\if :create_role
+CREATE ROLE "alloy" WITH LOGIN;
+\endif
+GRANT pg_monitor TO "alloy";
+
 {% for service in containers_postgresql_services %}
 SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ service }}') AS create_role \gset
 \if :create_role

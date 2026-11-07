@@ -1,6 +1,17 @@
 # Local administration and backups in the container.
 local all all trust
 
+# Alloy metrics from the PostgreSQL host.
+{% for host in services['containers']['postgresql']['units']['main']['hosts'] %}
+{% for family in ['ipv4', 'ipv6'] %}
+{% if networks['segments']['server']['hosts'][host][family] | default('', true) | length > 0 %}
+hostssl postgres alloy {{ networks['segments']['server']['hosts'][host][family] }}/{{ 32 if family == 'ipv4' else 128 }} trust
+{% endif %}
+{% endfor %}
+{% endfor %}
+hostssl postgres alloy 169.254.1.0/24 trust
+hostssl postgres alloy fe80::/64 trust
+
 # Container loopback and rootless host forwarding.
 host all all 127.0.0.1/32 scram-sha-256
 host all all ::1/128 scram-sha-256

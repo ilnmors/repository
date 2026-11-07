@@ -144,6 +144,38 @@ prometheus.scrape "x509" {
     forward_to   = [prometheus.relabel.service_metrics.receiver]
 }
 {% endif %}
+{% if target_host in services['containers']['postgresql']['units']['main']['hosts'] %}
+
+// PostgreSQL metrics input
+prometheus.exporter.postgres "postgresql" {
+    data_source_names = [
+        "postgres://alloy@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/postgres?sslmode=verify-full",
+    ]
+}
+
+prometheus.scrape "postgresql" {
+    targets    = prometheus.exporter.postgres.postgresql.targets
+    forward_to = [prometheus.relabel.service_metrics.receiver]
+}
+{% endif %}
+{% if target_host in services['containers']['caddy']['units']['main']['hosts'] %}
+
+// Caddy metrics input
+prometheus.scrape "caddy" {
+    targets = [
+        {
+            "__address__" = "caddy.{{ target_host }}.{{ site['domain']['internal'] }}:443",
+            "job"         = "caddy",
+            "name"        = "caddy",
+        },
+    ]
+
+    scheme       = "https"
+    metrics_path = "/metrics"
+    honor_labels = true
+    forward_to   = [prometheus.relabel.service_metrics.receiver]
+}
+{% endif %}
 
 
 // Loki

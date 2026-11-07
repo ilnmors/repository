@@ -12,6 +12,17 @@ groups:
         summary: "Exporter heartbeat is down: {{ instance }}"
         description: "{{ instance }} exporter is down for 5 mins"
 {% endfor %}
+  - name: postgresql_heartbeat
+    rules:
+      - alert: Postgresql_Down
+        expr: |
+          (max_over_time(pg_up{instance="{{ containers_postgresql_host }}", job="postgres"}[5m]) or on() vector(0)) == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgresql Heartbeat Lost: postgresql"
+          description: "postgresql node is down for 5 mins."
   - name: certificate_expiry_check
     rules:
       - alert: CertificateMetricsMissing

@@ -92,6 +92,8 @@ networks:
           ipv4: "192.168.10.12"
           ipv6: "fd00:10::12"
           domain: "auth"
+          alias:
+            - "*.auth"
         app:
           ipv4: "192.168.10.13"
           ipv6: "fd00:10::13"

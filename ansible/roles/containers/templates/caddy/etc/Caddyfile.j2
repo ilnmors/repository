@@ -73,6 +73,12 @@
     )
 %}
 
+# Metrics
+caddy.{{ target_host }}.{{ site['domain']['internal'] }} {
+        import private_tls
+        metrics
+}
+
 {% for service in caddy_services %}
 {% if target_host in service['hosts'] and (service['domain']['internal'] | default('', true) | length) > 0 %}
 {{ service['domain']['internal'] }}.{{ site['domain']['internal'] }} {
