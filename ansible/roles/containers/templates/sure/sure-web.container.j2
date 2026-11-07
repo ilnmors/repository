@@ -1,0 +1,93 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Sure Web
+
+After=network-online.target valkey_sure.service
+Wants=network-online.target valkey_sure.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=sure-web
+HostName=sure-web
+
+PublishPort={{ services['containers']['sure']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['sure']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['sure']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/sure/ssl:/etc/ssl/sure:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="SELF_HOSTED=true"
+Environment="ONBOARDING_STATE=closed"
+Environment="RAILS_FORCE_SSL=false"
+Environment="RAILS_ASSUME_SSL=true"
+Environment="APP_DOMAIN={{ services['containers']['sure']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Secret=SURE_SECRET_KEY_BASE,type=env,target=SECRET_KEY_BASE
+
+# PostgreSQL
+Environment="POSTGRES_USER=sure"
+Environment="POSTGRES_DB=sure_db"
+Environment="DB_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DB_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="PGSSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/sure/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=SURE_POSTGRES_PASSWORD,type=env,target=POSTGRES_PASSWORD
+
+# Redis
+Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['sure']['units']['valkey']['ports']['tcp']['int'] }}/1"
+
+# OIDC - Authelia
+Environment="OIDC_CLIENT_ID=sure"
+Environment="OIDC_ISSUER=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OIDC_REDIRECT_URI=https://{{ services['containers']['sure']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/auth/openid_connect/callback"
+Environment="OIDC_BUTTON_LABEL=Sign in with Authelia"
+Environment="AUTH_LOCAL_LOGIN_ENABLED=false"
+Environment="AUTH_LOCAL_ADMIN_OVERRIDE_ENABLED=false"
+Environment="AUTH_PASSKEY_LOGIN_ENABLED=false"
+Environment="AUTH_JIT_MODE=create_and_link"
+# email's domain, e.g. ilnmors.internal then only user@ilnmors.internal is allowed to sign-up
+Environment="ALLOWED_OIDC_DOMAINS="
+Secret=SURE_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# WebAuthn / Passkey
+Environment="WEBAUTHN_RP_ID={{ site['domain']['public'] }}"
+Environment="WEBAUTHN_ALLOWED_ORIGINS=https://{{ services['containers']['sure']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+
+# Provider
+## Currency
+Environment="EXCHANGE_RATE_PROVIDER=yahoo_finance"
+Environment="SECURITIES_PROVIDER=yahoo_finance"
+
+# AI backend
+Environment="ASSISTANT_TYPE=builtin"
+{% if containers_sure_ai_enabled %}
+# Open WebUI is the only AI gateway.
+Environment="OPENAI_URI_BASE=http://host.containers.internal:{{ services['containers']['openwebui']['units']['main']['ports']['http']['int'] }}/api"
+Environment="OPENAI_MODEL={{ services['containers']['sure']['units']['main']['ai']['model'] }}"
+Secret=SURE_OPENWEBUI_API_KEY,type=env,target=OPENAI_ACCESS_TOKEN
+{% endif %}
+Environment="LLM_CONTEXT_WINDOW=8192"
+Environment="OPENAI_REQUEST_TIMEOUT=600"
+Environment="ASSISTANT_MAX_TOOL_CALL_ITERATIONS=2"
+Environment="AI_RESPONSE_TIMEOUT=2400"
+
+# S3
+Environment="ACTIVE_STORAGE_SERVICE=generic_s3"
+Environment="GENERIC_S3_ACCESS_KEY_ID=sure"
+Environment="GENERIC_S3_REGION=us-east-1"
+Environment="GENERIC_S3_BUCKET=sure"
+Environment="GENERIC_S3_ENDPOINT=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="GENERIC_S3_FORCE_PATH_STYLE=true"
+Secret=SURE_S3_SECRET_KEY,type=env,target=GENERIC_S3_SECRET_ACCESS_KEY
+
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

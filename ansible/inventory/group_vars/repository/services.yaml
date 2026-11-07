@@ -869,3 +869,52 @@ services:
           ai:
             embedding_model: ""
             image_model: ""
+    sure:
+      units:
+        main:
+          release: "sure"
+          hosts: ["app"]
+          domain:
+            public: "sure"
+            internal: "sure.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3006
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            s3:
+              status: true
+              buckets:
+                - name: "sure"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/auth/openid_connect/callback"]
+              scopes: ["openid", "email", "profile", "groups"]
+              auth_method: "client_secret_basic"
+              pkce: true
+          # Open WebUI model id. Needs secrets['sure']['openwebui_api_key'] (created in Open WebUI). Empty disables AI.
+          ai:
+            model: ""
+        worker:
+          release: "sure"
+          hosts: ["app"]
+          subuid: 100999
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6383
+              container: 6379

@@ -1,0 +1,138 @@
+---
+- name: Register the sure database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the sure rustfs client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_rustfs_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "rustfs.yaml"
+    apply:
+      delegate_to: "{{ containers_rustfs_host }}"
+
+- name: Register the sure authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the sure valkey
+  vars:
+    containers_valkey_service: "sure"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "sure"
+
+- name: Register the missing sure secret key on secrets.yaml
+  vars:
+    secrets_target: '["sure"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['sure']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the sure fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "SURE_SECRET_KEY_BASE"
+        value: "{{ secrets['sure']['secret_key'] }}"
+      - name: "SURE_POSTGRES_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['sure'] }}"
+      - name: "SURE_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['sure']['oidc']['secret'] }}"
+      - name: "SURE_S3_SECRET_KEY"
+        value: "{{ secrets['rustfs']['password']['sure'] }}"
+  no_log: true
+
+- name: Set the sure AI fact
+  ansible.builtin.set_fact:
+    containers_sure_ai_enabled: >-
+      {{
+        (services['containers']['sure']['units']['main']['ai']['model'] | length) > 0
+        and (secrets['sure']['openwebui_api_key'] | default('', true) | length) > 0
+      }}
+  no_log: true
+
+- name: Add the sure AI secret
+  ansible.builtin.set_fact:
+    containers_secrets: "{{ containers_secrets + [{'name': 'SURE_OPENWEBUI_API_KEY', 'value': secrets['sure']['openwebui_api_key']}] }}"
+  when: containers_sure_ai_enabled
+  no_log: true
+
+- name: Create the sure directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['sure']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/sure"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/sure/ssl"
+  become: true
+
+- name: Deploy the sure root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/sure/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['sure']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_sure"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_sure"
+  no_log: true
+
+- name: Deploy the sure image
+  vars:
+    containers_image_notifications: "notification_restart_sure"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container files
+  ansible.builtin.template:
+    src: "sure/{{ item }}.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/{{ item }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - "sure-web.container"
+    - "sure-worker.container"
+  notify: "notification_restart_sure"
+
+- name: Start the sure
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "{{ item }}"
+    state: "started"
+    daemon_reload: true
+  loop:
+    - "sure-web.service"
+    - "sure-worker.service"
+  register: "containers_sure_started"
+
+- name: Apply the sure configuration handlers
+  ansible.builtin.meta: "flush_handlers"

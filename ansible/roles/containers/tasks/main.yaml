@@ -207,5 +207,13 @@
   when: target_host in services['containers']['openwebui']['units']['main']['hosts']
   tags: ["openwebui"]
 
+- name: Include the sure task
+  ansible.builtin.include_tasks:
+    file: "sure.yaml"
+    apply:
+      tags: ["sure"]
+  when: target_host in services['containers']['sure']['units']['main']['hosts']
+  tags: ["sure"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

@@ -246,6 +246,10 @@ releases:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
       tag: "v0.12.3"
+    sure:
+      name: "sure"
+      repository: "ghcr.io/we-promise/sure"
+      tag: "0.7.4"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
