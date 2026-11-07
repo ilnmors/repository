@@ -1,6 +1,7 @@
 {% set build = (services['containers'][target_container]['units']['main']['build']) %}
 {% if target_host in build['http-bouncer']['hosts'] and target_host in build['crowdsec-bouncer']['hosts'] %}
 {
+        metrics
         # CrowdSec LAPI connection
         crowdsec {
                 api_url https://{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['crowdsec']['units']['lapi']['ports']['https']['ext'] }}
@@ -21,6 +22,7 @@
 }
 {% else %}
 {
+        metrics
         servers {
 {% if build['crowdsec-bouncer']['hosts'] | length > 0 %}
                 trusted_proxies static{% for item in (build['crowdsec-bouncer']['hosts'] | unique | list) %} {{ networks['segments']['server']['hosts'][item]['ipv4'] }}{% if networks['segments']['server']['hosts'][item]['ipv6'] | default(none) %} {{ networks['segments']['server']['hosts'][item]['ipv6'] }}{% endif %}{% endfor %}
