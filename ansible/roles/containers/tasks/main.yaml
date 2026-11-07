@@ -223,5 +223,13 @@
   when: target_host in services['containers']['papra']['units']['main']['hosts']
   tags: ["papra"]
 
+- name: Include the homepage task
+  ansible.builtin.include_tasks:
+    file: "homepage.yaml"
+    apply:
+      tags: ["homepage"]
+  when: target_host in services['containers']['homepage']['units']['main']['hosts']
+  tags: ["homepage"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

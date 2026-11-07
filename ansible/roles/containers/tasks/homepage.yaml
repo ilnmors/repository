@@ -1,0 +1,75 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "homepage"
+
+- name: Create the homepage directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/homepage"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/images"
+  become: true
+
+- name: Deploy the homepage configuration files
+  ansible.builtin.template:
+    src: "{{ item['src'] }}"
+    dest: "{{ item['dest'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  loop:
+    - src: "homepage/config/settings.yaml.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config/settings.yaml"
+    - src: "homepage/config/widgets.yaml.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config/widgets.yaml"
+    - src: "homepage/config/services.yaml.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config/services.yaml"
+    - src: "homepage/config/bookmarks.yaml.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config/bookmarks.yaml"
+    - src: "homepage/config/custom.css.j2"
+      dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/config/custom.css"
+  loop_control:
+    label: "{{ item['dest'] | basename }}"
+  become: true
+  notify: "notification_restart_homepage"
+
+- name: Deploy the homepage images
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/homepage/images/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/homepage/images/"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_homepage"
+
+- name: Deploy the homepage image
+  vars:
+    containers_image_notifications: "notification_restart_homepage"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "homepage/homepage.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/homepage.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_homepage"
+
+- name: Start the homepage
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "homepage.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_homepage_started"
+
+- name: Apply the homepage configuration handlers
+  ansible.builtin.meta: "flush_handlers"

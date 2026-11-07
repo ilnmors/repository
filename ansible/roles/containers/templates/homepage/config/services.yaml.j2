@@ -1,0 +1,49 @@
+{% set catalog = {
+  'Productivity': {
+    'snappymail': {'name': 'SnappyMail', 'icon': 'snappymail', 'description': 'Mail'},
+    'vaultwarden': {'name': 'Vaultwarden', 'icon': 'vaultwarden', 'description': 'Passwords'},
+    'kaneo': {'name': 'Kaneo', 'icon': 'mdi-view-column-outline', 'description': 'Projects'},
+    'sure': {'name': 'Sure', 'icon': 'mdi-finance', 'description': 'Finance'},
+    'forgejo': {'name': 'Forgejo', 'icon': 'forgejo', 'description': 'Git'},
+    'openwebui': {'name': 'Open WebUI', 'icon': 'open-webui', 'description': 'AI'},
+    'mastodon': {'name': 'Mastodon', 'icon': 'mastodon', 'description': 'Social'}
+  },
+  'Files & Media': {
+    'oxicloud': {'name': 'OxiCloud', 'icon': 'mdi-cloud-outline', 'description': 'Files, calendar and contacts'},
+    'immich': {'name': 'Immich', 'icon': 'immich', 'description': 'Photos'},
+    'papra': {'name': 'Papra', 'icon': 'mdi-file-document-outline', 'description': 'Documents'}
+  },
+  'Knowledge': {
+    'outline': {'name': 'Outline', 'icon': 'outline', 'description': 'Wiki'},
+    'bookstack': {'name': 'BookStack', 'icon': 'bookstack', 'description': 'Books'},
+    'linkding': {'name': 'linkding', 'icon': 'linkding', 'description': 'Bookmarks and archive'}
+  }
+} %}
+{% set admin_icons = {'ldap': 'lldap'} %}
+{% set web_services = (
+    (services['packages'] | dict2items) + (services['containers'] | dict2items)
+  )
+  | selectattr('value.units.main', 'defined')
+  | selectattr('value.units.main.dependency.web.status', 'defined')
+  | selectattr('value.units.main.dependency.web.status', 'equalto', true)
+  | list
+%}
+{% for group, members in catalog.items() %}
+- {{ group }}:
+{% for key, card in members.items() %}
+{% set unit = services['containers'][key]['units']['main'] %}
+    - {{ card['name'] }}:
+        icon: {{ card['icon'] }}
+        description: {{ card['description'] }}
+        href: https://{{ unit['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ unit['ports']['http']['int'] }}
+{% endfor %}
+{% endfor %}
+- Admin:
+{% for item in web_services %}
+{% if (item['value']['units']['main']['domain']['public'] | default('', true) | length) == 0 %}
+    - {{ item['key'] }}:
+        icon: {{ admin_icons.get(item['key'], item['key']) }}
+        href: https://{{ item['value']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+{% endif %}
+{% endfor %}

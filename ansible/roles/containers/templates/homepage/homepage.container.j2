@@ -1,0 +1,30 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Homepage
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=homepage
+HostName=homepage
+
+PublishPort={{ services['containers']['homepage']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['homepage']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['homepage']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/homepage/config:/app/config:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/homepage/images:/app/public/images:ro
+
+# Environment
+Environment="TZ={{ site['timezone'] }}"
+# The public root domain will be the domain of homepage
+Environment="HOMEPAGE_ALLOWED_HOSTS={{ site['domain']['public'] }},www.{{ site['domain']['public'] }}"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

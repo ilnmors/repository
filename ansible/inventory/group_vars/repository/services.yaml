@@ -940,3 +940,19 @@ services:
               redirect_uris: ["/api/auth/oauth2/callback/authelia"]
               scopes: ["openid", "profile", "email"]
               auth_method: "client_secret_post"
+    homepage:
+      units:
+        main:
+          release: "homepage"
+          hosts: ["app"]
+          domain:
+            public: "@"
+            internal: "homepage.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3000
+              container: 3000
+          dependency:
+            web:
+              status: true

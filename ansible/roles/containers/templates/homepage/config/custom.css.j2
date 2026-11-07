@@ -1,0 +1,18 @@
+/* Softer cards on top of the background image. */
+.service-card,
+.bookmark {
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 0.875rem;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.service-card:hover,
+.bookmark:hover {
+  transform: translateY(-2px);
+  border-color: rgb(45 212 191 / 45%);
+}
+
+.service-group-name,
+.bookmark-group-name {
+  letter-spacing: 0.04em;
+}
