@@ -1,0 +1,22 @@
+---
+- name: Manage the PKI
+  hosts: "console"
+  vars:
+    secrets: "{{ hostvars['console']['secrets'] }}"
+    target_host: "console"
+    control_host: "console"
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Load secrets
+      ansible.builtin.include_role:
+        name: "secrets"
+        apply:
+          tags: ["always"]
+      tags: ["always"]
+  tasks:
+    - name: Manage the root, intermediate, leaf and SSH certificates
+      ansible.builtin.include_role:
+        name: "secrets"
+        tasks_from: "pki"
+      tags: ["always"]
