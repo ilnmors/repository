@@ -70,7 +70,7 @@ services:
       units:
         main:
           release: "logrotate"
-          hosts: ["vmm"]
+          hosts: ["vmm", "infra"]
     conntrack:
       units:
         main:
