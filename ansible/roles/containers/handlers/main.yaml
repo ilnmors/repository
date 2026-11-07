@@ -310,3 +310,15 @@
   register: "result_restart_outline"
   listen: "notification_restart_outline"
   ignore_errors: true
+
+- name: Restart the bookstack.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "bookstack.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_bookstack_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_bookstack"
+  listen: "notification_restart_bookstack"
+  ignore_errors: true

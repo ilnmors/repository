@@ -1,0 +1,69 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Bookstack
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=bookstack
+HostName=bookstack
+
+PublishPort={{ services['containers']['bookstack']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['bookstack']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['bookstack']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/bookstack/ssl:/etc/ssl/bookstack:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="APP_ENV=production"
+Environment="APP_DEBUG=false"
+Environment="APP_URL=https://{{ services['containers']['bookstack']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+# 169.254.1.2 is podman pasta APIPA ip address to communicate the other container in the same host
+Environment="APP_PROXIES={{ containers_trusted_proxies | join(',') }}"
+
+# Secrets
+Secret=BOOKSTACK_SECRET_KEY,type=env,target=APP_KEY
+
+# Database (MariaDB)
+Environment="DB_HOST={{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['mariadb']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DB_DATABASE=bookstack_db"
+Environment="DB_USERNAME=bookstack"
+Environment="MYSQL_ATTR_SSL_CA=/etc/ssl/bookstack/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=BOOKSTACK_DB_PASSWORD,type=env,target=DB_PASSWORD
+
+# OIDC
+Environment="AUTH_METHOD=oidc"
+Environment="AUTH_AUTO_INITIATE=false"
+Environment="OIDC_NAME=Authelia"
+Environment="OIDC_ISSUER=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OIDC_ISSUER_DISCOVER=true"
+Environment="OIDC_CLIENT_ID=bookstack"
+Environment="OIDC_ADDITIONAL_SCOPES=groups"
+Environment="OIDC_DISPLAY_NAME_CLAIMS=name"
+Environment="OIDC_GROUPS_CLAIM=groups"
+Environment="OIDC_USER_TO_GROUPS=true"
+Environment="OIDC_REMOVE_FROM_GROUPS=true"
+Environment="OIDC_END_SESSION_ENDPOINT=false"
+Secret=BOOKSTACK_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# S3
+Environment="STORAGE_TYPE=s3"
+Environment="STORAGE_IMAGE_TYPE=s3"
+Environment="STORAGE_ATTACHMENT_TYPE=s3"
+Environment="STORAGE_S3_KEY=bookstack"
+Environment="STORAGE_S3_BUCKET=bookstack"
+Environment="STORAGE_S3_REGION=us-east-1"
+Environment="STORAGE_S3_ENDPOINT=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="STORAGE_URL=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/bookstack"
+Secret=BOOKSTACK_S3_SECRET_KEY,type=env,target=STORAGE_S3_SECRET
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['mariadb']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

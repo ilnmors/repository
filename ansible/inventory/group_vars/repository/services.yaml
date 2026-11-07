@@ -787,3 +787,36 @@ services:
               protocol: "tcp"
               int: 6382
               container: 6379
+    bookstack:
+      units:
+        main:
+          release: "bookstack"
+          hosts: ["app"]
+          domain:
+            public: "bookstack"
+            internal: "bookstack.app"
+          subuid: 100032
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8004
+              container: 8080
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "mariadb"
+            s3:
+              status: true
+              buckets:
+                - name: "bookstack"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/oidc/callback"]
+              scopes: ["openid", "profile", "email", "groups"]
+              auth_method: "client_secret_basic"
+              pkce: true
