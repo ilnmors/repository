@@ -84,7 +84,17 @@
             {{ packages_backup_path | quote }}
           args:
             executable: "/bin/bash"
+          become: true
           changed_when: true
+
+        - name: Set the owner of the restored rclone data
+          ansible.builtin.file:
+            path: "{{ packages_backup_path }}"
+            state: "directory"
+            recurse: true
+            owner: "{{ nodes[target_host]['user'] }}"
+            group: "{{ nodes[target_host]['group'] }}"
+          become: true
 
         - name: Clear the pending rclone restore
           ansible.builtin.file:
