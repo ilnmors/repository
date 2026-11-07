@@ -74,7 +74,7 @@
         - "postgresql.conf"
         - "pg_hba.conf"
       become: true
-      notify: "notification_reload_postgresql"
+      notify: "notification_restart_postgresql"
 
     - name: Deploy the PostgreSQL certificate and key
       ansible.builtin.copy:
@@ -97,7 +97,7 @@
           value: "{{ secrets['ca']['x509']['leaf'][services['containers']['postgresql']['units']['main']['domain']['internal']]['key'] }}"
           mode: "0400"
       become: true
-      notify: "notification_reload_postgresql"
+      notify: "notification_restart_postgresql"
       no_log: true
 
     - name: Check the PostgreSQL .init marker
