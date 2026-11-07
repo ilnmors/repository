@@ -12,8 +12,8 @@ hardwares:
         model: "IrisXE"
         vendor: "intel"
         driver: "i915"
-        id: null # "8086:46a8"
-        address: null # "0000:00:02.0"
+        id: "8086:46a8"
+        address: "0000:00:02.0"
       gpu02:
         # A discrete GPU usually shares its IOMMU group with its HDMI/DP audio function (e.g. 0000:03:00.1).
         # VFIO needs every endpoint in the group bound to vfio-pci, otherwise the group is "not viable"
