@@ -19,6 +19,8 @@
 - name: Install the packages from the Debian APT repository
   ansible.builtin.apt:
     name: "{{ packages_host_debian_package_list }}"
+    update_cache: true
+    cache_valid_time: 3600
   become: true
   tags: ["apt-packages"]
 
