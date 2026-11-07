@@ -705,3 +705,44 @@ services:
                 actions:
                   bucket: ["ListBucket", "GetBucketLocation"]
                   object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+    immich:
+      units:
+        main:
+          release: "immich"
+          hosts: ["app"]
+          domain:
+            public: "immich"
+            internal: "immich.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 2283
+              container: 2283
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/auth/login", "/user-settings", "app.immich:///oauth-callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+        ml:
+          release: "immich-ml"
+          hosts: ["app"]
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3003
+              container: 3003
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6381
+              container: 6379

@@ -226,7 +226,15 @@ releases:
       name: "kaneo"
       repository: "ghcr.io/usekaneo/kaneo"
       tag: "2.23.2"
+    immich:
+      name: "immich"
+      repository: "ghcr.io/immich-app/immich-server"
+      tag: "v3.3.5"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
       tag: "v4.7.2"
+    immich-ml:
+      name: "immich-ml"
+      repository: "ghcr.io/immich-app/immich-machine-learning"
+      tag: "v3.3.5-openvino"

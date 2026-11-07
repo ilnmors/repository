@@ -167,5 +167,13 @@
   when: target_host in services['containers']['kaneo']['units']['main']['hosts']
   tags: ["kaneo"]
 
+- name: Include the immich task
+  ansible.builtin.include_tasks:
+    file: "immich.yaml"
+    apply:
+      tags: ["immich"]
+  when: target_host in services['containers']['immich']['units']['main']['hosts']
+  tags: ["immich"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

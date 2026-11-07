@@ -1,0 +1,32 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Immich Machine Learning
+
+After=immich.service
+Wants=immich.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=immich-ml
+HostName=immich-ml
+
+PublishPort={{ services['containers']['immich']['units']['ml']['ports']['http']['int'] }}:{{ services['containers']['immich']['units']['ml']['ports']['http']['container'] }}/{{ services['containers']['immich']['units']['ml']['ports']['http']['protocol'] }}
+
+# iGPU access for OpenVINO
+AddDevice=/dev/dri:/dev/dri
+PodmanArgs=--group-add keep-groups
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/immich/ml/cache:/cache:rw
+
+Environment="TZ={{ site['timezone'] }}"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

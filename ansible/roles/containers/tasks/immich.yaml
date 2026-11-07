@@ -1,0 +1,118 @@
+---
+- name: Register the immich database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the immich authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the immich valkey
+  vars:
+    containers_valkey_service: "immich"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "immich"
+
+- name: Set the immich fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "IMMICH_DB_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['immich'] }}"
+  no_log: true
+
+- name: Create the immich directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/immich"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/immich/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/immich"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/immich/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/immich/ml"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/immich/ml/cache"
+  become: true
+
+- name: Deploy the immich root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/immich/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_immich"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_immich"
+  no_log: true
+
+- name: Deploy the immich image
+  vars:
+    containers_image_notifications: "notification_restart_immich"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "immich/immich.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/immich.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_immich"
+
+- name: Set the immich-ml target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "immich-ml"
+
+- name: Deploy the immich-ml image
+  vars:
+    containers_image_notifications: "notification_restart_immich"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "immich/immich-ml.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/immich-ml.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_immich"
+
+- name: Start the immich
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "{{ item }}"
+    state: "started"
+    daemon_reload: true
+  loop:
+    - "immich.service"
+    - "immich-ml.service"
+  register: "containers_immich_started"
+
+- name: Apply the immich configuration handlers
+  ansible.builtin.meta: "flush_handlers"
