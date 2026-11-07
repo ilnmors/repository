@@ -832,3 +832,40 @@ services:
               container: 8080
           # Model id: {cmd, ...} from the Quartermaster config. llama-server and sd-server are in the image.
           models: {}
+    openwebui:
+      units:
+        main:
+          release: "openwebui"
+          hosts: ["app"]
+          domain:
+            public: "openwebui"
+            internal: "openwebui.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8002
+              container: 8080
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            s3:
+              status: true
+              access_key: "open-webui"
+              buckets:
+                - name: "open-webui"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/oauth/oidc/callback"]
+              scopes: ["openid", "profile", "groups", "email"]
+              auth_method: "client_secret_basic"
+              pkce: true
+          # Quartermaster model ids. Empty values disable RAG embedding and image generation.
+          ai:
+            embedding_model: ""
+            image_model: ""

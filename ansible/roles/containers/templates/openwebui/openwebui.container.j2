@@ -1,0 +1,121 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Open WebUI
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=openwebui
+HostName=openwebui
+PublishPort={{ services['containers']['openwebui']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['openwebui']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['openwebui']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/data:/app/backend/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/ssl:/etc/ssl/openwebui:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="WEBUI_URL=https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="CORS_ALLOW_ORIGIN=https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="ENABLE_PERSISTENT_CONFIG=false"
+Environment="ENABLE_SIGNUP=false"
+Environment="ENABLE_LOGIN_FORM=false"
+Environment="ENABLE_PASSWORD_AUTH=false"
+Environment="ENABLE_PASSWORD_CHANGE_FORM=false"
+Secret=OPEN_WEBUI_SECRET_KEY,type=env,target=WEBUI_SECRET_KEY
+# Sure uses an Open WebUI API key as its AI gateway.
+Environment="ENABLE_API_KEYS=true"
+# We use OpenAI-compatible backends, not Ollama
+Environment="ENABLE_OLLAMA_API=false"
+
+# PostgreSQL
+Environment="DATABASE_TYPE=postgresql"
+Environment="DATABASE_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DATABASE_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DATABASE_NAME=openwebui_db"
+Environment="DATABASE_USER=openwebui"
+Environment="PGSSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/openwebui/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Environment="PGSSLCERTMODE=disable"
+Secret=OPEN_WEBUI_POSTGRES_PASSWORD,type=env,target=DATABASE_PASSWORD
+
+# vector DB
+Environment="VECTOR_DB=pgvector"
+Environment="PGVECTOR_CREATE_EXTENSION=false"
+# Qwen dimension is 1024
+Environment="PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH=1024"
+
+# OIDC
+Environment="ENABLE_OAUTH_PERSISTENT_CONFIG=false"
+Environment="ENABLE_OAUTH_SIGNUP=true"
+Environment="OAUTH_AUTO_REDIRECT=false"
+Environment="OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true"
+Environment="OAUTH_CLIENT_ID=openwebui"
+Environment="OPENID_PROVIDER_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration"
+Environment="OAUTH_PROVIDER_NAME=Authelia"
+Environment="OAUTH_SCOPES=openid email profile groups"
+Environment="ENABLE_OAUTH_ROLE_MANAGEMENT=true"
+Environment="OAUTH_ALLOWED_ROLES=admins,users"
+Environment="OAUTH_ADMIN_ROLES=admins"
+Environment="OAUTH_ROLES_CLAIM=groups"
+Environment="OAUTH_CODE_CHALLENGE_METHOD=S256"
+Secret=OPEN_WEBUI_OAUTH_CLIENT_SECRET,type=env,target=OAUTH_CLIENT_SECRET
+
+# AI backend server
+# Quartermaster routes every model (llama-server, sd-server) and manages the VRAM.
+Environment="OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
+Environment="OPENAI_API_KEY=none"
+{% if (services['containers']['openwebui']['units']['main']['ai']['image_model'] | length) > 0 %}
+Environment="ENABLE_IMAGE_GENERATION=true"
+Environment="IMAGE_GENERATION_ENGINE=openai"
+Environment="IMAGES_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
+Environment="IMAGES_OPENAI_API_KEY=none"
+Environment="IMAGE_GENERATION_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['image_model'] }}"
+Environment="IMAGE_SIZE=1024x1024"
+{% else %}
+Environment="ENABLE_IMAGE_GENERATION=false"
+{% endif %}
+Environment="AIOHTTP_CLIENT_TIMEOUT=3600"
+# Disable background LLM tasks
+Environment="ENABLE_TITLE_GENERATION=false"
+Environment="ENABLE_TAGS_GENERATION=false"
+Environment="ENABLE_FOLLOW_UP_GENERATION=false"
+Environment="ENABLE_AUTOCOMPLETE_GENERATION=false"
+Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false}}"
+
+# RAG Embedding
+{% if (services['containers']['openwebui']['units']['main']['ai']['embedding_model'] | length) > 0 %}
+Environment="RAG_EMBEDDING_ENGINE=openai"
+Environment="RAG_EMBEDDING_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['embedding_model'] }}"
+Environment="RAG_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
+Environment="RAG_OPENAI_API_KEY=none"
+# Asymmetric embedding
+Environment="RAG_EMBEDDING_QUERY_PREFIX=query: "
+Environment="RAG_EMBEDDING_CONTENT_PREFIX=document: "
+{% endif %}
+# Chunking
+Environment="RAG_TEXT_SPLITTER=token"
+Environment="CHUNK_SIZE=350"
+Environment="CHUNK_OVERLAP=50"
+
+# S3
+Environment="STORAGE_PROVIDER=s3"
+Environment="S3_ACCESS_KEY_ID=open-webui"
+Environment="S3_BUCKET_NAME=open-webui"
+Environment="S3_REGION_NAME=us-east-1"
+Environment="S3_ENDPOINT_URL=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="S3_ADDRESSING_STYLE=path"
+Environment="S3_ENABLE_TAGGING=false"
+Environment="STORAGE_LOCAL_CACHE=false"
+Secret=OPEN_WEBUI_S3_SECRET_KEY,type=env,target=S3_SECRET_ACCESS_KEY
+
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

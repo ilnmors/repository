@@ -199,5 +199,13 @@
   when: target_host in services['containers']['quartermaster']['units']['main']['hosts']
   tags: ["quartermaster"]
 
+- name: Include the openwebui task
+  ansible.builtin.include_tasks:
+    file: "openwebui.yaml"
+    apply:
+      tags: ["openwebui"]
+  when: target_host in services['containers']['openwebui']['units']['main']['hosts']
+  tags: ["openwebui"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

@@ -242,6 +242,10 @@ releases:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
       tag: "v1.8.1"
+    openwebui:
+      name: "openwebui"
+      repository: "ghcr.io/open-webui/open-webui"
+      tag: "v0.12.3"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
