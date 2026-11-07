@@ -746,3 +746,44 @@ services:
               protocol: "tcp"
               int: 6381
               container: 6379
+    outline:
+      units:
+        main:
+          release: "outline"
+          hosts: ["app"]
+          domain:
+            public: "outline"
+            internal: "outline.app"
+          subuid: 101000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3004
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            s3:
+              status: true
+              buckets:
+                - name: "outline"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/auth/oidc.callback"]
+              scopes: ["openid", "offline_access", "profile", "email"]
+              auth_method: "client_secret_post"
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6382
+              container: 6379

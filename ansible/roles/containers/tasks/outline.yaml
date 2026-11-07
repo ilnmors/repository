@@ -1,0 +1,129 @@
+---
+- name: Register the outline database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the outline rustfs client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_rustfs_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "rustfs.yaml"
+    apply:
+      delegate_to: "{{ containers_rustfs_host }}"
+
+- name: Register the outline authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the outline valkey
+  vars:
+    containers_valkey_service: "outline"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "outline"
+
+- name: Register the missing outline secret key on secrets.yaml
+  vars:
+    secrets_target: '["outline"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['outline']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing outline utils secret on secrets.yaml
+  vars:
+    secrets_target: '["outline"]["utils_secret"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['outline']['utils_secret'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the outline fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "OUTLINE_SECRET_KEY"
+        value: "{{ secrets['outline']['secret_key'] }}"
+      - name: "OUTLINE_UTILS_SECRET"
+        value: "{{ secrets['outline']['utils_secret'] }}"
+      - name: "OUTLINE_DATABASE_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['outline'] }}"
+      - name: "OUTLINE_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['outline']['oidc']['secret'] }}"
+      - name: "OUTLINE_S3_SECRET_KEY"
+        value: "{{ secrets['rustfs']['password']['outline'] }}"
+  no_log: true
+
+- name: Create the outline directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['outline']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/outline"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/outline/ssl"
+  become: true
+
+- name: Deploy the outline root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/outline/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['outline']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_outline"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_outline"
+  no_log: true
+
+- name: Deploy the outline image
+  vars:
+    containers_image_notifications: "notification_restart_outline"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "outline/outline.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/outline.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_outline"
+
+- name: Start the outline
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "outline.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_outline_started"
+
+- name: Apply the outline configuration handlers
+  ansible.builtin.meta: "flush_handlers"

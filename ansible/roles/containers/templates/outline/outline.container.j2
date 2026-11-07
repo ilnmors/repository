@@ -1,0 +1,87 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Outline
+
+After=valkey_outline.service
+Wants=valkey_outline.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=outline
+HostName=outline
+PublishPort={{ services['containers']['outline']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['outline']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['outline']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/outline/ssl:/etc/ssl/outline:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="NODE_ENV=production"
+Environment="URL=https://{{ services['containers']['outline']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="PORT={{ services['containers']['outline']['units']['main']['ports']['http']['container'] }}"
+#Environment="FORCE_HTTPS=true" #HSTS function is not required
+
+# Secrets
+Secret=OUTLINE_SECRET_KEY,type=env,target=SECRET_KEY
+Secret=OUTLINE_UTILS_SECRET,type=env,target=UTILS_SECRET
+
+# Database
+Environment="DATABASE_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DATABASE_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DATABASE_NAME=outline_db"
+Environment="DATABASE_USER=outline"
+Environment="PGSSLMODE=verify-full"
+Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/outline/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=OUTLINE_DATABASE_PASSWORD,type=env,target=DATABASE_PASSWORD
+
+# Redis
+Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['outline']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# Storage
+# Environment="FILE_STORAGE=local"
+# Environment="FILE_STORAGE_LOCAL_ROOT_DIR=/var/lib/outline/data"
+# Environment="FILE_STORAGE_UPLOAD_MAX_SIZE=262144000"
+Environment="FILE_STORAGE=s3"
+Environment="FILE_STORAGE_UPLOAD_MAX_SIZE=262144000"
+# S3 configuration
+Environment="AWS_REGION=us-east-1"
+Environment="AWS_S3_UPLOAD_BUCKET_NAME=outline"
+Environment="AWS_ACCESS_KEY_ID=outline"
+Environment="AWS_S3_UPLOAD_BUCKET_URL=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="AWS_S3_FORCE_PATH_STYLE=true"
+Secret=OUTLINE_S3_SECRET_KEY,type=env,target=AWS_SECRET_ACCESS_KEY
+
+# OIDC
+Environment="OIDC_CLIENT_ID=outline"
+Environment="OIDC_AUTH_URI=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/oidc/authorization"
+Environment="OIDC_TOKEN_URI=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/oidc/token"
+Environment="OIDC_USERINFO_URI=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/oidc/userinfo"
+Environment="OIDC_USERNAME_CLAIM=preferred_username"
+Environment="OIDC_DISPLAY_NAME=Authelia"
+Environment="OIDC_SCOPES=openid offline_access profile email"
+Environment="OIDC_DISABLE_REDIRECT=true"
+Secret=OUTLINE_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# Mail
+#Environment="SMTP_HOST=smtp.example.com"
+#Environment="SMTP_PORT=587"
+#Environment="SMTP_USERNAME=outline@example.com"
+#Environment="SMTP_PASSWORD=change_me"
+#Environment="SMTP_FROM_EMAIL=outline@example.com"
+#Environment="SMTP_REPLY_EMAIL=outline@example.com"
+#Environment="SMTP_SECURE=false"
+
+# Optional
+Environment="LOG_LEVEL=warn"
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
