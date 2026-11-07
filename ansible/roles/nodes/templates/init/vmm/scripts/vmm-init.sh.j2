@@ -35,6 +35,7 @@ if ! id "{{ nodes['vmm']['user'] }}" >/dev/null 2>&1; then
     useradd -u {{ nodes['vmm']['uid'] }} -g {{ nodes['vmm']['group'] }} -G sudo \
         -c "Hypervisor" -m -d {{ nodes['vmm']['paths']['home'] }} -s /bin/bash \
         {{ nodes['vmm']['user'] }}
+    printf '%s:%s\n' {{ nodes['vmm']['user'] | quote }} {{ secrets['sudo']['vmm']['hash'] | quote }} | chpasswd -e
 fi
 
 # APT Packages

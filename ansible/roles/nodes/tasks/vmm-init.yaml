@@ -12,6 +12,27 @@
     - "init/ssh"
     - "init/networkd"
 
+- name: Generate the missing vmm password hash
+  ansible.builtin.shell: |
+    openssl passwd -6 -stdin
+  args:
+    executable: "/bin/bash"
+    stdin: "{{ secrets['sudo']['vmm']['password'] }}"
+  when: (secrets['sudo']['vmm']['hash'] | default('', true) | length) == 0
+  changed_when: false
+  register: "nodes_vmm_password_hash"
+  no_log: true
+
+- name: Register the missing vmm password hash on secrets.yaml
+  vars:
+    secrets_target: '["sudo"]["vmm"]["hash"]'
+    secrets_content: "{{ nodes_vmm_password_hash['stdout'] | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: nodes_vmm_password_hash['stdout'] is defined
+  no_log: true
+
 - name: Copy the script
   ansible.builtin.template:
     src: "init/vmm/scripts/vmm-init.sh.j2"
