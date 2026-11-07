@@ -138,8 +138,7 @@ services:
           acquisd:
             collection:
               - "crowdsecurity/caddy"
-            parser:
-              - "crowdsecurity/nextcloud-whitelist"
+            parser: []
             config:
               - "caddy.yaml"
         dovecot:
