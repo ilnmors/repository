@@ -11,3 +11,6 @@
 - name: Load auth playbook
   ansible.builtin.import_playbook:
     "nodes/auth.yaml"
+- name: Load app playbook
+  ansible.builtin.import_playbook:
+    "nodes/app.yaml"
