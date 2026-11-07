@@ -49,19 +49,6 @@
   listen: "notification_restart_postgresql"
   ignore_errors: true
 
-- name: Reload the PostgreSQL configuration
-  delegate_to: "{{ containers_postgresql_host }}"
-  ansible.builtin.shell: |
-    set -euo pipefail
-    /usr/bin/podman exec -u postgres postgresql sh -c "pg_ctl reload"
-  args:
-    executable: "/bin/bash"
-  when: not (containers_postgresql_started['changed'] | default(false))
-  changed_when: false
-  register: "result_reload_postgresql"
-  listen: "notification_reload_postgresql"
-  ignore_errors: true
-
 - name: Restart the mariadb.service
   delegate_to: "{{ containers_mariadb_host }}"
   ansible.builtin.systemd_service:
@@ -266,7 +253,7 @@
     - "mastodon-web.service"
     - "mastodon-worker.service"
     - "mastodon-streaming.service"
-  when: not (containers_mastodon_started['changed'] | default(false))
+  when: (containers_mastodon_started['results'] | default([]) | selectattr('item', 'equalto', item) | selectattr('changed') | list | length) == 0
   changed_when: false
   register: "result_restart_mastodon"
   listen: "notification_restart_mastodon"
@@ -293,7 +280,7 @@
   loop:
     - "immich.service"
     - "immich-ml.service"
-  when: not (containers_immich_started['changed'] | default(false))
+  when: (containers_immich_started['results'] | default([]) | selectattr('item', 'equalto', item) | selectattr('changed') | list | length) == 0
   changed_when: false
   register: "result_restart_immich"
   listen: "notification_restart_immich"
@@ -356,7 +343,7 @@
   loop:
     - "sure-web.service"
     - "sure-worker.service"
-  when: not (containers_sure_started['changed'] | default(false))
+  when: (containers_sure_started['results'] | default([]) | selectattr('item', 'equalto', item) | selectattr('changed') | list | length) == 0
   changed_when: false
   register: "result_restart_sure"
   listen: "notification_restart_sure"
