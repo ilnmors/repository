@@ -46,6 +46,24 @@ containers_mariadb_services: >-
     | map(attribute='service') | unique | list
   }}
 
+containers_postgresql_extensions: >-
+  {%- set containers_found = namespace(extensions={}) -%}
+  {%- for containers_service in containers_service_list -%}
+  {%-   set containers_units = (
+          containers_service['value']['units'] | default({}) | dict2items
+          | selectattr('value.dependency', 'defined')
+          | selectattr('value.dependency.db', 'defined')
+          | selectattr('value.dependency.db.type', 'defined')
+          | selectattr('value.dependency.db.type', 'equalto', 'postgresql')
+          | selectattr('value.dependency.db.extensions', 'defined')
+          | map(attribute='value.dependency.db.extensions') | flatten | unique | list
+        ) -%}
+  {%-   if (containers_units | length) > 0 -%}
+  {%-     set containers_found.extensions = containers_found.extensions | combine({containers_service['key']: containers_units}) -%}
+  {%-   endif -%}
+  {%- endfor -%}
+  {{ containers_found.extensions }}
+
 containers_postgresql_client_hosts: >-
   {{
     containers_service_list

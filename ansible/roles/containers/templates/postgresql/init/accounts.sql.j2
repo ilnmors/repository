@@ -11,4 +11,11 @@ CREATE DATABASE "{{ service }}_db" OWNER "{{ service }}";
 REVOKE ALL ON DATABASE "{{ service }}_db" FROM PUBLIC;
 \endif
 ALTER USER "{{ service }}" WITH PASSWORD '{{ secrets['postgresql']['password'][service] | replace("'", "''") }}';
+{% if containers_postgresql_extensions[service] is defined %}
+\connect "{{ service }}_db"
+{% for extension in containers_postgresql_extensions[service] %}
+CREATE EXTENSION IF NOT EXISTS "{{ extension }}" CASCADE;
+{% endfor %}
+\connect postgres
+{% endif %}
 {% endfor %}

@@ -575,6 +575,7 @@ services:
             db:
               status: true
               type: "postgresql"
+              extensions: ["pg_trgm", "ltree"]
             oidc:
               status: true
               redirect_uris: ["/api/auth/oidc/callback"]
@@ -723,6 +724,7 @@ services:
             db:
               status: true
               type: "postgresql"
+              extensions: ["vchord", "earthdistance"]
             oidc:
               status: true
               redirect_uris: ["/auth/login", "/user-settings", "app.immich:///oauth-callback"]
@@ -850,6 +852,7 @@ services:
             db:
               status: true
               type: "postgresql"
+              extensions: ["vector"]
             s3:
               status: true
               access_key: "open-webui"
