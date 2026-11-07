@@ -1,0 +1,46 @@
+#!/bin/bash
+# Build the BIND response policy zone. A failed download keeps the current zone.
+set -euo pipefail
+
+ZONE_NAME="{{ services['packages']['bind']['units']['main']['blocklist']['zone'] }}"
+ZONE_FILE="/var/lib/bind/db.${ZONE_NAME}"
+MINIMUM_DOMAINS=1000
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "${WORK_DIR}"' EXIT
+
+while read -r url; do
+    curl -fsSL --retry 3 --max-time 180 "${url}" >> "${WORK_DIR}/raw"
+    printf '\n' >> "${WORK_DIR}/raw"
+done <<'URLS'
+{% for url in services['packages']['bind']['units']['main']['blocklist']['urls'] %}
+{{ url }}
+{% endfor %}
+URLS
+
+# Accepts hosts files, plain domain lists and "||domain^" rules.
+awk '{
+    gsub(/\r/, "")
+    sub(/[#!].*/, "")
+    if ($0 ~ /^\|\|/) { sub(/^\|\|/, ""); sub(/\^.*/, ""); domain = $0 }
+    else if (NF >= 2 && ($1 == "0.0.0.0" || $1 == "127.0.0.1" || $1 == "::" || $1 == "::1")) domain = $2
+    else if (NF == 1) domain = $1
+    else next
+    domain = tolower(domain)
+    if (domain ~ /^[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)+$/ && domain !~ /^[0-9.]+$/) print domain
+}' "${WORK_DIR}/raw" \
+    | grep -Ev '(^|\.)(localhost|localdomain|{{ site['domain']['internal'] | regex_replace('[.]', '\\.') }}|{{ site['domain']['public'] | regex_replace('[.]', '\\.') }})$' \
+    | sort -u > "${WORK_DIR}/domains"
+
+if (( $(wc -l < "${WORK_DIR}/domains") < MINIMUM_DOMAINS )); then
+    echo "The blocklist has fewer than ${MINIMUM_DOMAINS} domains; keeping the current zone." >&2
+    exit 1
+fi
+
+{
+    printf '$TTL 300\n@ IN SOA localhost. hostmaster.localhost. %s 3600 600 86400 300\n@ IN NS localhost.\n' "$(date +%s)"
+    awk '{ print $0 " CNAME ."; print "*." $0 " CNAME ." }' "${WORK_DIR}/domains"
+} > "${WORK_DIR}/zone"
+
+/usr/bin/named-checkzone -q "${ZONE_NAME}" "${WORK_DIR}/zone"
+install -o bind -g bind -m 0640 "${WORK_DIR}/zone" "${ZONE_FILE}"
+/usr/sbin/rndc reload "${ZONE_NAME}"

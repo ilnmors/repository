@@ -1,0 +1,8 @@
+[Unit]
+Description=Update the BIND blocklist
+Wants=network-online.target
+After=network-online.target named.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bind-blocklist.sh

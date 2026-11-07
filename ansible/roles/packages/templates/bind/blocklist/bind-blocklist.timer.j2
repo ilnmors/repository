@@ -1,0 +1,11 @@
+[Unit]
+Description=Update the BIND blocklist every day
+
+[Timer]
+OnActiveSec=5min
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -172,6 +172,16 @@
         - "'ipv6' in networks['dns']['zones']['reverse']['families']"
         - (networks['segments'][item]['subnet']['ipv6'] | default(none)) is not none
 
+    # The update script replaces this zone, so an existing file is kept.
+    - name: Create the initial BIND blocklist zone
+      ansible.builtin.template:
+        src: "bind/db.blocklist.j2"
+        dest: "/var/lib/bind/db.{{ services['packages']['bind']['units']['main']['blocklist']['zone'] }}"
+        owner: "bind"
+        group: "bind"
+        mode: "0640"
+        force: false
+
     - name: Configure the BIND
       ansible.builtin.template:
         src: "bind/named.conf.j2"
@@ -187,3 +197,32 @@
         enabled: true
         state: "restarted"
         daemon_reload: true
+
+- name: Deploy the BIND blocklist script
+  ansible.builtin.template:
+    src: "bind/blocklist/bind-blocklist.sh.j2"
+    dest: "/usr/local/sbin/bind-blocklist.sh"
+    owner: "root"
+    group: "root"
+    mode: "0750"
+  become: true
+
+- name: Deploy the BIND blocklist units
+  ansible.builtin.template:
+    src: "bind/blocklist/{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  loop:
+    - "bind-blocklist.service"
+    - "bind-blocklist.timer"
+  become: true
+
+- name: Enable the bind-blocklist.timer
+  ansible.builtin.systemd_service:
+    name: "bind-blocklist.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  become: true

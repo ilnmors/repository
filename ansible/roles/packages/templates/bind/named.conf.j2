@@ -29,6 +29,13 @@ options {
         };
         max-cache-size 256M;
         notify no;
+        response-policy { zone "{{ services['packages']['bind']['units']['main']['blocklist']['zone'] }}"; } break-dnssec yes qname-wait-recurse no;
+};
+
+zone "{{ services['packages']['bind']['units']['main']['blocklist']['zone'] }}" {
+        type primary;
+        file "/var/lib/bind/db.{{ services['packages']['bind']['units']['main']['blocklist']['zone'] }}";
+        notify no;
 };
 
 zone "{{ networks['dns']['zones']['internal']['domain'] }}" {

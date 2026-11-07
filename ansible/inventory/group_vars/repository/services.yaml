@@ -172,6 +172,24 @@ services:
         main:
           release: "bind"
           hosts: ["vmm"]
+          blocklist:
+            zone: "blocklist.rpz"
+            urls:
+              # General
+              - "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+              - "https://big.oisd.nl"
+              - "https://o0.pages.dev/Lite/domains.txt"
+              # Korean regional
+              - "https://raw.githubusercontent.com/yous/YousList/master/hosts.txt"
+              # Telemetry
+              - "https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt"
+              - "https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/SmartTV.txt"
+          domain:
+            internal: "bind"
+          ports:
+            dns:
+              protocol: "udp/tcp"
+              ext: 53
     kea4:
       units:
         main:
