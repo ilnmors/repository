@@ -238,6 +238,10 @@ releases:
       name: "bookstack"
       repository: "docker.io/solidnerd/bookstack"
       tag: "26.5.4"
+    quartermaster:
+      name: "quartermaster"
+      repository: "ghcr.io/quartermaster-labs/quartermaster"
+      tag: "v1.8.1"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"

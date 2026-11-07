@@ -820,3 +820,15 @@ services:
               scopes: ["openid", "profile", "email", "groups"]
               auth_method: "client_secret_basic"
               pkce: true
+    quartermaster:
+      units:
+        main:
+          release: "quartermaster"
+          hosts: ["app"]
+          ports:
+            http:
+              protocol: "tcp"
+              int: 10000
+              container: 8080
+          # Model id: {cmd, ...} from the Quartermaster config. llama-server and sd-server are in the image.
+          models: {}
