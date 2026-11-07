@@ -172,12 +172,6 @@ services:
         main:
           release: "bind"
           hosts: ["vmm"]
-          domain:
-            internal: "bind"
-          ports:
-            dns:
-              protocol: "udp/tcp"
-              ext: 53
     kea4:
       units:
         main:
@@ -701,10 +695,10 @@ services:
             s3:
               status: true
               buckets:
-              - "name": "kaneo"
-                actions:
-                  bucket: ["ListBucket", "GetBucketLocation"]
-                  object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+                - name: "kaneo"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
     immich:
       units:
         main:
