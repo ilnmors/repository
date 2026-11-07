@@ -215,5 +215,13 @@
   when: target_host in services['containers']['sure']['units']['main']['hosts']
   tags: ["sure"]
 
+- name: Include the papra task
+  ansible.builtin.include_tasks:
+    file: "papra.yaml"
+    apply:
+      tags: ["papra"]
+  when: target_host in services['containers']['papra']['units']['main']['hosts']
+  tags: ["papra"]
+
 - name: Apply the containers configuration handlers
   ansible.builtin.meta: "flush_handlers"

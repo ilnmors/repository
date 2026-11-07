@@ -1,0 +1,145 @@
+---
+- name: Register the papra authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "papra"
+
+- name: Register the missing papra secret key on secrets.yaml
+  vars:
+    secrets_target: '["papra"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['papra']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the papra fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "PAPRA_AUTH_SECRET"
+        value: "{{ secrets['papra']['secret_key'] }}"
+      - name: "PAPRA_AUTH_PROVIDERS_CUSTOMS"
+        value: |
+          [
+            {
+              "providerId": "authelia",
+              "providerName": "Authelia",
+              "providerIconUrl": "https://www.authelia.com/images/branding/logo-cropped.png",
+              "clientId": "papra",
+              "clientSecret": "{{ secrets['papra']['oidc']['secret'] }}",
+              "type": "oidc",
+              "discoveryUrl": "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration",
+              "scopes": {{ services['containers']['papra']['units']['main']['dependency']['oidc']['scopes'] | to_json }}
+            }
+          ]
+  no_log: true
+
+- name: Create the papra directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['papra']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/papra"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/papra/data"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/papra/backup"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/papra"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/papra/db"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/papra/script"
+  become: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_papra"
+  no_log: true
+
+- name: Check the papra backup database
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/papra/backup/db.sqlite"
+  register: "containers_papra_backup_database"
+
+- name: Check the papra database
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/papra/db/db.sqlite"
+  become: true
+  register: "containers_papra_database"
+
+- name: Restore the papra database
+  ansible.builtin.copy:
+    src: "{{ nodes[target_host]['paths']['data'] }}/containers/papra/backup/db.sqlite"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/papra/db/db.sqlite"
+    remote_src: true
+    owner: "{{ services['containers']['papra']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0660"
+  become: true
+  when:
+    - containers_papra_backup_database['stat']['exists']
+    - not containers_papra_database['stat']['exists']
+
+- name: Deploy the papra scripts
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/papra/script/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/papra/script/"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  become: true
+
+- name: Deploy the papra image
+  vars:
+    containers_image_notifications: "notification_restart_papra"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "papra/papra.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/papra.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_papra"
+
+- name: Deploy the papra systemd units
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/papra/services/{{ item }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/{{ item }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - "papra-backup.service"
+    - "papra-backup.timer"
+
+- name: Start the papra
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "papra.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_papra_started"
+
+- name: Enable the papra-backup.timer
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "papra-backup.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+
+- name: Apply the papra configuration handlers
+  ansible.builtin.meta: "flush_handlers"
