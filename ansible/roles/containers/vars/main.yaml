@@ -92,16 +92,19 @@ containers_rustfs_clients: >-
 containers_rustfs_cors_origins: >-
   {{
     (
-      containers_rustfs_units
-      | map(attribute='domain.internal') | select
-      | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['internal'])
-      | list
-    ) + (
-      containers_rustfs_units
-      | map(attribute='domain.public') | select
-      | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['public'])
-      | map('regex_replace', '^https://@[.]', 'https://')
-      | list
+      (
+        containers_rustfs_units
+        | map(attribute='domain.internal') | map('default', '', true) | select
+        | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['internal'])
+        | map('regex_replace', '^https://@[.]', 'https://')
+        | list
+      ) + (
+        containers_rustfs_units
+        | map(attribute='domain.public') | map('default', '', true) | select
+        | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['public'])
+        | map('regex_replace', '^https://@[.]', 'https://')
+        | list
+      )
     )
     | unique
     | list
