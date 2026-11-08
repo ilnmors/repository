@@ -101,11 +101,11 @@ releases:
     step:
       source: "github"
       name: "step-cli"
-      version: "0.30.6"
+      version: "0.31.0"
     code-server:
       source: "github"
       name: "code-server"
-      version: "4.144.0"
+      version: "4.145.2"
     kopia:
       source: "github"
       name: "kopia"
@@ -113,12 +113,12 @@ releases:
     alloy:
       source: "github"
       name: "alloy"
-      version: "1.17.1"
+      version: "1.21.3"
   containers:
     caddy:
       name: "caddy"
       repository: "docker.io/library/caddy"
-      tag: "2.11.4"
+      tag: "2.11.9"
       build:
         status: true
         rfc2136:
@@ -137,7 +137,7 @@ releases:
     rustfs:
       name: "rustfs"
       repository: "docker.io/rustfs/rustfs"
-      tag: "1.0.0-rc.6"
+      tag: "1.0.4"
     postgresql:
       name: "postgresql"
       repository: "docker.io/library/postgres"
@@ -150,7 +150,7 @@ releases:
     mariadb:
       name: "mariadb"
       repository: "docker.io/library/mariadb"
-      tag: "12.3.3"
+      tag: "13.0.2"
     ldap:
       name: "ldap"
       repository: "docker.io/lldap/lldap"
@@ -158,19 +158,19 @@ releases:
     prometheus:
       name: "prometheus"
       repository: "docker.io/prom/prometheus"
-      tag: "v3.14.0"
+      tag: "v3.16.0"
     loki:
       name: "loki"
       repository: "docker.io/grafana/loki"
-      tag: "3.7.7"
+      tag: "3.7.9"
     grafana:
       name: "grafana"
       repository: "docker.io/grafana/grafana"
-      tag: "13.2.1"
+      tag: "13.3.0"
     x509-exporter:
       name: "x509-exporter"
       repository: "docker.io/enix/x509-certificate-exporter"
-      tag: "4.1.0"
+      tag: "4.2.4"
     dovecot:
       name: "dovecot"
       repository: "docker.io/dovecot/dovecot"
@@ -189,7 +189,7 @@ releases:
     authelia:
       name: "authelia"
       repository: "docker.io/authelia/authelia"
-      tag: "4.39.20"
+      tag: "4.39.28"
     valkey:
       name: "valkey"
       repository: "docker.io/valkey/valkey"
@@ -197,15 +197,15 @@ releases:
     linkding:
       name: "linkding"
       repository: "ghcr.io/sissbruecker/linkding"
-      tag: "1.46.2"
+      tag: "1.47.0"
     vaultwarden:
       name: "vaultwarden"
       repository: "docker.io/vaultwarden/server"
-      tag: "1.37.2"
+      tag: "1.37.5"
     forgejo:
       name: "forgejo"
       repository: "codeberg.org/forgejo/forgejo"
-      tag: "15.0.11"
+      tag: "17.0.1"
     oxicloud:
       name: "oxicloud"
       repository: "docker.io/diocrafts/oxicloud"
@@ -213,31 +213,31 @@ releases:
     collabora:
       name: "collabora"
       repository: "docker.io/collabora/code"
-      tag: "26.04.3.2.1"
+      tag: "26.04.6.1.1"
     snappymail:
       name: "snappymail"
       repository: "ghcr.io/the-djmaze/snappymail"
-      tag: "v2.38.2"
+      tag: "v2.38.2.1"
     mastodon:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
-      tag: "v4.7.2"
+      tag: "v4.7.5"
     kaneo:
       name: "kaneo"
       repository: "ghcr.io/usekaneo/kaneo"
-      tag: "2.23.2"
+      tag: "2.49.0"
     immich:
       name: "immich"
       repository: "ghcr.io/immich-app/immich-server"
-      tag: "v3.3.5"
+      tag: "v3.3.6"
     outline:
       name: "outline"
       repository: "docker.io/outlinewiki/outline"
-      tag: "1.10.1"
+      tag: "1.12.0"
     bookstack:
       name: "bookstack"
       repository: "docker.io/solidnerd/bookstack"
-      tag: "26.5.4"
+      tag: "26.9.2"
     quartermaster:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
@@ -245,24 +245,24 @@ releases:
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
-      tag: "v0.12.3"
+      tag: "v0.13.0"
     sure:
       name: "sure"
       repository: "ghcr.io/we-promise/sure"
-      tag: "0.7.4"
+      tag: "0.7.6"
     papra:
       name: "papra"
       repository: "ghcr.io/papra-hq/papra"
-      tag: "26.6.1-rootless"
+      tag: "26.7.1-rootless"
     homepage:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"
-      tag: "v2.0.0"
+      tag: "v2.7.0"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
-      tag: "v4.7.2"
+      tag: "v4.7.5"
     immich-ml:
       name: "immich-ml"
       repository: "ghcr.io/immich-app/immich-machine-learning"
-      tag: "v3.3.5-openvino"
+      tag: "v3.3.6-openvino"
