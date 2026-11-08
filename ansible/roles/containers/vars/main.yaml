@@ -46,30 +46,9 @@ containers_mariadb_services: >-
     | map(attribute='service') | unique | list
   }}
 
-containers_postgresql_extensions: >-
-  {%- set containers_found = namespace(extensions={}) -%}
-  {%- for containers_service in containers_service_list -%}
-  {%-   set containers_units = (
-          containers_service['value']['units'] | default({}) | dict2items
-          | selectattr('value.dependency', 'defined')
-          | selectattr('value.dependency.db', 'defined')
-          | selectattr('value.dependency.db.type', 'defined')
-          | selectattr('value.dependency.db.type', 'equalto', 'postgresql')
-          | selectattr('value.dependency.db.extensions', 'defined')
-          | map(attribute='value.dependency.db.extensions') | flatten | unique | list
-        ) -%}
-  {%-   if (containers_units | length) > 0 -%}
-  {%-     set containers_found.extensions = containers_found.extensions | combine({containers_service['key']: containers_units}) -%}
-  {%-   endif -%}
-  {%- endfor -%}
-  {{ containers_found.extensions }}
-
 containers_postgresql_client_hosts: >-
   {{
-    containers_service_list
-    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
-    | selectattr('value.dependency', 'defined')
-    | selectattr('value.dependency.db', 'defined')
+    containers_unit_entries
     | selectattr('value.dependency.db.status', 'defined')
     | selectattr('value.dependency.db.status', 'equalto', true)
     | selectattr('value.dependency.db.type', 'defined')
@@ -80,10 +59,7 @@ containers_postgresql_client_hosts: >-
 
 containers_rustfs_units: >-
   {{
-    containers_service_list
-    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
-    | selectattr('value.dependency', 'defined')
-    | selectattr('value.dependency.s3', 'defined')
+    containers_unit_entries
     | selectattr('value.dependency.s3.status', 'defined')
     | selectattr('value.dependency.s3.status', 'equalto', true)
     | map(attribute='value')
@@ -114,29 +90,26 @@ containers_rustfs_clients: >-
   {{ containers_found.clients }}
 
 containers_rustfs_cors_origins: >-
-  {%- set containers_found = namespace(origins=[]) -%}
-  {%- for containers_unit in containers_rustfs_units -%}
-  {%-   for containers_scope in ['internal', 'public'] -%}
-  {%-     set containers_domain = containers_unit['domain'][containers_scope] | default('', true) -%}
-  {%-     if (containers_domain | length) > 0 -%}
-  {%-       set containers_found.origins = containers_found.origins + [
-              'https://' ~ (
-                site['domain'][containers_scope]
-                if containers_domain == '@'
-                else containers_domain ~ '.' ~ site['domain'][containers_scope]
-              )
-            ] -%}
-  {%-     endif -%}
-  {%-   endfor -%}
-  {%- endfor -%}
-  {{ containers_found.origins | unique | list }}
+  {{
+    (
+      containers_rustfs_units
+      | map(attribute='domain.internal') | select
+      | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['internal'])
+      | list
+    ) + (
+      containers_rustfs_units
+      | map(attribute='domain.public') | select
+      | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['public'])
+      | map('regex_replace', '^https://@[.]', 'https://')
+      | list
+    )
+    | unique
+    | list
+  }}
 
 containers_x509_exporter_leaf_domains: >-
   {{
-    containers_service_list
-    | map(attribute='value.units') | map('default', {}) | map('dict2items') | flatten
-    | selectattr('value.dependency', 'defined')
-    | selectattr('value.dependency.pki', 'defined')
+    containers_unit_entries
     | selectattr('value.dependency.pki.cert', 'defined')
     | selectattr('value.dependency.pki.cert', 'equalto', true)
     | map(attribute='value.domain.internal')
