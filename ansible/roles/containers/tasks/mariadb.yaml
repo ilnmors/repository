@@ -260,7 +260,7 @@
         executable: "/bin/bash"
         stdin: "{{ lookup('ansible.builtin.template', 'mariadb/init/accounts.sql.j2') }}"
       when: containers_mariadb_init_marker['stat']['exists']
-      changed_when: (containers_mariadb_services | length) > 0
+      changed_when: false
       register: "containers_mariadb_registered"
       no_log: true
 

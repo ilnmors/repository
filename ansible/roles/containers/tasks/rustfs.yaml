@@ -27,6 +27,7 @@
       - item[1] is mapping
       - item[1]['name'] is string
       - (item[1]['name'] | length) > 0
+      - (item[1]['public_read'] | default(false)) is boolean
       - item[1]['actions'] is mapping
       - (item[1]['actions']['bucket'] | default([])) is sequence
       - (item[1]['actions']['bucket'] | default([])) is not string
@@ -138,6 +139,7 @@
         RUSTFS_ACCESS_KEY: "{{ item['access_key'] }}"
         RUSTFS_SECRET_KEY: "{{ secrets['rustfs']['password'][item['name']] }}"
         RUSTFS_BUCKETS: "{{ item['s3']['buckets'] | map(attribute='name') | list | to_json }}"
+        RUSTFS_PUBLIC_READ_BUCKETS: "{{ item['s3']['buckets'] | selectattr('public_read', 'defined') | items2dict(key_name='name', value_name='public_read') | to_json }}"
         RUSTFS_POLICY: "{{ lookup('ansible.builtin.template', 'rustfs/policy.json.j2') | from_json | to_json }}"
         RUSTFS_POLICY_NAME: "{{ site['org'] }}-{{ item['name'] }}"
       ansible.builtin.shell: |
@@ -157,6 +159,33 @@
             elif [[ "${rustfs_bucket_status}" != "200" ]]; then
                 echo "Unable to inspect the RustFS bucket: HTTP ${rustfs_bucket_status}" >&2
                 exit 1
+            fi
+
+            if /usr/bin/jq -e --arg bucket "${rustfs_bucket}" 'has($bucket)' <<< "${RUSTFS_PUBLIC_READ_BUCKETS}" > /dev/null; then
+                rustfs_bucket_response=$(run_curl "/${rustfs_bucket}?policy" --no-fail --write-out $'\n%{http_code}')
+                rustfs_bucket_status=${rustfs_bucket_response##*$'\n'}
+                case "${rustfs_bucket_status}" in
+                    200) rustfs_bucket_policy=$(/usr/bin/jq -Sc . <<< "${rustfs_bucket_response%$'\n'*}") ;;
+                    404) rustfs_bucket_policy='{"Statement":[],"Version":"2012-10-17"}' ;;
+                    *)
+                        echo "Unable to inspect the RustFS bucket policy: HTTP ${rustfs_bucket_status}" >&2
+                        exit 1
+                        ;;
+                esac
+                rustfs_public_read=$(/usr/bin/jq --arg bucket "${rustfs_bucket}" '.[$bucket]' <<< "${RUSTFS_PUBLIC_READ_BUCKETS}")
+                rustfs_bucket_desired_policy=$(/usr/bin/jq -Sc --arg bucket "${rustfs_bucket}" --argjson public_read "${rustfs_public_read}" '
+                    .Statement = ([.Statement[] | select(.Sid != "PublicReadObjects")] + (
+                        if $public_read then [{
+                            Sid: "PublicReadObjects", Effect: "Allow", Principal: "*",
+                            Action: ["s3:GetObject"], Resource: ["arn:aws:s3:::" + $bucket + "/*"]
+                        }] else [] end
+                    ))
+                ' <<< "${rustfs_bucket_policy}")
+                if [[ "${rustfs_bucket_policy}" != "${rustfs_bucket_desired_policy}" ]]; then
+                    run_curl "/${rustfs_bucket}?policy" --request PUT \
+                      --header 'Content-Type: application/json' --data-binary "${rustfs_bucket_desired_policy}" > /dev/null
+                    rustfs_changed=1
+                fi
             fi
         done < <(/usr/bin/jq -r '.[]' <<< "${RUSTFS_BUCKETS}")
 

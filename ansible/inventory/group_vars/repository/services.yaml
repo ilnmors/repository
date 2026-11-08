@@ -656,6 +656,7 @@ services:
               status: true
               buckets:
                 - name: "mastodon"
+                  public_read: true
                   actions:
                     bucket: ["ListBucket", "GetBucketLocation"]
                     object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
