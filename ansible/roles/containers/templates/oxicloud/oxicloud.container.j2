@@ -18,6 +18,20 @@ PublishPort={{ services['containers']['oxicloud']['units']['main']['ports']['htt
 Volume={{ nodes[target_host]['paths']['data'] }}/containers/oxicloud/storage:/app/storage:rw
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/oxicloud/ssl:/etc/ssl/oxicloud:ro
 
+# Storage stays on the app host's local HDD.
+# Optional S3-compatible target: create the bucket, user and Podman secret first.
+# Keep the local entry and use OxiCloud's migration workflow for existing data.
+# Environment="OXICLOUD_STORAGE_ENTRIES=default,rustfs"
+# Environment="OXICLOUD_STORAGE_default_BACKEND=local"
+# Environment="OXICLOUD_STORAGE_default_ROOT_DIR=/app/storage"
+# Environment="OXICLOUD_STORAGE_rustfs_BACKEND=s3"
+# Environment="OXICLOUD_STORAGE_rustfs_S3_BUCKET=oxicloud"
+# Environment="OXICLOUD_STORAGE_rustfs_S3_REGION=us-east-1"
+# Environment="OXICLOUD_STORAGE_rustfs_S3_ENDPOINT_URL=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+# Environment="OXICLOUD_STORAGE_rustfs_S3_ACCESS_KEY=oxicloud"
+# Environment="OXICLOUD_STORAGE_rustfs_S3_FORCE_PATH_STYLE=true"
+# Secret=OXICLOUD_S3_SECRET_KEY,type=env,target=OXICLOUD_STORAGE_rustfs_S3_SECRET_KEY
+
 # General
 Environment="TZ={{ site['timezone'] }}"
 Environment="OXICLOUD_BASE_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
