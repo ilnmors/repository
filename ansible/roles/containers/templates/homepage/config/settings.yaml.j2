@@ -1,13 +1,20 @@
-title: {{ site['org'] }}
+title: {{ (site['org'] ~ ' / home') | to_json }}
+description: A personal home for apps, work and the everyday.
+favicon: /images/mark.svg
 
 theme: dark
-color: slate
+color: zinc
+font: plexData
 background:
   image: /images/background.svg
-cardBlur: md
+  opacity: 100
+cardStyle: hairline
+iconStyle: theme
 headerStyle: clean
 statusStyle: dot
 useEqualHeights: true
+fullWidth: true
+disableCollapse: true
 
 target: _blank
 hideVersion: true
@@ -19,20 +26,29 @@ quicklaunch:
   hideVisitURL: true
 
 layout:
-  Productivity:
+  Everyday:
+    tab: Home
+    style: row
+    columns: 5
+  Workspace:
+    tab: Home
     style: row
     columns: 4
-    icon: mdi-briefcase-outline
-  Files & Media:
+  Library:
+    tab: Home
     style: row
     columns: 4
-    icon: mdi-image-multiple-outline
-  Knowledge:
+  Observability:
+    tab: System
     style: row
-    columns: 4
-    icon: mdi-book-open-page-variant-outline
-  Admin:
+    columns: 3
+  Administration:
+    tab: System
     style: row
-    columns: 4
-    icon: mdi-shield-crown-outline
-    initiallyCollapsed: true
+    columns: 3
+  Developer:
+    tab: Links
+  School:
+    tab: Links
+  Entertainment:
+    tab: Links

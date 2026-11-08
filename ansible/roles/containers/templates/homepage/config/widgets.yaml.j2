@@ -1,15 +1,20 @@
 - greeting:
-    text_size: 2xl
-    text: {{ site['org'] }}
+    text_size: 4xl
+    text: {{ site['org'] | to_json }}
+
+- datetime:
+    text_size: lg
+    locale: en-GB
+    format:
+      weekday: short
+      day: 2-digit
+      month: short
+      hour: 2-digit
+      minute: 2-digit
+      hourCycle: h23
 
 - search:
     provider: google
     target: _blank
-    focus: true
-
-- datetime:
-    text_size: xl
-    format:
-      dateStyle: medium
-      timeStyle: short
-      hourCycle: h23
+    focus: false
+    showSearchSuggestions: false

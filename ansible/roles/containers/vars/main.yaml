@@ -175,21 +175,3 @@ containers_trusted_proxies: >-
   }}
 
 containers_rustfs_host: "{{ services['containers']['rustfs']['units']['main']['hosts'] | first }}"
-
-containers_homepage_catalog:
-  "Productivity":
-    snappymail: {name: "SnappyMail", icon: "snappymail", description: "Mail"}
-    vaultwarden: {name: "Vaultwarden", icon: "vaultwarden", description: "Passwords"}
-    kaneo: {name: "Kaneo", icon: "mdi-view-column-outline", description: "Projects"}
-    sure: {name: "Sure", icon: "mdi-finance", description: "Finance"}
-    forgejo: {name: "Forgejo", icon: "forgejo", description: "Git"}
-    openwebui: {name: "Open WebUI", icon: "open-webui", description: "AI"}
-    mastodon: {name: "Mastodon", icon: "mastodon", description: "Social"}
-  "Files & Media":
-    oxicloud: {name: "OxiCloud", icon: "mdi-cloud-outline", description: "Files, calendar and contacts"}
-    immich: {name: "Immich", icon: "immich", description: "Photos"}
-    papra: {name: "Papra", icon: "mdi-file-document-outline", description: "Documents"}
-  "Knowledge":
-    outline: {name: "Outline", icon: "outline", description: "Wiki"}
-    bookstack: {name: "BookStack", icon: "bookstack", description: "Books"}
-    linkding: {name: "linkding", icon: "linkding", description: "Bookmarks and archive"}

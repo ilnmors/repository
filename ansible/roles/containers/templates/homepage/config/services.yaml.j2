@@ -1,23 +1,117 @@
-{% for group, members in containers_homepage_catalog.items() %}
-- {{ group }}:
-{% for key, card in members.items() %}
-{% set unit = services['containers'][key]['units']['main'] %}
-    - {{ card['name'] }}:
-        icon: {{ card['icon'] }}
-        description: {{ card['description'] }}
-        href: https://{{ unit['domain']['public'] }}.{{ site['domain']['public'] }}
-        siteMonitor: http://host.containers.internal:{{ unit['ports']['http']['int'] }}
-{% endfor %}
-{% endfor %}
-- Admin:
-{% for item in containers_service_list
-  | selectattr('value.units.main', 'defined')
-  | selectattr('value.units.main.dependency.web.status', 'defined')
-  | selectattr('value.units.main.dependency.web.status', 'equalto', true)
-%}
-{% if (item['value']['units']['main']['domain']['public'] | default('', true) | length) == 0 %}
-    - {{ item['key'] }}:
-        icon: {{ {'ldap': 'lldap'}.get(item['key'], item['key']) }}
-        href: https://{{ item['value']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
-{% endif %}
-{% endfor %}
+- Everyday:
+    - SnappyMail:
+        id: snappymail
+        icon: mdi-email-outline
+        description: Email & inbox
+        href: https://{{ services['containers']['snappymail']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['snappymail']['units']['main']['ports']['http']['int'] }}
+    - Vaultwarden:
+        id: vaultwarden
+        icon: mdi-shield-key-outline
+        description: Passwords & secure notes
+        href: https://{{ services['containers']['vaultwarden']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['vaultwarden']['units']['main']['ports']['http']['int'] }}
+    - Kaneo:
+        id: kaneo
+        icon: mdi-view-column-outline
+        description: Projects & things to do
+        href: https://{{ services['containers']['kaneo']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['kaneo']['units']['main']['ports']['http']['int'] }}
+    - Sure:
+        id: sure
+        icon: mdi-finance
+        description: Money & personal finance
+        href: https://{{ services['containers']['sure']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['sure']['units']['main']['ports']['http']['int'] }}
+    - Mastodon:
+        id: mastodon
+        icon: mastodon
+        description: People & conversations
+        href: https://{{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['mastodon']['units']['main']['ports']['http']['int'] }}
+
+- Workspace:
+    - Forgejo:
+        id: forgejo
+        icon: forgejo
+        description: Code & repositories
+        href: https://{{ services['containers']['forgejo']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['forgejo']['units']['main']['ports']['http']['int'] }}
+    - Open WebUI:
+        id: openwebui
+        icon: open-webui
+        description: AI chat & models
+        href: https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['openwebui']['units']['main']['ports']['http']['int'] }}
+    - Outline:
+        id: outline
+        icon: outline
+        description: Notes & shared knowledge
+        href: https://{{ services['containers']['outline']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['outline']['units']['main']['ports']['http']['int'] }}
+    - BookStack:
+        id: bookstack
+        icon: bookstack
+        description: Books, guides & reference
+        href: https://{{ services['containers']['bookstack']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['bookstack']['units']['main']['ports']['http']['int'] }}
+
+- Library:
+    - OxiCloud:
+        id: oxicloud
+        icon: mdi-cloud-outline
+        description: Files, calendars & contacts
+        href: https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['oxicloud']['units']['main']['ports']['http']['int'] }}
+    - Immich:
+        id: immich
+        icon: immich
+        description: Photos & videos
+        href: https://{{ services['containers']['immich']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['immich']['units']['main']['ports']['http']['int'] }}
+    - Papra:
+        id: papra
+        icon: mdi-file-document-outline
+        description: Documents & archives
+        href: https://{{ services['containers']['papra']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['papra']['units']['main']['ports']['http']['int'] }}
+    - linkding:
+        id: linkding
+        icon: linkding
+        description: Bookmarks & saved pages
+        href: https://{{ services['containers']['linkding']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['linkding']['units']['main']['ports']['http']['int'] }}
+
+- Observability:
+    - Grafana:
+        id: grafana
+        icon: grafana
+        description: Dashboards & service health
+        href: https://{{ services['containers']['grafana']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+    - Prometheus:
+        id: prometheus
+        icon: prometheus
+        description: Metrics & alert rules
+        href: https://{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+    - Loki:
+        id: loki
+        icon: loki
+        description: Log ingestion API
+        href: https://{{ services['containers']['loki']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+
+- Administration:
+    - Authelia:
+        id: authelia
+        icon: mdi-fingerprint
+        description: Sign-in & account security
+        href: https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+    - LDAP:
+        id: ldap
+        icon: mdi-account-group-outline
+        description: People, groups & access
+        href: https://{{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+    - RustFS:
+        id: rustfs
+        icon: mdi-database-outline
+        description: Object storage API
+        href: https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}

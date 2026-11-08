@@ -1,20 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b1220"/>
-      <stop offset="0.55" stop-color="#101a2e"/>
-      <stop offset="1" stop-color="#0a0f1c"/>
-    </linearGradient>
-    <radialGradient id="teal" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    <radialGradient id="light" cx="90%" cy="0%" r="80%">
+      <stop stop-color="#344337" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#101716" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="indigo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#6366f1" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
-    </radialGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r=".8" fill="#c5d6ac" fill-opacity=".1"/>
+    </pattern>
   </defs>
-  <rect width="1920" height="1080" fill="url(#base)"/>
-  <ellipse cx="1560" cy="130" rx="760" ry="520" fill="url(#indigo)"/>
-  <ellipse cx="240" cy="980" rx="820" ry="560" fill="url(#teal)"/>
+  <path fill="#101716" d="M0 0h1920v1200H0z"/>
+  <path fill="url(#light)" d="M0 0h1920v1200H0z"/>
+  <path fill="url(#grid)" d="M0 0h1920v1200H0z"/>
+  <g fill="none" stroke="#c5d6ac" stroke-opacity=".055">
+    <circle cx="1700" cy="90" r="250"/>
+    <circle cx="1700" cy="90" r="330"/>
+    <circle cx="1700" cy="90" r="410"/>
+    <path d="M1160 90h760M1700 0v650"/>
+  </g>
 </svg>
