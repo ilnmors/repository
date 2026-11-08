@@ -1,14 +1,15 @@
-{% set statements = [] %}
+{
+  "Version": "2012-10-17",
+  "Statement": [
+{% set separator = joiner(',') %}
 {% for bucket in item['s3']['buckets'] %}
-{% for scope in ['bucket', 'object'] %}
-{% set actions = bucket['actions'][scope] | default([]) %}
-{% if actions | length > 0 %}
-{% set _ = statements.append({
-    'Effect': 'Allow',
-    'Action': actions | map('regex_replace', '^', 's3:') | list,
-    'Resource': ['arn:aws:s3:::' ~ bucket['name'] ~ ('/*' if scope == 'object' else '')]
-}) %}
-{% endif %}
+{% for scope in ['bucket', 'object'] if bucket['actions'][scope] | default([]) %}
+    {{ separator() }}{
+      "Effect": "Allow",
+      "Action": {{ bucket['actions'][scope] | map('regex_replace', '^', 's3:') | list | to_json }},
+      "Resource": {{ ['arn:aws:s3:::' ~ bucket['name'] ~ ('/*' if scope == 'object' else '')] | to_json }}
+    }
 {% endfor %}
 {% endfor %}
-{{ {'Version': '2012-10-17', 'Statement': statements} | to_json }}
+  ]
+}

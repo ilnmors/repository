@@ -71,11 +71,10 @@ containers_rustfs_clients: >-
   {%- for containers_service in containers_service_list -%}
   {%-   set containers_units = (
           containers_service['value']['units'] | default({}) | dict2items
-          | selectattr('value.dependency', 'defined')
-          | selectattr('value.dependency.s3', 'defined')
-          | selectattr('value.dependency.s3.status', 'defined')
-          | selectattr('value.dependency.s3.status', 'equalto', true)
-          | map(attribute='value') | list
+          | map(attribute='value')
+          | selectattr('dependency.s3.status', 'defined')
+          | selectattr('dependency.s3.status', 'equalto', true)
+          | list
         ) -%}
   {%-   if (containers_units | length) > 0 -%}
   {%-     set containers_definitions = containers_units | map(attribute='dependency.s3') | unique | list -%}
@@ -133,11 +132,10 @@ containers_authelia_oidc_clients: >-
   {%- for containers_service in containers_service_list -%}
   {%-   set containers_units = (
           containers_service['value']['units'] | default({}) | dict2items
-          | selectattr('value.dependency', 'defined')
-          | selectattr('value.dependency.oidc', 'defined')
-          | selectattr('value.dependency.oidc.status', 'defined')
-          | selectattr('value.dependency.oidc.status', 'equalto', true)
-          | map(attribute='value') | list
+          | map(attribute='value')
+          | selectattr('dependency.oidc.status', 'defined')
+          | selectattr('dependency.oidc.status', 'equalto', true)
+          | list
         ) -%}
   {%-   if (containers_units | length) > 0 -%}
   {%-     set containers_unit = containers_units | first -%}
@@ -156,10 +154,8 @@ containers_authelia_oidc_clients: >-
   {%- endfor -%}
   {{ containers_found.clients }}
 
-# Podman pasta forwards host.containers.internal traffic from this link-local address (pg_hba.conf uses the same range).
 containers_podman_gateway: "169.254.1.2"
 
-# Reverse proxies the app services trust: the local Caddy (via pasta) and the public CrowdSec bouncer Caddy.
 containers_trusted_proxies: >-
   {{
     [containers_podman_gateway]
@@ -179,3 +175,21 @@ containers_trusted_proxies: >-
   }}
 
 containers_rustfs_host: "{{ services['containers']['rustfs']['units']['main']['hosts'] | first }}"
+
+containers_homepage_catalog:
+  "Productivity":
+    snappymail: {name: "SnappyMail", icon: "snappymail", description: "Mail"}
+    vaultwarden: {name: "Vaultwarden", icon: "vaultwarden", description: "Passwords"}
+    kaneo: {name: "Kaneo", icon: "mdi-view-column-outline", description: "Projects"}
+    sure: {name: "Sure", icon: "mdi-finance", description: "Finance"}
+    forgejo: {name: "Forgejo", icon: "forgejo", description: "Git"}
+    openwebui: {name: "Open WebUI", icon: "open-webui", description: "AI"}
+    mastodon: {name: "Mastodon", icon: "mastodon", description: "Social"}
+  "Files & Media":
+    oxicloud: {name: "OxiCloud", icon: "mdi-cloud-outline", description: "Files, calendar and contacts"}
+    immich: {name: "Immich", icon: "immich", description: "Photos"}
+    papra: {name: "Papra", icon: "mdi-file-document-outline", description: "Documents"}
+  "Knowledge":
+    outline: {name: "Outline", icon: "outline", description: "Wiki"}
+    bookstack: {name: "BookStack", icon: "bookstack", description: "Books"}
+    linkding: {name: "linkding", icon: "linkding", description: "Bookmarks and archive"}

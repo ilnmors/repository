@@ -6,14 +6,12 @@ BindsTo=postgresql.service
 [Service]
 Type=oneshot
 
-# logging
 StandardOutput=journal
 StandardError=journal
 
 ExecStartPre=/usr/bin/podman exec postgresql sh -c "mkdir -p /backups/%i && chown postgres:root /backups/%i && chmod 770 /backups/%i"
 ExecStartPre=/usr/bin/podman exec postgresql sh -c "mkdir -p /backups/sql && chown postgres:root /backups/sql && chmod 770 /backups/sql"
 
-# Run the script
 ExecStart=/usr/bin/podman exec -u postgres postgresql sh -ec '\
         backup="/backups/%i/pg_%i_$$(date "+%%Y-%%m-%%d").sql"; \
         printf "\\connect %i_db\n" > "$${backup}"; \

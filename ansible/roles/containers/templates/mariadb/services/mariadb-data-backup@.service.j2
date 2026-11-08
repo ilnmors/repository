@@ -6,14 +6,12 @@ BindsTo=mariadb.service
 [Service]
 Type=oneshot
 
-# logging
 StandardOutput=journal
 StandardError=journal
 
 ExecStartPre=/usr/bin/podman exec mariadb sh -c "mkdir -p /backups/%i && chown mysql:root /backups/%i && chmod 770 /backups/%i"
 ExecStartPre=/usr/bin/podman exec mariadb sh -c "mkdir -p /backups/sql && chown mysql:root /backups/sql && chmod 770 /backups/sql"
 
-# Run the script
 ExecStart=/usr/bin/podman exec -u mysql mariadb bash -e -o pipefail -c '\
         backup="/backups/%i/mariadb_%i_$$(date "+%%Y-%%m-%%d").sql"; \
         mariadb -uroot -N -B -e \"SHOW CREATE USER \'%i\'@\'%%\';\" | sed "s/$$/;/" > "$${backup}"; \
