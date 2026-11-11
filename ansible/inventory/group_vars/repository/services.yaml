@@ -47,6 +47,13 @@ services:
         main:
           release: "code-server"
           hosts: ["console"]
+          domain:
+            internal: "code"
+          dependency:
+            web:
+              status: true
+            pki:
+              cert: true
           ports:
             http:
               protocol: "tcp"
@@ -55,12 +62,12 @@ services:
       units:
         main:
           release: "nftables"
-          hosts: ["vmm", "infra", "auth", "app"]
+          hosts: ["console", "vmm", "infra", "auth", "app"]
     netcat:
       units:
         main:
           release: "netcat"
-          hosts: ["vmm", "infra", "auth", "app"]
+          hosts: ["console", "vmm", "infra", "auth", "app"]
     rsync:
       units:
         main:
@@ -235,7 +242,7 @@ services:
       units:
         main:
           release: "podman"
-          hosts: ["infra", "auth", "app"]
+          hosts: ["console", "infra", "auth", "app"]
     ksm:
       units:
         tuned:
@@ -254,7 +261,7 @@ services:
       units:
         main:
           release: "caddy"
-          hosts: ["infra", "auth", "app"]
+          hosts: ["console", "infra", "auth", "app"]
           ports:
             http:
               protocol: "tcp"

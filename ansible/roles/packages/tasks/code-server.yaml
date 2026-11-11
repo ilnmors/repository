@@ -23,6 +23,14 @@
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0644"
 
+- name: Create the user systemd directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+
 - name: Deploy the code-server service file
   ansible.builtin.template:
     src: "code-server/code-server.service.j2"

@@ -1,0 +1,12 @@
+#!/usr/sbin/nft -f
+{% set caddy = services['containers']['caddy']['units']['main'] %}
+destroy table inet console
+
+table inet console {
+    chain output {
+        type nat hook output priority dstnat; policy accept;
+{% for name in ['http', 'https'] %}
+        ip daddr 127.0.0.1 tcp dport {{ caddy['ports'][name]['ext'] }} dnat to :{{ caddy['ports'][name]['int'] }} comment "DNAT {{ caddy['ports'][name]['ext'] }} to {{ caddy['ports'][name]['int'] }} out of LOCALHOST"
+{% endfor %}
+    }
+}

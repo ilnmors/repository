@@ -9,6 +9,15 @@
     mode: "0644"
   loop: ["uid", "gid"]
   become: true
+  when: not nodes[target_host]['control_node']
+
+- name: Check the console podman subordinate IDs
+  ansible.builtin.shell: |
+    /usr/bin/getsubids {{ nodes[target_host]['user'] | quote }}
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  when: nodes[target_host]['control_node']
 
 - name: Create the podman configuration directories
   ansible.builtin.file:

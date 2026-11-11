@@ -5,7 +5,7 @@
     containers_container_repository: >-
       {{
           site['domain']['internal'] ~ '/' ~ target_host ~ '/' ~ target_container
-          if releases['containers'][target_container]['build']['status'] | default(false)
+          if containers_build_enabled
           else
             releases['containers'][target_container]['repository']
       }}
@@ -35,12 +35,12 @@
     state: "present"
     pull: true
   when:
-    - not (releases['containers'][target_container]['build']['status'] | default(false))
+    - not (containers_build_enabled)
     - not containers_archived_image['stat']['exists']
   notify: "{{ containers_image_notifications | default(omit) }}"
 
 - name: Build the image
-  when: releases['containers'][target_container]['build']['status'] | default(false)
+  when: containers_build_enabled
   block:
     - name: Set the build file tree
       ansible.builtin.set_fact:

@@ -175,3 +175,27 @@ containers_trusted_proxies: >-
   }}
 
 containers_rustfs_host: "{{ services['containers']['rustfs']['units']['main']['hosts'] | first }}"
+
+containers_caddy_services: >-
+  {{
+    containers_unit_entries
+    | map(attribute='value')
+    | selectattr('hosts', 'contains', target_host)
+    | selectattr('dependency.web.status', 'defined')
+    | selectattr('dependency.web.status', 'equalto', true)
+    | list
+  }}
+
+containers_caddy_static_tls: "{{ nodes[target_host]['control_node'] }}"
+
+containers_build_enabled: >-
+  {{
+    (releases['containers'][target_container]['build']['status'] | default(false))
+    and (
+      services['containers'][target_container]['units']['main']['build'] is not defined
+      or target_host in (
+        services['containers'][target_container]['units']['main']['build']
+        | dict2items | map(attribute='value.hosts') | flatten | unique | list
+      )
+    )
+  }}

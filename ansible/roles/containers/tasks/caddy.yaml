@@ -17,7 +17,10 @@
     containers_secrets: >-
       {{
         [
-          {'name': 'CADDY_ACME_KEY', 'value': secrets['ca']['x509']['acme']['key']},
+          (
+            {'name': 'CADDY_ACME_KEY', 'value': secrets['ca']['x509']['acme']['key']}
+            if not containers_caddy_static_tls else none
+          ),
           (
             {'name': 'CADDY_CROWDSEC_KEY', 'value': secrets['crowdsec']['bouncers'][target_host]}
             if target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts']
@@ -66,6 +69,46 @@
     containers_image_notifications: "notification_restart_caddy"
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
+
+- name: Register the missing caddy leaf certificates # noqa: var-naming[no-role-prefix]
+  vars:
+    target_service: "{{ item }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "x509-leaf"
+  loop: "{{ containers_caddy_services | selectattr('dependency.pki.cert', 'defined') | selectattr('dependency.pki.cert', 'equalto', true) | list }}"
+  when:
+    - containers_caddy_static_tls
+    - >-
+      (secrets['ca']['x509']['leaf'][item['domain']['internal']]['crt'] | default('', true) | length) == 0 or
+      (secrets['ca']['x509']['leaf'][item['domain']['internal']]['key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Deploy the caddy leaf certificates
+  ansible.builtin.copy:
+    content: "{{ secrets['ca']['x509']['leaf'][item['domain']['internal']]['crt'] }}{{ secrets['ca']['x509']['intermediate']['crt'] }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/etc/{{ item['domain']['internal'] }}.crt"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  loop: "{{ containers_caddy_services | selectattr('dependency.pki.cert', 'defined') | selectattr('dependency.pki.cert', 'equalto', true) | list }}"
+  when: containers_caddy_static_tls
+  become: true
+  no_log: true
+  notify: "notification_restart_caddy"
+
+- name: Deploy the caddy leaf private keys
+  ansible.builtin.copy:
+    content: "{{ secrets['ca']['x509']['leaf'][item['domain']['internal']]['key'] }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/etc/{{ item['domain']['internal'] }}.key"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  loop: "{{ containers_caddy_services | selectattr('dependency.pki.cert', 'defined') | selectattr('dependency.pki.cert', 'equalto', true) | list }}"
+  when: containers_caddy_static_tls
+  become: true
+  no_log: true
+  notify: "notification_restart_caddy"
 
 - name: Deploy the Caddyfile
   ansible.builtin.template:

@@ -14,6 +14,7 @@ nodes:
     paths:
       home: "/home/console"
       repository: "/home/console/workspace/repository"
+      data: "/home/console/.local/share/repository"
   vmm:
     control_node: false
     virtualization: false

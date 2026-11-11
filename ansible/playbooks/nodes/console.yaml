@@ -32,6 +32,12 @@
         apply:
           tags: ["site", "init"]
       tags: ["always"]
+    - name: Set containers
+      ansible.builtin.include_role:
+        name: "containers"
+        apply:
+          tags: ["site", "init"]
+      tags: ["always"]
   post_tasks:
     - name: Set the handler results
       ansible.builtin.set_fact:

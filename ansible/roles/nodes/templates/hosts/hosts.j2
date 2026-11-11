@@ -17,3 +17,13 @@
 {% endif %}
 {% endfor %}
 {% endfor %}
+
+{% if nodes[target_host]['control_node'] %}
+{% for package in services['packages'] | dict2items %}
+{% for unit in package['value']['units'] | dict2items %}
+{% if target_host in unit['value']['hosts'] and unit['value']['dependency']['web']['status'] | default(false) %}
+127.0.0.1       {{ unit['value']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}

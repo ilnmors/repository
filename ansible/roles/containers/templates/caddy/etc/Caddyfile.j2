@@ -1,3 +1,22 @@
+{% if containers_caddy_static_tls %}
+{
+        admin off
+        auto_https off
+        http_port {{ services['containers']['caddy']['units']['main']['ports']['http']['int'] }}
+        https_port {{ services['containers']['caddy']['units']['main']['ports']['https']['int'] }}
+        default_bind 127.0.0.1
+}
+{% for service in containers_caddy_services %}
+http://{{ service['domain']['internal'] }}.{{ site['domain']['internal'] }} {
+        redir https://{host}{uri} permanent
+}
+
+https://{{ service['domain']['internal'] }}.{{ site['domain']['internal'] }} {
+        tls /etc/caddy/{{ service['domain']['internal'] }}.crt /etc/caddy/{{ service['domain']['internal'] }}.key
+        reverse_proxy 127.0.0.1:{{ service['ports']['http']['int'] }}
+}
+{% endfor %}
+{% else %}
 {% set build = (services['containers'][target_container]['units']['main']['build']) %}
 {% if target_host in build['http-bouncer']['hosts'] and target_host in build['crowdsec-bouncer']['hosts'] %}
 {
@@ -131,4 +150,5 @@ caddy.{{ target_host }}.{{ site['domain']['internal'] }} {
 }
 {% endif %}
 {% endfor %}
+{% endif %}
 {% endif %}

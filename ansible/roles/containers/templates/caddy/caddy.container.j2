@@ -23,8 +23,12 @@ AddHost={{ services['containers']['prometheus']['units']['main']['domain']['inte
 AddHost={{ services['containers']['loki']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
 {% endif %}
 
+{% if containers_caddy_static_tls %}
+Network=host
+{% else %}
 PublishPort={{ services['containers'][target_container]['units']['main']['ports']['http']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['http']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['http']['protocol'] }}
 PublishPort={{ services['containers'][target_container]['units']['main']['ports']['https']['int'] }}:{{ services['containers'][target_container]['units']['main']['ports']['https']['container'] }}/{{ services['containers'][target_container]['units']['main']['ports']['https']['protocol'] }}
+{% endif %}
 
 Volume=%h/containers/caddy/etc:/etc/caddy:ro
 Volume=%h/containers/caddy/data:/data:rw
@@ -38,13 +42,21 @@ Volume=/var/log/caddy:/log:rw
 
 Environment="TZ={{ site['timezone'] }}"
 
+{% if not containers_caddy_static_tls %}
 Secret=CADDY_ACME_KEY,target=/run/secrets/CADDY_ACME_KEY
+{% endif %}
 {% if target_host in services['containers'][target_container]['units']['main']['build']['http-bouncer']['hosts'] and target_host in services['containers'][target_container]['units']['main']['build']['crowdsec-bouncer']['hosts'] %}
 Secret=CADDY_CROWDSEC_KEY,target=/run/secrets/CADDY_CROWDSEC_KEY
 {% endif %}
 
 [Service]
+{% if containers_caddy_static_tls %}
+{% for service in containers_caddy_services %}
+ExecStartPre=/usr/bin/nc -zv -w 5 127.0.0.1 {{ service['ports']['http']['int'] }}
+{% endfor %}
+{% else %}
 ExecStartPre=/usr/bin/nc -zv -w 5 {{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['step-ca']['units']['main']['ports']['https']['int'] if target_host in services['containers']['step-ca']['units']['main']['hosts'] else services['containers']['step-ca']['units']['main']['ports']['https']['ext'] }}
+{% endif %}
 Restart=always
 RestartSec=60s
 TimeoutStopSec=120
