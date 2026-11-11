@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+"""Restore native PET omitted from universal Open VSX Python Environments builds."""
+import hashlib
+import json
+import os
+import platform
+import re
+import struct
+import tempfile
+import urllib.request
+import zipfile
+from pathlib import Path
+
+extension_root = Path.home() / '.local/share/code-server/extensions'
+cache_root = Path.home() / '.cache/code-server/python-tools'
+platforms = {'aarch64': ('linux-arm64', 183), 'x86_64': ('linux-x64', 62)}
+if platform.machine() not in platforms:
+    raise SystemExit('Unsupported Python environment tools architecture')
+target, machine = platforms[platform.machine()]
+
+def native(path):
+    try:
+        with path.open('rb') as stream:
+            header = stream.read(20)
+        return header[:5] == b'\x7fELF\x02' and struct.unpack('<H', header[18:20])[0] == machine and os.access(path, os.X_OK)
+    except (OSError, struct.error):
+        return False
+
+for extension in sorted(extension_root.glob('ms-python.vscode-python-envs-*')):
+    info = json.loads((extension / 'package.json').read_text())
+    if info.get('publisher') != 'ms-python' or info.get('name') != 'vscode-python-envs':
+        raise SystemExit('Unexpected Python Environments package identity')
+    version = info['version']
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.]+)?', version):
+        raise SystemExit('Invalid Python Environments version')
+    destination = extension / 'python-env-tools/bin'
+    if native(destination / 'pet'):
+        continue
+    cache_root.mkdir(parents=True, exist_ok=True)
+    archive = cache_root / f'python-envs-{version}-{target}.vsix'
+    url = ('https://ms-python.gallery.vsassets.io/_apis/public/gallery/publisher/ms-python/'
+           f'extension/vscode-python-envs/{version}/assetbyname/'
+           f'Microsoft.VisualStudio.Services.VSIXPackage?targetPlatform={target}')
+    if not archive.exists():
+        with tempfile.NamedTemporaryFile(dir=cache_root, delete=False) as temporary:
+            downloaded = Path(temporary.name)
+            try:
+                with urllib.request.urlopen(url, timeout=30) as response:
+                    total = 0
+                    while block := response.read(1024 * 1024):
+                        total += len(block)
+                        if total > 128 * 1024 * 1024:
+                            raise ValueError('Python Environments archive exceeds 128 MiB')
+                        temporary.write(block)
+                temporary.flush()
+                downloaded.replace(archive)
+            finally:
+                downloaded.unlink(missing_ok=True)
+    with zipfile.ZipFile(archive) as bundle:
+        package = json.loads(bundle.read('extension/package.json'))
+        if (package.get('publisher'), package.get('name'), package.get('version')) != ('ms-python', 'vscode-python-envs', version):
+            raise SystemExit('Downloaded extension identity mismatch')
+        destination.mkdir(parents=True, exist_ok=True)
+        for name in ('pet', 'ThirdPartyNotices.txt'):
+            data = bundle.read('extension/python-env-tools/bin/' + name)
+            if name == 'pet' and (data[:5] != b'\x7fELF\x02' or struct.unpack('<H', data[18:20])[0] != machine):
+                raise SystemExit('Downloaded PET architecture mismatch')
+            path = destination / name
+            with tempfile.NamedTemporaryFile(dir=destination, delete=False) as temporary:
+                temporary.write(data)
+                temporary_path = Path(temporary.name)
+            temporary_path.chmod(0o755 if name == 'pet' else 0o644)
+            temporary_path.replace(path)
+    provenance = {'url': url, 'version': version, 'target': target,
+                  'archive_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+                  'pet_sha256': hashlib.sha256((destination / 'pet').read_bytes()).hexdigest()}
+    (cache_root / f'python-envs-{version}-{target}.json').write_text(json.dumps(provenance, indent=2) + '\n')
+    print('Python environment tools installed: ' + version + ' / ' + target)

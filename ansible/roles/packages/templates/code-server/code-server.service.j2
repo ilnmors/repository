@@ -3,6 +3,7 @@ Description=code-server user service
 
 [Service]
 Type=simple
+ExecStartPre=-/usr/bin/python3 %h/.local/share/code-server/repair-python-tools.py
 ExecStart=/usr/bin/code-server \
         --auth none \
         --bind-addr 127.0.0.1:{{ services['packages']['code-server']['units']['main']['ports']['http']['int'] }} \

@@ -47,6 +47,11 @@ services:
         main:
           release: "code-server"
           hosts: ["console"]
+          extensions:
+            - "redhat.ansible"
+            - "redhat.vscode-yaml"
+            - "ms-python.python"
+            - "mhutchie.git-graph"
           domain:
             internal: "code"
           dependency:

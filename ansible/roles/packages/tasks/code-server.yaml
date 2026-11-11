@@ -7,6 +7,39 @@
   ansible.builtin.include_tasks:
     file: "install.yaml"
 
+- name: List the installed code-server extensions
+  ansible.builtin.shell: |
+    /usr/bin/code-server --list-extensions
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  register: "packages_code_server_extensions"
+
+- name: Install the missing code-server extensions
+  ansible.builtin.shell: |
+    /usr/bin/code-server --install-extension {{ item | quote }}
+  args:
+    executable: "/bin/bash"
+  loop: "{{ services['packages']['code-server']['units']['main']['extensions'] | default([]) }}"
+  when: item not in packages_code_server_extensions['stdout_lines']
+  changed_when: true
+
+- name: Deploy the Python environment tools helper
+  ansible.builtin.template:
+    src: "code-server/repair-python-tools.py.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.local/share/code-server/repair-python-tools.py"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+
+- name: Install the missing Python environment tools
+  ansible.builtin.shell: |
+    /usr/bin/python3 {{ (nodes[target_host]['paths']['home'] ~ '/.local/share/code-server/repair-python-tools.py') | quote }}
+  args:
+    executable: "/bin/bash"
+  register: "packages_code_server_python_tools"
+  changed_when: "'Python environment tools installed:' in packages_code_server_python_tools['stdout']"
+
 - name: Create the VS Code settings directory
   ansible.builtin.file:
     path: "{{ nodes[target_host]['paths']['repository'] }}/.vscode"
