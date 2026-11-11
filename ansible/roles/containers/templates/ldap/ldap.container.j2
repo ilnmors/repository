@@ -4,13 +4,8 @@ DefaultDependencies=false
 [Unit]
 Description=LDAP
 
-{% if target_host in services['containers']['postgresql']['units']['main']['hosts'] %}
-After=postgresql.service
-Requires=postgresql.service
-{% else %}
 After=network-online.target
 Wants=network-online.target
-{% endif %}
 
 [Container]
 Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}

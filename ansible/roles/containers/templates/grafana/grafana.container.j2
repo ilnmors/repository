@@ -6,13 +6,8 @@ DefaultDependencies=false
 [Unit]
 Description=Grafana
 
-{% if target_host in postgresql['hosts'] %}
-After=postgresql.service
-Requires=postgresql.service
-{% else %}
 After=network-online.target
 Wants=network-online.target
-{% endif %}
 
 [Container]
 Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}

@@ -4,13 +4,8 @@ DefaultDependencies=false
 [Unit]
 Description=Caddy
 
-{% if target_host in (services['containers']['step-ca']['units']['main']['hosts']) %}
-After=step-ca.service
-Requires=step-ca.service
-{% else %}
 After=network-online.target
 Wants=network-online.target
-{% endif %}
 
 
 [Container]
@@ -49,6 +44,7 @@ Secret=CADDY_CROWDSEC_KEY,target=/run/secrets/CADDY_CROWDSEC_KEY
 {% endif %}
 
 [Service]
+ExecStartPre=/usr/bin/nc -zv -w 5 {{ services['containers']['step-ca']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['step-ca']['units']['main']['ports']['https']['int'] if target_host in services['containers']['step-ca']['units']['main']['hosts'] else services['containers']['step-ca']['units']['main']['ports']['https']['ext'] }}
 Restart=always
 RestartSec=60s
 TimeoutStopSec=120

@@ -4,13 +4,8 @@ DefaultDependencies=false
 [Unit]
 Description=Dovecot
 
-{% if target_host in services['containers']['ldap']['units']['main']['hosts'] %}
-After=ldap.service
-Wants=ldap.service
-{% else %}
 After=network-online.target
 Wants=network-online.target
-{% endif %}
 
 [Container]
 Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}

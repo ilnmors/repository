@@ -45,6 +45,7 @@ Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/immich/{{ site['ca']['x509']['root']['
 Secret=IMMICH_DB_PASSWORD,target=/run/secrets/DB_PASSWORD
 
 [Service]
+ExecStartPre=/usr/bin/nc -zv -w 5 127.0.0.1 {{ services['containers']['immich']['units']['valkey']['ports']['tcp']['int'] }}
 ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
 Restart=always
 RestartSec=60s

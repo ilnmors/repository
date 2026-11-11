@@ -77,6 +77,7 @@ Secret=OUTLINE_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
 Environment="LOG_LEVEL=warn"
 
 [Service]
+ExecStartPre=/usr/bin/nc -zv -w 5 127.0.0.1 {{ services['containers']['outline']['units']['valkey']['ports']['tcp']['int'] }}
 MemoryKSM=yes
 ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
 Restart=always
