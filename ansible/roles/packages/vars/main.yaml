@@ -35,3 +35,5 @@ packages_host_debian_package_list: >-
   }}
 
 packages_backup_path: "{{ nodes[target_host]['system']['disk']['backup']['fs']['mount_point'] }}"
+
+packages_kopia_backup_path: "{{ nodes[target_host]['paths']['workspace'] | default(nodes[target_host]['paths']['data']) }}"

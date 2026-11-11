@@ -474,12 +474,12 @@
     - name: Check the kopia client data path
       ansible.builtin.assert:
         that:
-          - (nodes[target_host]['paths']['data'] | default('') | length) > 0
+          - (packages_kopia_backup_path | default('') | length) > 0
         fail_msg: "Define the data path for {{ target_host }} in nodes.yaml."
 
     - name: Check the kopia client data directory
       ansible.builtin.stat:
-        path: "{{ nodes[target_host]['paths']['data'] }}"
+        path: "{{ packages_kopia_backup_path }}"
       register: "packages_data_dir"
 
     - name: Check the kopia client data directory is ready
@@ -490,7 +490,7 @@
 
     - name: Check the kopia client data directory is empty
       ansible.builtin.find:
-        paths: "{{ nodes[target_host]['paths']['data'] }}"
+        paths: "{{ packages_kopia_backup_path }}"
         file_type: "any"
         hidden: true
         recurse: false
@@ -511,7 +511,7 @@
       ansible.builtin.shell: |
         set -euo pipefail
         /usr/bin/kopia snapshot list \
-        {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ nodes[target_host]['paths']['data']) | quote }} \
+        {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ packages_kopia_backup_path) | quote }} \
         --json --max-results=1
       args:
         executable: "/bin/bash"
@@ -563,8 +563,8 @@
             --override-hostname={{ (target_host ~ '.' ~ site['domain']['internal']) | quote }}
             /usr/bin/kopia snapshot restore --snapshot-time=latest \
             --write-files-atomically --skip-existing \
-            {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ nodes[target_host]['paths']['data']) | quote }} \
-            {{ nodes[target_host]['paths']['data'] | quote }}
+            {{ (target_host ~ '@' ~ target_host ~ '.' ~ site['domain']['internal'] ~ ':' ~ packages_kopia_backup_path) | quote }} \
+            {{ packages_kopia_backup_path | quote }}
           args:
             executable: "/bin/bash"
           changed_when: true

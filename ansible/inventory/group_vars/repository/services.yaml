@@ -242,7 +242,7 @@ services:
               cert: true
         client:
           release: "kopia"
-          hosts: ["infra", "auth", "app"]
+          hosts: ["console", "infra", "auth", "app"]
     podman:
       units:
         main:
