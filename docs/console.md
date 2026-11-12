@@ -87,7 +87,7 @@ Run as the Console user. The playbook loads encrypted secrets, reads the declare
 
 ### Local code-server
 
-- [services.yaml](../ansible/inventory/group_vars/repository/services.yaml) declares `code`, its web/PKI dependency, HTTP backend and extensions.
+- [services.yaml](../ansible/inventory/group_vars/repository/services.yaml) declares `code`, its web/PKI dependency and HTTP backend.
 - The nodes role maps `code.ilnmors.internal` to `127.0.0.1` and translates localhost TCP `80 → 2080`, `443 → 2443` using a dedicated nftables table.
 - The packages role runs code-server at `127.0.0.1:8081` and installs missing Ansible, YAML, Python and Git Graph extensions. Core Git support is built in.
 - The existing containers/Caddy role selects hosted services with `dependency.web.status: true`. Console uses fixed leaf/full-chain files; servers retain ACME. PKI services use the existing `dependency.pki.cert: true` convention.
@@ -121,3 +121,5 @@ sudo journalctl -u kopia-client.service
 ## Next step
 
 Prepare the physical hypervisor using [vmm.md](vmm.md). Keep the Surface hardware bundle separate from infrastructure secrets and server bootstrap material.
+
+Python environment discovery: the packages role repairs missing native PET files in universal Open VSX Python Environments builds, using the matching version's native Microsoft extension archive. The helper verifies package identity and ELF architecture, preserves third-party notices and caches the archive/hash outside Git. It runs during setup and before the user service starts; an unavailable repair download does not prevent the editor starting. Reload the editor after an initial repair.

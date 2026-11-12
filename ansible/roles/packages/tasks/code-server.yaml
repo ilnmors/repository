@@ -20,7 +20,11 @@
     /usr/bin/code-server --install-extension {{ item | quote }}
   args:
     executable: "/bin/bash"
-  loop: "{{ services['packages']['code-server']['units']['main']['extensions'] | default([]) }}"
+  loop:
+    - "redhat.ansible"
+    - "redhat.vscode-yaml"
+    - "ms-python.python"
+    - "mhutchie.git-graph"
   when: item not in packages_code_server_extensions['stdout_lines']
   changed_when: true
 
@@ -42,19 +46,25 @@
 
 - name: Create the VS Code settings directory
   ansible.builtin.file:
-    path: "{{ nodes[target_host]['paths']['repository'] }}/.vscode"
+    path: "{{ item }}/.vscode"
     state: "directory"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0755"
+  loop:
+    - "{{ nodes[target_host]['paths']['workspace'] }}"
+    - "{{ nodes[target_host]['paths']['repository'] }}"
 
 - name: Deploy the VS Code settings file
   ansible.builtin.template:
     src: "code-server/settings.json.j2"
-    dest: "{{ nodes[target_host]['paths']['repository'] }}/.vscode/settings.json"
+    dest: "{{ item }}/.vscode/settings.json"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0644"
+  loop:
+    - "{{ nodes[target_host]['paths']['workspace'] }}"
+    - "{{ nodes[target_host]['paths']['repository'] }}"
 
 - name: Create the user systemd directory
   ansible.builtin.file:
