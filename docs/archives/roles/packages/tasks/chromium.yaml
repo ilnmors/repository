@@ -1,0 +1,8 @@
+---
+# chromium and fonts-nanum are installed from Debian by the generic package task
+# (releases.packages.{chromium,fonts-nanum}); this only refreshes the font cache.
+- name: Refresh the font cache
+  ansible.builtin.command:
+    cmd: "fc-cache -f"
+  changed_when: false
+  become: true

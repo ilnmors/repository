@@ -1,0 +1,42 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=BookLogr Web
+
+After=network-online.target booklogr-api.service
+Wants=network-online.target booklogr-api.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=booklogr-web
+HostName=booklogr-web
+
+PublishPort={{ services['containers']['booklogr']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['booklogr']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['booklogr']['units']['main']['ports']['http']['protocol'] }}
+
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="BL_DEMO_MODE=false"
+Environment="BL_DEBUG=false"
+Environment="BL_CHECK_UPDATES=true"
+
+# API
+Environment="BL_API_ENDPOINT=https://{{ services['containers']['booklogr']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+
+# Authentication UI
+Environment="BL_SINGLE_USER_MODE=false"
+Environment="BL_ALLOW_MANUAL_LOGIN=false"
+Environment="BL_ALLOW_REGISTRATION=false"
+
+# OIDC - Authelia
+Environment="BL_OIDC_AUTHORITY=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="BL_OIDC_CLIENT_ID=booklogr"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

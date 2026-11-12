@@ -1,0 +1,109 @@
+---
+- name: Register the opencloud authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "opencloud"
+
+- name: Create the opencloud directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['opencloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/opencloud"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/opencloud"
+  become: true
+
+- name: Check the opencloud .init marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/opencloud/.init"
+  register: "containers_opencloud_init_marker"
+
+- name: Initialize the opencloud
+  when: not containers_opencloud_init_marker['stat']['exists']
+  block:
+    - name: Deploy the opencloud image for initialization
+      vars:
+        containers_image_notifications: "notification_restart_opencloud"
+      ansible.builtin.include_tasks:
+        file: "deploy.yaml"
+
+    - name: Run the opencloud init
+      containers.podman.podman_container:
+        name: "opencloud_init"
+        image: "{{ containers_container_repository }}:{{ releases['containers']['opencloud']['tag'] }}"
+        command: "init"
+        state: "started"
+        rm: true
+        detach: false
+        env:
+          IDM_ADMIN_PASSWORD: "{{ secrets['opencloud']['admin'] }}"
+          OC_INSECURE: "true"
+        volume:
+          - "{{ nodes[target_host]['paths']['home'] }}/containers/opencloud:/etc/opencloud:rw"
+          - "{{ nodes[target_host]['paths']['data'] }}/containers/opencloud:/var/lib/opencloud:rw"
+      no_log: true
+
+    - name: Create the opencloud .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}/containers/opencloud/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+
+- name: Deploy the opencloud csp.yaml
+  ansible.builtin.template:
+    src: "opencloud/etc/csp.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/opencloud/csp.yaml"
+    owner: "{{ services['containers']['opencloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_opencloud"
+
+- name: Deploy the opencloud proxy.yaml
+  ansible.builtin.template:
+    src: "opencloud/etc/proxy.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/opencloud/proxy.yaml"
+    owner: "{{ services['containers']['opencloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_opencloud"
+
+- name: Deploy the opencloud image
+  vars:
+    containers_image_notifications: "notification_restart_opencloud"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the opencloud container file
+  ansible.builtin.template:
+    src: "opencloud/opencloud.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/opencloud.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_opencloud"
+
+- name: Start the opencloud
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "opencloud.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_opencloud_started"
+
+- name: Apply the opencloud configuration handlers
+  ansible.builtin.meta: "flush_handlers"

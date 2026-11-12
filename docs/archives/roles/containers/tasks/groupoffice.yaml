@@ -1,0 +1,154 @@
+---
+- name: Register the groupoffice database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_mariadb_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_mariadb_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "mariadb.yaml"
+    apply:
+      delegate_to: "{{ containers_mariadb_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "groupoffice"
+
+- name: Set the groupoffice fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "GROUPOFFICE_DB_PASSWORD"
+        value: "{{ secrets['mariadb']['password']['groupoffice'] }}"
+  no_log: true
+
+- name: Create the groupoffice directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/groupoffice"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/groupoffice/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config"
+  become: true
+
+- name: Deploy the groupoffice root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_groupoffice"
+  no_log: true
+
+- name: Deploy the groupoffice config.php
+  ansible.builtin.template:
+    src: "groupoffice/config/config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/config.php"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_groupoffice"
+
+- name: Deploy the groupoffice groupoffice-ca.ini
+  ansible.builtin.template:
+    src: "groupoffice/config/groupoffice-ca.ini.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/groupoffice-ca.ini"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_groupoffice"
+
+- name: Deploy the groupoffice Connection.php
+  ansible.builtin.template:
+    src: "groupoffice/config/Connection.php.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/Connection.php"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_groupoffice"
+
+- name: Deploy the groupoffice Authenticator.php
+  ansible.builtin.template:
+    src: "groupoffice/config/Authenticator.php.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/Authenticator.php"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_groupoffice"
+
+- name: Deploy the groupoffice configfile.php
+  ansible.builtin.template:
+    src: "groupoffice/config/configfile.php.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/configfile.php"
+    owner: "{{ services['containers']['groupoffice']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_groupoffice"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_groupoffice"
+  no_log: true
+
+- name: Deploy the groupoffice image
+  vars:
+    containers_image_notifications: "notification_restart_groupoffice"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the groupoffice container file
+  ansible.builtin.template:
+    src: "groupoffice/groupoffice.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/groupoffice.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_groupoffice"
+
+- name: Deploy the groupoffice-cron.service
+  ansible.builtin.template:
+    src: "groupoffice/services/groupoffice-cron.service"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/groupoffice-cron.service"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+
+- name: Deploy the groupoffice-cron.timer
+  ansible.builtin.template:
+    src: "groupoffice/services/groupoffice-cron.timer"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/groupoffice-cron.timer"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+
+- name: Start the groupoffice
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "groupoffice.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_groupoffice_started"
+
+- name: Enable the groupoffice-cron.timer
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "groupoffice-cron.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+
+- name: Apply the groupoffice configuration handlers
+  ansible.builtin.meta: "flush_handlers"

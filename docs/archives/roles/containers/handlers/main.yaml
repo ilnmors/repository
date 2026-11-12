@@ -1,0 +1,324 @@
+---
+- name: Restart the actual-budget.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "actual-budget.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_actual_budget_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_actual_budget"
+  listen: "notification_restart_actual-budget"
+  ignore_errors: true
+
+- name: Restart the manticore_affine.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "manticore_affine.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_affine_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_manticore_affine"
+  listen: "notification_restart_affine"
+  ignore_errors: true
+
+- name: Restart the affine.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "affine.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_affine_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_affine"
+  listen: "notification_restart_affine"
+  ignore_errors: true
+
+- name: Restart the bonfire.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "bonfire.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_bonfire_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_bonfire"
+  listen: "notification_restart_bonfire"
+  ignore_errors: true
+
+- name: Restart the booklogr-api.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "booklogr-api.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_booklogr_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_booklogr_api"
+  listen: "notification_restart_booklogr"
+  ignore_errors: true
+
+- name: Restart the booklogr-web.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "booklogr-web.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_booklogr_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_booklogr_web"
+  listen: "notification_restart_booklogr"
+  ignore_errors: true
+
+- name: Restart the ca.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ca.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_ca_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_ca"
+  listen: "notification_restart_ca"
+  ignore_errors: true
+
+- name: Restart the ezbookkeeping.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ezbookkeeping.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_ezbookkeeping_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_ezbookkeeping"
+  listen: "notification_restart_ezbookkeeping"
+  ignore_errors: true
+
+- name: Restart the gitea.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "gitea.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_gitea_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_gitea"
+  listen: "notification_restart_gitea"
+  ignore_errors: true
+
+- name: Restart the groupoffice.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "groupoffice.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_groupoffice_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_groupoffice"
+  listen: "notification_restart_groupoffice"
+  ignore_errors: true
+
+- name: Restart the homebox.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "homebox.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_homebox_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_homebox"
+  listen: "notification_restart_homebox"
+  ignore_errors: true
+
+- name: Restart the linkwarden.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "linkwarden.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_linkwarden_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_linkwarden"
+  listen: "notification_restart_linkwarden"
+  ignore_errors: true
+
+- name: Restart the llama.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "llama.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_llama_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_llama"
+  listen: "notification_restart_llama"
+  ignore_errors: true
+
+- name: Restart the maddy.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "maddy.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_maddy_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_maddy"
+  listen: "notification_restart_maddy"
+  ignore_errors: true
+
+- name: Restart the mealie.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "mealie.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_mealie_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_mealie"
+  listen: "notification_restart_mealie"
+  ignore_errors: true
+
+- name: Restart the memos.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "memos.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_memos_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_memos"
+  listen: "notification_restart_memos"
+  ignore_errors: true
+
+- name: Restart the nextcloud.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "nextcloud.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_nextcloud_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_nextcloud"
+  listen: "notification_restart_nextcloud"
+  ignore_errors: true
+
+- name: Restart the opencloud.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "opencloud.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_opencloud_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_opencloud"
+  listen: "notification_restart_opencloud"
+  ignore_errors: true
+
+- name: Restart the ovms.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ovms.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_ovms_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_ovms"
+  listen: "notification_restart_ovms"
+  ignore_errors: true
+
+- name: Restart the paperless.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "paperless.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_paperless_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_paperless"
+  listen: "notification_restart_paperless"
+  ignore_errors: true
+
+- name: Restart the readur.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "readur.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_readur_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_readur"
+  listen: "notification_restart_readur"
+  ignore_errors: true
+
+- name: Restart the romm.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "romm.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_romm_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_romm"
+  listen: "notification_restart_romm"
+  ignore_errors: true
+
+- name: Restart the stablediffusion.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "stablediffusion.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_stablediffusion_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_stablediffusion"
+  listen: "notification_restart_stablediffusion"
+  ignore_errors: true
+
+- name: Restart the tandoor.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "tandoor.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_tandoor_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_tandoor"
+  listen: "notification_restart_tandoor"
+  ignore_errors: true
+
+- name: Restart the trilium.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "trilium.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_trilium_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_trilium"
+  listen: "notification_restart_trilium"
+  ignore_errors: true
+
+- name: Restart the vikunja.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "vikunja.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_vikunja_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_vikunja"
+  listen: "notification_restart_vikunja"
+  ignore_errors: true
+
+- name: Restart the wikijs.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "wikijs.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_wikijs_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_wikijs"
+  listen: "notification_restart_wikijs"
+  ignore_errors: true

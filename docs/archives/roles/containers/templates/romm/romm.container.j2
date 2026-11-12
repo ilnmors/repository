@@ -1,0 +1,80 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=RomM
+
+After=valkey_romm.service
+Wants=valkey_romm.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=romm
+HostName=romm
+
+PublishPort={{ services['containers']['romm']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['romm']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['romm']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/romm/library:/romm/library:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/romm/resources:/romm/resources:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/romm/assets:/romm/assets:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/romm/ssl:/etc/ssl/romm:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="ROMM_BASE_URL=https://{{ services['containers']['romm']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="DISABLE_SETUP_WIZARD=true"
+Environment="DISABLE_USERPASS_LOGIN=true"
+
+# Secrets
+Secret=ROMM_AUTH_SECRET_KEY,type=env,target=ROMM_AUTH_SECRET_KEY
+
+# Database
+Environment="ROMM_DB_DRIVER=postgresql"
+Environment="DB_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DB_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DB_NAME=romm_db"
+Environment="DB_USER=romm"
+Environment="PGSSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/romm/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=ROMM_DATABASE_PASSWORD,type=env,target=DB_PASSWD
+
+# Redis
+Environment="REDIS_HOST=host.containers.internal"
+Environment="REDIS_PORT={{ services['containers']['romm']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# OIDC
+Environment="OIDC_ENABLED=true"
+Environment="OIDC_PROVIDER=authelia"
+Environment="OIDC_CLIENT_ID=romm"
+Environment="OIDC_REDIRECT_URI=https://{{ services['containers']['romm']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/oauth/openid"
+Environment="OIDC_SERVER_APPLICATION_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OIDC_USERNAME_ATTRIBUTE=preferred_username"
+Environment="OIDC_ALLOW_REGISTRATION=true"
+Environment="OIDC_CLAIM_ROLES=groups"
+Environment="OIDC_ROLE_ADMIN=admins"
+Environment="OIDC_ROLE_VIEWER=users"
+Environment="OIDC_AUTOLOGIN=false"
+Secret=ROMM_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# Players
+Environment="DISABLE_EMULATOR_JS=false"
+Environment="DISABLE_RUFFLE_RS=false"
+
+# Metadata
+Environment="HASHEOUS_API_ENABLED=true"
+#Environment="PLAYMATCH_API_ENABLED=true"
+
+# Optional
+Environment="LOGLEVEL=INFO"
+Environment="DISABLE_LOGS_VIEWER=true"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

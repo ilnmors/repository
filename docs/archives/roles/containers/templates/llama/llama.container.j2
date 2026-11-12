@@ -1,0 +1,34 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=llama.cpp Model Server
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=llama
+HostName=llama
+PublishPort={{ services['containers']['llama']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['llama']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['llama']['units']['main']['ports']['http']['protocol'] }}
+
+# iGPU access for Vulkan
+AddDevice=/dev/dri:/dev/dri
+PodmanArgs=--group-add keep-groups
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/llama/models:/models:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/llama/config:/config:ro
+
+Environment="TZ={{ site['timezone'] }}"
+
+Exec=--models-preset /config/models.ini \
+     --models-max 3 \
+     --host 0.0.0.0 \
+     --port 9931
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=300
+
+[Install]
+WantedBy=default.target

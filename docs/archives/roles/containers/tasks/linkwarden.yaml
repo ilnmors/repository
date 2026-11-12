@@ -1,0 +1,102 @@
+---
+- name: Register the linkwarden database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the linkwarden authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "linkwarden"
+
+- name: Register the missing linkwarden secret key on secrets.yaml
+  vars:
+    secrets_target: '["linkwarden"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['linkwarden']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the linkwarden fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "LINKWARDEN_SECRET_KEY"
+        value: "{{ secrets['linkwarden']['secret_key'] }}"
+      - name: "LINKWARDEN_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['linkwarden']['oidc']['secret'] }}"
+      - name: "LINKWARDEN_DATABASE_URL"
+        value: "postgresql://linkwarden:{{ secrets['postgresql']['password']['linkwarden'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/linkwarden_db?sslmode=require&sslcert=/etc/ssl/linkwarden/{{ site['ca']['x509']['root']['certificate_file'] }}&sslaccept=strict"
+  no_log: true
+
+- name: Create the linkwarden directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/linkwarden"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/linkwarden/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/linkwarden"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/linkwarden/ssl"
+  become: true
+
+- name: Deploy the linkwarden root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/linkwarden/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_linkwarden"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_linkwarden"
+  no_log: true
+
+- name: Deploy the linkwarden image
+  vars:
+    containers_image_notifications: "notification_restart_linkwarden"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the linkwarden container file
+  ansible.builtin.template:
+    src: "linkwarden/linkwarden.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/linkwarden.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_linkwarden"
+
+- name: Start the linkwarden
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "linkwarden.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_linkwarden_started"
+
+- name: Apply the linkwarden configuration handlers
+  ansible.builtin.meta: "flush_handlers"

@@ -1,0 +1,41 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=GroupOffice
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=groupoffice
+HostName=groupoffice
+
+PublishPort={{ services['containers']['groupoffice']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['groupoffice']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['groupoffice']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/groupoffice/data:/var/lib/groupoffice:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}:/etc/ssl/groupoffice/{{ site['ca']['x509']['root']['certificate_file'] }}:ro
+# Keep the official image intact.
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/config.php:/etc/groupoffice/config.php:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/groupoffice-ca.ini:/usr/local/etc/php/conf.d/99-groupoffice-ca.ini:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/Authenticator.php:/usr/local/share/groupoffice/go/modules/community/imapauthenticator/model/Authenticator.php:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/db_Connection.php:/usr/local/share/groupoffice/go/core/db/Connection.php:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/groupoffice/config/configfile.php:/usr/local/share/groupoffice/install/configfile.php:ro
+
+Environment="TZ={{ site['timezone'] }}"
+
+# GroupOffice official Docker DB configuration
+Environment="MYSQL_HOST={{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="MYSQL_DATABASE=groupoffice_db"
+Environment="MYSQL_USER=groupoffice"
+Secret=GROUPOFFICE_DB_PASSWORD,type=env,target=MYSQL_PASSWORD
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['mariadb']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['mariadb']['units']['main']['ports']['tcp']['int'] }}
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['maddy']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} 993
+ExecStartPost=-/usr/bin/podman exec -u www-data groupoffice php /usr/local/share/groupoffice/cli.php core/System/upgrade
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

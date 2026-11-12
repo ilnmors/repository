@@ -1,0 +1,105 @@
+---
+# Superseded by the bind RPZ blocklist (services.packages.bind.units.main.blocklist).
+# Requires networks.segments.server.hosts.blocky (ipv4/ipv6) and a PKI leaf for the blocky domain.
+- name: Create the blocky group
+  ansible.builtin.group:
+    name: "blocky"
+    system: true
+    state: "present"
+  become: true
+
+- name: Create the blocky user
+  ansible.builtin.user:
+    name: "blocky"
+    group: "blocky"
+    system: true
+    shell: "/usr/sbin/nologin"
+    create_home: false
+    password_lock: true
+    comment: "Blocky DNS User"
+    state: "present"
+  become: true
+
+- name: Create the blocky directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "blocky"
+    group: "blocky"
+    mode: "0750"
+  loop:
+    - "/etc/blocky"
+    - "/etc/blocky/ssl"
+  become: true
+
+- name: Install the blocky binary
+  ansible.builtin.unarchive:
+    src: "https://github.com/0xERR0R/blocky/releases/download/v{{ releases['packages']['blocky']['version'] }}/\
+      blocky_v{{ releases['packages']['blocky']['version'] }}_Linux_{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'x86_64' }}.tar.gz"
+    remote_src: true
+    dest: "/usr/local/bin/"
+    include: ["blocky"]
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  become: true
+  notify: "notification_restart_blocky"
+
+- name: Deploy the blocky configuration
+  ansible.builtin.template:
+    src: "blocky/etc/config.yaml.j2"
+    dest: "/etc/blocky/config.yaml"
+    owner: "blocky"
+    group: "blocky"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_blocky"
+
+- name: Deploy the blocky certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "/etc/blocky/ssl/{{ item['name'] }}"
+    owner: "blocky"
+    group: "blocky"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "blocky.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['packages']['blocky']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "blocky.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['packages']['blocky']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_blocky"
+  no_log: true
+
+- name: Deploy the blocky.service
+  ansible.builtin.copy:
+    src: "blocky/blocky.service"
+    dest: "/etc/systemd/system/blocky.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    validate: "/usr/bin/systemd-analyze verify %s"
+  become: true
+  notify: "notification_restart_blocky"
+
+- name: Enable the blocky.service
+  ansible.builtin.systemd_service:
+    name: "blocky.service"
+    enabled: true
+    daemon_reload: true
+  become: true
+
+- name: Start the blocky.service
+  ansible.builtin.systemd_service:
+    name: "blocky.service"
+    state: "started"
+  become: true
+  register: "packages_blocky_started"
+
+- name: Apply the blocky configuration handlers
+  ansible.builtin.meta: "flush_handlers"

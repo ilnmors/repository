@@ -1,0 +1,65 @@
+---
+- name: Register the trilium authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "trilium"
+
+- name: Set the trilium fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "TRILIUM_OAUTH_CLIENT_SECRET"
+        value: "{{ secrets['trilium']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the trilium directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['trilium']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/trilium"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/trilium/data"
+  become: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_trilium"
+  no_log: true
+
+- name: Deploy the trilium image
+  vars:
+    containers_image_notifications: "notification_restart_trilium"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the trilium container file
+  ansible.builtin.template:
+    src: "trilium/trilium.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/trilium.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_trilium"
+
+- name: Start the trilium
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "trilium.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_trilium_started"
+
+- name: Apply the trilium configuration handlers
+  ansible.builtin.meta: "flush_handlers"

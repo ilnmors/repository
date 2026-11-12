@@ -1,0 +1,223 @@
+---
+- name: Register the nextcloud database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the nextcloud authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the nextcloud valkey
+  vars:
+    containers_valkey_service: "nextcloud"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "nextcloud"
+
+- name: Create the nextcloud directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ini"
+  become: true
+
+- name: Deploy the nextcloud root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_nextcloud"
+  no_log: true
+
+- name: Check the nextcloud .init marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/.init"
+  register: "containers_nextcloud_init_marker"
+
+- name: Initialize the nextcloud
+  when: not containers_nextcloud_init_marker['stat']['exists']
+  block:
+    - name: Deploy the nextcloud image for initialization
+      vars:
+        containers_image_notifications: "notification_restart_nextcloud"
+      ansible.builtin.include_tasks:
+        file: "deploy.yaml"
+
+    - name: Run the nextcloud installer
+      containers.podman.podman_container:
+        name: "nextcloud_init"
+        image: "{{ containers_container_repository }}:{{ releases['containers']['nextcloud']['tag'] }}"
+        command: "/bin/true"
+        state: "started"
+        rm: true
+        detach: false
+        env:
+          NEXTCLOUD_UPDATE: "1"
+          NEXTCLOUD_ADMIN_USER: "{{ secrets['nextcloud']['admin']['id'] }}"
+          NEXTCLOUD_ADMIN_PASSWORD: "{{ secrets['nextcloud']['admin']['password'] }}"
+          POSTGRES_HOST: "{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+          POSTGRES_DB: "nextcloud_db"
+          POSTGRES_USER: "nextcloud"
+          POSTGRES_PASSWORD: "{{ secrets['postgresql']['password']['nextcloud'] }}"
+          PGSSLMODE: "verify-full"
+          PGSSLROOTCERT: "/etc/ssl/nextcloud/{{ site['ca']['x509']['root']['certificate_file'] }}"
+          PGSSLCERTMODE: "disable"
+          REDIS_HOST: "host.containers.internal"
+          REDIS_HOST_PORT: "{{ services['containers']['nextcloud']['units']['valkey']['ports']['tcp']['int'] }}"
+        volume:
+          - "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ssl:/etc/ssl/nextcloud:ro"
+          - "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html:/var/www/html:rw"
+      no_log: true
+
+    - name: Create the nextcloud .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+
+- name: Deploy the nextcloud background.config.php
+  ansible.builtin.template:
+    src: "nextcloud/config/background.config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html/config/background.config.php"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud cache.config.php
+  ansible.builtin.template:
+    src: "nextcloud/config/cache.config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html/config/cache.config.php"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud domain.config.php
+  ansible.builtin.template:
+    src: "nextcloud/config/domain.config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html/config/domain.config.php"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud local_remote.config.php
+  ansible.builtin.template:
+    src: "nextcloud/config/local_remote.config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html/config/local_remote.config.php"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud user_oidc.config.php
+  ansible.builtin.template:
+    src: "nextcloud/config/user_oidc.config.php.j2"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html/config/user_oidc.config.php"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud opcache.ini
+  ansible.builtin.template:
+    src: "nextcloud/ini/opcache.ini"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ini/opcache.ini"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud upload.ini
+  ansible.builtin.template:
+    src: "nextcloud/ini/upload.ini"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ini/upload.ini"
+    owner: "{{ services['containers']['nextcloud']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  become: true
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud image
+  vars:
+    containers_image_notifications: "notification_restart_nextcloud"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the nextcloud container file
+  ansible.builtin.template:
+    src: "nextcloud/nextcloud.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/nextcloud.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_nextcloud"
+
+- name: Deploy the nextcloud-cron.service
+  ansible.builtin.template:
+    src: "nextcloud/services/nextcloud-cron.service"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/nextcloud-cron.service"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+
+- name: Deploy the nextcloud-cron.timer
+  ansible.builtin.template:
+    src: "nextcloud/services/nextcloud-cron.timer"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/systemd/user/nextcloud-cron.timer"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+
+- name: Start the nextcloud
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "nextcloud.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_nextcloud_started"
+
+- name: Enable the nextcloud-cron.timer
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "nextcloud-cron.timer"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+
+- name: Apply the nextcloud configuration handlers
+  ansible.builtin.meta: "flush_handlers"

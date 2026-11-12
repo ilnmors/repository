@@ -1,0 +1,24 @@
+---
+- name: Include the blocky task
+  ansible.builtin.include_tasks:
+    file: "blocky.yaml"
+    apply:
+      tags: ["blocky"]
+  when: target_host in services['packages']['blocky']['units']['main']['hosts']
+  tags: ["blocky"]
+
+- name: Include the wsl-alive task
+  ansible.builtin.include_tasks:
+    file: "wsl-alive.yaml"
+    apply:
+      tags: ["wsl-alive"]
+  when: target_host in services['packages']['wsl-alive']['units']['main']['hosts']
+  tags: ["wsl-alive"]
+
+- name: Include the chromium task
+  ansible.builtin.include_tasks:
+    file: "chromium.yaml"
+    apply:
+      tags: ["chromium"]
+  when: target_host in services['packages']['chromium']['units']['main']['hosts']
+  tags: ["chromium"]

@@ -1,0 +1,47 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Readur
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=readur
+HostName=readur
+
+PublishPort={{ services['containers']['readur']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['readur']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['readur']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/readur/uploads:/app/uploads:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/readur/watch:/app/watch:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/readur/ssl:/etc/ssl/readur:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="ALLOW_LOCAL_AUTH=false"
+Environment="OCR_LANGUAGE=eng+kor"
+Secret=READUR_JWT_SECRET,type=env,target=JWT_SECRET
+
+# Database
+Secret=READUR_DATABASE_URL,type=env,target=DATABASE_URL
+
+# OIDC
+Environment="OIDC_ENABLED=true"
+Environment="OIDC_CLIENT_ID=readur"
+Environment="OIDC_ISSUER_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="OIDC_REDIRECT_URI=https://{{ services['containers']['readur']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api/auth/oidc/callback"
+Environment="OIDC_AUTO_REGISTER=true"
+Secret=READUR_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+# Logging
+Environment="RUST_LOG=warn"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

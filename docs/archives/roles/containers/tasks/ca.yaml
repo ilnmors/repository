@@ -1,0 +1,116 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "ca"
+
+- name: Set the ca fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "STEP_CA_PASSWORD"
+        value: "{{ secrets['ca']['x509']['intermediate']['password'] }}"
+  no_log: true
+
+- name: Create the ca directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ca"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ca/certs"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ca/secrets"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ca/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ca/templates"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/ca"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/ca/db"
+  become: true
+
+- name: Deploy the ca certificates and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ item['path'] }}/{{ item['name'] }}"
+    owner: "{{ services['containers']['ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/certs"
+      mode: "0440"
+    - name: "{{ site['ca']['x509']['intermediate']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['intermediate']['crt'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/certs"
+      mode: "0440"
+    - name: "{{ site['ca']['x509']['intermediate']['private_key_file'] }}"
+      value: "{{ secrets['ca']['x509']['intermediate']['key'] }}"
+      path: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/secrets"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_ca"
+  no_log: true
+
+- name: Deploy the ca defaults.json
+  ansible.builtin.template:
+    src: "ca/config/defaults.json.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/config/defaults.json"
+    owner: "{{ services['containers']['ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  become: true
+  notify: "notification_restart_ca"
+
+- name: Deploy the ca templates
+  ansible.builtin.copy:
+    src: "ca/templates/ca.tpl"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/templates/ca.tpl"
+    owner: "{{ services['containers']['ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_ca"
+
+- name: Deploy the ca ca.json
+  ansible.builtin.template:
+    src: "ca/config/ca.json.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ca/config/ca.json"
+    owner: "{{ services['containers']['ca']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  become: true
+  notify: "notification_restart_ca"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_ca"
+  no_log: true
+
+- name: Deploy the ca image
+  vars:
+    containers_image_notifications: "notification_restart_ca"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the ca container file
+  ansible.builtin.template:
+    src: "ca/ca.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/ca.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_ca"
+
+- name: Start the ca
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ca.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_ca_started"
+
+- name: Apply the ca configuration handlers
+  ansible.builtin.meta: "flush_handlers"

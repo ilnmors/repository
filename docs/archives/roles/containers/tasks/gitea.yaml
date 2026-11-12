@@ -1,0 +1,88 @@
+---
+- name: Register the gitea database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the gitea authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "gitea"
+
+- name: Set the gitea fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "GITEA__database__PASSWD"
+        value: "{{ secrets['postgresql']['password']['gitea'] }}"
+  no_log: true
+
+- name: Create the gitea directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['gitea']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/gitea"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/gitea/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/gitea"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/gitea/ssl"
+  become: true
+
+- name: Deploy the gitea root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/gitea/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['gitea']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_gitea"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_gitea"
+  no_log: true
+
+- name: Deploy the gitea image
+  vars:
+    containers_image_notifications: "notification_restart_gitea"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the gitea container file
+  ansible.builtin.template:
+    src: "gitea/gitea.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/gitea.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_gitea"
+
+- name: Start the gitea
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "gitea.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_gitea_started"
+
+- name: Apply the gitea configuration handlers
+  ansible.builtin.meta: "flush_handlers"

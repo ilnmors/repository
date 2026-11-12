@@ -1,0 +1,31 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Redis - {{ containers_redis_service }}
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=redis_{{ containers_redis_service }}
+HostName=redis_{{ containers_redis_service }}
+
+PublishPort={{ services['containers'][containers_redis_service]['units']['valkey']['ports']['tcp']['int'] }}:{{ services['containers'][containers_redis_service]['units']['valkey']['ports']['tcp']['container'] }}/{{ services['containers'][containers_redis_service]['units']['valkey']['ports']['tcp']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/redis/{{ containers_redis_service }}/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/redis/{{ containers_redis_service }}/redis.conf:/usr/local/etc/redis/redis.conf:ro
+
+Exec=redis-server /usr/local/etc/redis/redis.conf
+
+Environment="TZ={{ site['timezone'] }}"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,101 @@
+---
+- name: Register the vikunja database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the vikunja authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "vikunja"
+
+- name: Register the missing vikunja session secret on secrets.yaml
+  vars:
+    secrets_target: '["vikunja"]["session_secret"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['vikunja']['session_secret'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the vikunja fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "VIKUNJA_SERVICE_JWTSECRET"
+        value: "{{ secrets['vikunja']['session_secret'] }}"
+      - name: "VIKUNJA_DATABASE_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['vikunja'] }}"
+      - name: "VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_CLIENTSECRET"
+        value: "{{ secrets['vikunja']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the vikunja directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['vikunja']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/vikunja"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/vikunja"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/vikunja/ssl"
+  become: true
+
+- name: Deploy the vikunja root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/vikunja/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['vikunja']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_vikunja"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_vikunja"
+  no_log: true
+
+- name: Deploy the vikunja image
+  vars:
+    containers_image_notifications: "notification_restart_vikunja"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the vikunja container file
+  ansible.builtin.template:
+    src: "vikunja/vikunja.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/vikunja.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_vikunja"
+
+- name: Start the vikunja
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "vikunja.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_vikunja_started"
+
+- name: Apply the vikunja configuration handlers
+  ansible.builtin.meta: "flush_handlers"

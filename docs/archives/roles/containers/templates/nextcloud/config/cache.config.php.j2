@@ -1,0 +1,12 @@
+<?php
+$CONFIG = [
+    'memcache.local' => '\OC\Memcache\APCu',
+    'memcache.distributed' => '\OC\Memcache\Redis',
+    'memcache.locking' => '\OC\Memcache\Redis',
+    'redis' => [
+        'host' => 'host.containers.internal',
+        'port' => {{ services['containers']['nextcloud']['units']['valkey']['ports']['tcp']['int'] }},
+        'timeout' => 1.5,
+        'dbindex' => 0,
+    ],
+];

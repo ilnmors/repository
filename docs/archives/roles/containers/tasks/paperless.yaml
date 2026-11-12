@@ -1,0 +1,139 @@
+---
+- name: Register the paperless database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the paperless authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the paperless valkey
+  vars:
+    containers_valkey_service: "paperless"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "paperless"
+
+- name: Register the missing paperless session secret on secrets.yaml
+  vars:
+    secrets_target: '["paperless"]["session_secret"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 50') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['paperless']['session_secret'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the paperless fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "PAPERLESS_SECRET_KEY"
+        value: "{{ secrets['paperless']['session_secret'] }}"
+      - name: "PAPERLESS_DBPASS"
+        value: "{{ secrets['postgresql']['password']['paperless'] }}"
+      - name: "PAPERLESS_SOCIALACCOUNT_PROVIDERS"
+        value: |
+          {
+            "openid_connect": {
+              "SCOPE": ["openid", "profile", "email"],
+              "OAUTH_PKCE_ENABLED": true,
+              "APPS": [
+                {
+                  "provider_id": "authelia",
+                  "name": "Authelia",
+                  "client_id": "paperless",
+                  "secret": "{{ secrets['paperless']['oidc']['secret'] }}",
+                  "settings": {
+                    "server_url": "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration",
+                    "token_auth_method": "client_secret_post"
+                  }
+                }
+              ]
+            }
+          }
+  no_log: true
+
+- name: Create the paperless directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['paperless']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/paperless"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/paperless/data"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/paperless/media"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/paperless/consume"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/paperless"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/paperless/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/paperless/build"
+  become: true
+
+- name: Deploy the paperless root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/paperless/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['paperless']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_paperless"
+  no_log: true
+
+- name: Deploy the paperless Containerfile
+  ansible.builtin.template:
+    src: "paperless/build/paperless.containerfile.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/paperless/build/Containerfile"
+    owner: "{{ services['containers']['paperless']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_paperless"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_paperless"
+  no_log: true
+
+- name: Deploy the paperless image
+  vars:
+    containers_image_notifications: "notification_restart_paperless"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the paperless container file
+  ansible.builtin.template:
+    src: "paperless/paperless.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/paperless.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_paperless"
+
+- name: Start the paperless
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "paperless.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_paperless_started"
+
+- name: Apply the paperless configuration handlers
+  ansible.builtin.meta: "flush_handlers"

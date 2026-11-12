@@ -1,0 +1,18 @@
+---
+# Keeps a WSL distribution running while the Windows host has no open terminal.
+- name: Deploy the wsl-alive.service
+  ansible.builtin.copy:
+    src: "wsl-alive/wsl-alive.service"
+    dest: "/etc/systemd/system/wsl-alive.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+
+- name: Start the wsl-alive.service
+  ansible.builtin.systemd_service:
+    name: "wsl-alive.service"
+    state: "started"
+    enabled: true
+    daemon_reload: true
+  become: true

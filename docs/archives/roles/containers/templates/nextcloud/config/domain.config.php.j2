@@ -1,0 +1,9 @@
+<?php
+$CONFIG = [
+  'trusted_domains' => [
+    '{{ services['containers']['nextcloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}',
+  ],
+  'overwritehost' => '{{ services['containers']['nextcloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}',
+  'overwriteprotocol' => 'https',
+  'overwrite.cli.url' => 'https://{{ services['containers']['nextcloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}',
+];

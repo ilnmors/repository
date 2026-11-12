@@ -1,0 +1,133 @@
+---
+# --- docs/archives/releases.yaml ---
+# Archived image and package releases. Not loaded by Ansible; see README.md.
+releases:
+  containers:
+    actual-budget:
+      name: "actual-budget"
+      repository: "ghcr.io/actualbudget/actual-server"
+      tag: "26.3.0"
+    affine:
+      name: "affine"
+      repository: "ghcr.io/toeverything/affine"
+      tag: "0.26.3"
+    manticore:
+      name: "manticore"
+      repository: "docker.io/manticoresearch/manticore"
+      tag: "25.0.0"
+    bonfire:
+      name: "bonfire"
+      repository: "docker.io/bonfirenetworks/bonfire"
+      tag: "1.0.5-social-amd64"
+    booklogr:
+      name: "booklogr"
+      repository: "docker.io/mozzo/booklogr"
+      tag: "v1.11.1"
+    booklogr-web:
+      name: "booklogr-web"
+      repository: "docker.io/mozzo/booklogr-web"
+      tag: "v1.11.1"
+    ca:
+      name: "ca"
+      repository: "docker.io/smallstep/step-ca"
+      tag: "0.30.2"
+    ezbookkeeping:
+      name: "ezbookkeeping"
+      repository: "docker.io/mayswind/ezbookkeeping"
+      tag: "1.4.0"
+    gitea:
+      name: "gitea"
+      repository: "docker.io/gitea/gitea"
+      tag: "1.27.3"
+    groupoffice:
+      name: "groupoffice"
+      repository: "docker.io/intermesh/groupoffice"
+      tag: "26.0.43"
+    homebox:
+      name: "homebox"
+      repository: "ghcr.io/sysadminsmedia/homebox"
+      tag: "0.26.2"
+    linkwarden:
+      name: "linkwarden"
+      repository: "ghcr.io/linkwarden/linkwarden"
+      tag: "v2.16.1"
+    llama:
+      name: "llama"
+      repository: "ghcr.io/ggml-org/llama.cpp"
+      tag: "server-vulkan-b10830"
+    maddy:
+      name: "maddy"
+      repository: "docker.io/foxcpp/maddy"
+      tag: "0.9.5"
+    mealie:
+      name: "mealie"
+      repository: "ghcr.io/mealie-recipes/mealie"
+      tag: "v3.22.0"
+    memos:
+      name: "memos"
+      repository: "docker.io/neosmemo/memos"
+      tag: "0.30.0"
+    nextcloud:
+      name: "nextcloud"
+      repository: "docker.io/library/nextcloud"
+      tag: "34.0.3"
+    opencloud:
+      name: "opencloud"
+      repository: "docker.io/opencloudeu/opencloud"
+      tag: "4.0.6"
+    ovms:
+      name: "ovms"
+      repository: "docker.io/openvino/model_server"
+      tag: "2026.3-gpu"
+    readur:
+      name: "readur"
+      repository: "ghcr.io/readur/readur"
+      tag: "2.9.1"
+    redis:
+      name: "redis"
+      repository: "docker.io/library/redis"
+      tag: "8.10.1"
+    romm:
+      name: "romm"
+      repository: "docker.io/rommapp/romm"
+      tag: "5.1.0"
+    stablediffusion:
+      name: "stablediffusion"
+      repository: "ghcr.io/leejet/stable-diffusion.cpp"
+      tag: "master-sycl@sha256:67ccb5d11bf55578f7938daeb7c9fee1d0dd1344c089c090b9065714d7960fd5"
+    tandoor:
+      name: "tandoor"
+      repository: "docker.io/vabene1111/recipes"
+      tag: "2.6.13"
+    trilium:
+      name: "trilium"
+      repository: "docker.io/triliumnext/trilium"
+      tag: "v0.102.2"
+    vikunja:
+      name: "vikunja"
+      repository: "docker.io/vikunja/vikunja"
+      tag: "2.2.2"
+    wikijs:
+      name: "wikijs"
+      repository: "ghcr.io/requarks/wiki"
+      tag: "2.5.314"
+    paperless:
+      name: "paperless"
+      repository: "ghcr.io/paperless-ngx/paperless-ngx"
+      tag: "2.20.15"
+      build:
+        status: true
+  packages:
+    blocky:
+      source: "github"
+      name: "blocky"
+      version: "0.33.0"
+    wsl-alive:
+      source: "local"
+      name: "wsl-alive"
+    chromium:
+      source: "debian"
+      name: "chromium"
+    fonts-nanum:
+      source: "debian"
+      name: "fonts-nanum"

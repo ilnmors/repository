@@ -1,0 +1,38 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Maddy
+
+After=postgresql.service ldap.service
+Requires=postgresql.service ldap.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=maddy
+HostName=maddy
+
+PublishPort={{ services['containers']['maddy']['units']['main']['ports']['smtp']['int'] }}:{{ services['containers']['maddy']['units']['main']['ports']['smtp']['container'] }}/{{ services['containers']['maddy']['units']['main']['ports']['smtp']['protocol'] }}
+PublishPort={{ services['containers']['maddy']['units']['main']['ports']['imaps']['int'] }}:{{ services['containers']['maddy']['units']['main']['ports']['imaps']['container'] }}/{{ services['containers']['maddy']['units']['main']['ports']['imaps']['protocol'] }}
+
+AddHost={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+AddHost={{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/maddy/ssl:/etc/ssl/maddy:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/maddy/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/maddy/maddy.conf:/data/maddy.conf:ro
+
+Environment="TZ={{ site['timezone'] }}"
+Secret=MADDY_LDAP_BIND_PASSWORD,type=env
+Secret=MADDY_POSTGRES_URL,type=env
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['ldap']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} 636
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

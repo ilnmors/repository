@@ -1,0 +1,665 @@
+---
+# --- docs/archives/services.yaml ---
+# Archived stacks in the current services schema. Not loaded by Ansible; see README.md.
+services:
+  containers:
+    groupoffice:
+      units:
+        main:
+          release: "groupoffice"
+          hosts: ["app"]
+          domain:
+            public: "groupoffice"
+            internal: "groupoffice.app"
+          subuid: 100032
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8005
+              container: 80
+          route:
+            dav: true
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "mariadb"
+    homebox:
+      units:
+        main:
+          release: "homebox"
+          hosts: ["app"]
+          domain:
+            public: "homebox"
+            internal: "homebox.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 7745
+              container: 7745
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/v1/users/login/oidc/callback"]
+              scopes: ["openid", "groups", "email", "profile"]
+              auth_method: "client_secret_basic"
+              pkce: true
+    llama:
+      units:
+        main:
+          release: "llama"
+          hosts: ["app"]
+          ports:
+            http:
+              protocol: "tcp"
+              int: 10002
+              container: 9931
+          dependency:
+            models:
+              default: "n-gpu-layers = all\nkv-unified = true\ncache-prompt = true\ncache-type-k = q8_0\ncache-type-v = q8_0\nflash-attn = auto\nreasoning = off\njinja = true\nlazy-mode = off\n"
+              LFM2.5-24B-A2B-Heretic: "model = /models/LFM2.5-24B-A2B-Heretic/model.gguf\nc = 65536\nparallel = 2\nreasoning = on\nload-on-startup = true\n"
+              LFM2.5-VL-3B-Heretic: "model = /models/LFM2.5-VL-3B-Heretic/model.gguf\nmmproj = /models/LFM2.5-VL-3B-Heretic/mmproj.gguf\nc = 32768\nparallel = 1\nload-on-startup = true\n"
+              LFM2.5-Embedding-350M: "model = /models/LFM2.5-Embedding-350M/model.gguf\nembedding = true\npooling = cls\nc = 1024\nparallel = 1\nload-on-startup = true\n"
+    nextcloud:
+      units:
+        main:
+          release: "nextcloud"
+          hosts: ["app"]
+          domain:
+            public: "nextcloud"
+            internal: "nextcloud.app"
+          subuid: 100032
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8001
+              container: 80
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/apps/user_oidc/code"]
+              scopes: ["openid", "profile", "email", "groups"]
+              auth_method: "client_secret_post"
+              pkce: true
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6380
+              container: 6379
+    stablediffusion:
+      units:
+        main:
+          release: "stablediffusion"
+          hosts: ["app"]
+          ports:
+            http:
+              protocol: "tcp"
+              int: 10001
+              container: 1234
+          dependency:
+            models:
+              active: "zImage"
+              zImage: "--diffusion-model /models/zImage/moodyRealMix_zitV7Global-Q8_0.gguf \\\n--llm /models/zImage/Qwen3-4B-Instruct-2507-Q4_K_M.gguf \\\n--vae /models/zImage/ae.safetensors \\\n--backend gpu \\\n--cfg-scale 1.0 \\\n--steps 9 \\\n--vae-tiling \\\n--vae-tile-size 32x32 \\\n--vae-tile-overlap 0.5\n"
+    tandoor:
+      units:
+        main:
+          release: "tandoor"
+          hosts: ["app"]
+          domain:
+            public: "tandoor"
+            internal: "tandoor.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8003
+              container: 80
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/accounts/oidc/authelia/login/callback/"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+    gitea:
+      units:
+        main:
+          release: "gitea"
+          hosts: ["app"]
+          domain:
+            public: "gitea"
+            internal: "gitea.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3001
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/user/oauth2/authelia/callback"]
+              scopes: ["openid", "email", "profile"]
+              auth_method: "client_secret_basic"
+    redis:
+      units:
+        main:
+          release: "redis"
+          hosts: ["app"]
+          subuid: 100998
+    maddy:
+      units:
+        main:
+          release: "maddy"
+          hosts: ["infra"]
+          domain:
+            internal: "maddy"
+          ports:
+            smtp:
+              protocol: "tcp"
+              int: 2587
+              container: 587
+            imaps:
+              protocol: "tcp"
+              int: 2993
+              container: 993
+          dependency:
+            db:
+              status: true
+              type: "postgresql"
+            pki:
+              cert: true
+    ca:
+      units:
+        main:
+          release: "ca"
+          hosts: ["infra"]
+          domain:
+            internal: "ca"
+          subuid: 100999
+          ports:
+            https:
+              protocol: "tcp"
+              int: 9000
+              container: 9000
+    actual-budget:
+      units:
+        main:
+          release: "actual-budget"
+          hosts: ["app"]
+          domain:
+            public: "actualbudget"
+            internal: "actualbudget.app"
+          subuid: 101000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 5006
+              container: 5006
+          dependency:
+            web:
+              status: true
+            oidc:
+              status: true
+              redirect_uris: ["/openid/callback"]
+              scopes: ["openid", "profile", "groups", "email"]
+              auth_method: "client_secret_basic"
+    affine:
+      units:
+        main:
+          release: "affine"
+          hosts: ["app"]
+          domain:
+            public: "affine"
+            internal: "affine.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3010
+              container: 3010
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+              extensions: ["vector"]
+            oidc:
+              status: true
+              redirect_uris: ["/oauth/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+        manticore:
+          release: "manticore"
+          hosts: ["app"]
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 9308
+              container: 9308
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6385
+              container: 6379
+    bonfire:
+      units:
+        main:
+          release: "bonfire"
+          hosts: ["app"]
+          domain:
+            public: "bonfire"
+            internal: "bonfire.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 4001
+              container: 4000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+    booklogr:
+      units:
+        main:
+          release: "booklogr"
+          hosts: ["app"]
+          domain:
+            public: "booklogr"
+            internal: "booklogr.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 5150
+              container: 80
+            api:
+              protocol: "tcp"
+              int: 5000
+              container: 5000
+          route:
+            api: "/v1 /v1/*"
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+              cors: true
+        web:
+          release: "booklogr-web"
+          hosts: ["app"]
+    ezbookkeeping:
+      units:
+        main:
+          release: "ezbookkeeping"
+          hosts: ["app"]
+          domain:
+            public: "ezbookkeeping"
+            internal: "ezbookkeeping.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8009
+              container: 8080
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/oauth2/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+              pkce: true
+    linkwarden:
+      units:
+        main:
+          release: "linkwarden"
+          hosts: ["app"]
+          domain:
+            public: "link"
+            internal: "link.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3005
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/v1/auth/callback/oidc"]
+              scopes: ["openid", "groups", "email", "profile"]
+              auth_method: "client_secret_basic"
+              claims: ["preferred_username", "name", "email", "email_verified", "groups"]
+    mealie:
+      units:
+        main:
+          release: "mealie"
+          hosts: ["app"]
+          domain:
+            public: "mealie"
+            internal: "mealie.app"
+          subuid: 100910
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9000
+              container: 9000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/login"]
+              scopes: ["openid", "email", "profile", "groups"]
+              auth_method: "client_secret_basic"
+              pkce: true
+    memos:
+      units:
+        main:
+          release: "memos"
+          hosts: ["app"]
+          domain:
+            public: "memos"
+            internal: "memos.app"
+          subuid: 110000
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3008
+              container: 5230
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/auth/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+    opencloud:
+      units:
+        main:
+          release: "opencloud"
+          hosts: ["app"]
+          domain:
+            public: "opencloud"
+            internal: "opencloud.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 9200
+              container: 9200
+          dependency:
+            web:
+              status: true
+            oidc:
+              status: true
+              redirect_uris: ["/", "/oidc-callback.html", "/oidc-silent-redirect.html"]
+              scopes: ["openid", "profile", "email", "groups"]
+              auth_method: "none"
+              pkce: true
+              public: true
+              cors: true
+    ovms:
+      units:
+        main:
+          release: "ovms"
+          hosts: ["app"]
+          subuid: 104999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 5001
+              container: 8000
+    paperless:
+      units:
+        main:
+          release: "paperless"
+          hosts: ["app"]
+          domain:
+            public: "paperless"
+            internal: "paperless.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8010
+              container: 8000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/accounts/oidc/authelia/login/callback/"]
+              scopes: ["openid", "profile", "email", "groups"]
+              auth_method: "client_secret_post"
+              pkce: true
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6386
+              container: 6379
+    readur:
+      units:
+        main:
+          release: "readur"
+          hosts: ["app"]
+          domain:
+            public: "readur"
+            internal: "readur.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8011
+              container: 8000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/auth/oidc/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+    romm:
+      units:
+        main:
+          release: "romm"
+          hosts: ["app"]
+          domain:
+            public: "romm"
+            internal: "romm.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8008
+              container: 8080
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/api/oauth/openid"]
+              scopes: ["openid", "groups", "profile", "email"]
+              auth_method: "client_secret_basic"
+              claims: ["email", "email_verified", "alt_emails", "preferred_username", "name", "groups"]
+        valkey:
+          release: "valkey"
+          hosts: ["app"]
+          subuid: 100998
+          ports:
+            tcp:
+              protocol: "tcp"
+              int: 6384
+              container: 6379
+    trilium:
+      units:
+        main:
+          release: "trilium"
+          hosts: ["app"]
+          domain:
+            public: "trilium"
+            internal: "trilium.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8012
+              container: 8080
+          dependency:
+            web:
+              status: true
+            oidc:
+              status: true
+              redirect_uris: ["/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+              claims: ["email", "email_verified", "preferred_username", "name"]
+    vikunja:
+      units:
+        main:
+          release: "vikunja"
+          hosts: ["app"]
+          domain:
+            public: "vikunja"
+            internal: "vikunja.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3456
+              container: 3456
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/auth/openid/authelia"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+    wikijs:
+      units:
+        main:
+          release: "wikijs"
+          hosts: ["app"]
+          domain:
+            public: "wikijs"
+            internal: "wikijs.app"
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 3011
+              container: 3000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/login/<strategy-uuid>/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
+  packages:
+    blocky:
+      units:
+        main:
+          release: "blocky"
+          hosts: ["vmm"]
+          domain:
+            internal: "blocky"
+          ports:
+            dns:
+              protocol: "udp"
+              int: 53
+            dot:
+              protocol: "tcp"
+              int: 853
+            https:
+              protocol: "tcp"
+              int: 443
+          dependency:
+            pki:
+              cert: true
+    wsl-alive:
+      units:
+        main:
+          release: "wsl-alive"
+          hosts: ["console"]
+    chromium:
+      units:
+        main:
+          release: "chromium"
+          hosts: ["console"]
+    fonts-nanum:
+      units:
+        main:
+          release: "fonts-nanum"
+          hosts: ["console"]

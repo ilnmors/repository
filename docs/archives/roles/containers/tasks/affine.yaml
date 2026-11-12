@@ -1,0 +1,165 @@
+---
+- name: Register the affine database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the affine authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the affine valkey
+  vars:
+    containers_valkey_service: "affine"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "affine"
+
+- name: Set the affine fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "AFFINE_PRIVATE_KEY"
+        value: "{{ secrets['affine']['secret_key'] }}"
+      - name: "AFFINE_DATABASE_URL"
+        value: "postgresql://affine:{{ secrets['postgresql']['password']['affine'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/affine_db?sslmode=verify-full&sslrootcert=/etc/ssl/affine/{{ site['ca']['x509']['root']['certificate_file'] }}"
+  no_log: true
+
+- name: Create the affine directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/manticore"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/manticore/{{ manticore_service }}"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/affine"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/affine"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/affine/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/affine/config"
+  become: true
+
+- name: Deploy the affine root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/affine/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_affine"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_affine"
+  no_log: true
+
+- name: Check the affine .init marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/affine/.init"
+  register: "containers_affine_init_marker"
+
+- name: Deploy the affine manticore directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/affine/manticore"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  become: true
+
+- name: Set the manticore target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "manticore"
+
+- name: Deploy the manticore image
+  vars:
+    containers_image_notifications: "notification_restart_affine"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the manticore container file
+  ansible.builtin.template:
+    src: "affine/manticore.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/manticore_affine.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_affine"
+
+- name: Start the manticore_affine
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "manticore_affine.service"
+    state: "started"
+    daemon_reload: true
+
+- name: Set the affine target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "affine"
+
+- name: Deploy the affine image
+  vars:
+    containers_image_notifications: "notification_restart_affine"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Initialize the affine
+  when: not containers_affine_init_marker['stat']['exists']
+  block:
+    - name: Run the affine predeploy migration
+      containers.podman.podman_container:
+        name: "affine_init"
+        image: "{{ containers_container_repository }}:{{ releases['containers']['affine']['tag'] }}"
+        command: ["sh", "-c", "node ./scripts/self-host-predeploy.js"]
+        state: "started"
+        rm: true
+        detach: false
+        secrets:
+          - "AFFINE_DATABASE_URL,type=env,target=DATABASE_URL"
+      no_log: true
+
+    - name: Create the affine .init marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['data'] }}/containers/affine/.init"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
+
+- name: Deploy the affine container file
+  ansible.builtin.template:
+    src: "affine/affine.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/affine.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_affine"
+
+- name: Start the affine
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "affine.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_affine_started"
+
+- name: Apply the affine configuration handlers
+  ansible.builtin.meta: "flush_handlers"

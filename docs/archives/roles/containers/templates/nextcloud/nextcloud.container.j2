@@ -1,0 +1,42 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Nextcloud
+
+After=valkey_nextcloud.service
+Wants=valkey_nextcloud.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=nextcloud
+HostName=nextcloud
+
+PublishPort={{ services['containers']['nextcloud']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['nextcloud']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['nextcloud']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ssl:/etc/ssl/nextcloud:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ini/opcache.ini:/usr/local/etc/php/conf.d/opcache-recommended.ini:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/nextcloud/ini/upload.ini:/usr/local/etc/php/conf.d/upload.ini:ro
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/nextcloud/html:/var/www/html:rw
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="APACHE_DISABLE_REWRITE_IP=1"
+Environment="TRUSTED_PROXIES={{ containers_trusted_proxies | join(' ') }}"
+# PostgreSQL
+Environment="PGSSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/nextcloud/{{ site['ca']['x509']['root']['certificate_file'] }}"
+## libpq in Nextcloud automatically tries to use a client certificate for mTLS. Therefore, when only TLS is required, then disable the option explicitly.
+Environment="PGSSLCERTMODE=disable"
+# Redis
+Environment="REDIS_HOST=host.containers.internal"
+Environment="REDIS_HOST_PORT={{ services['containers']['nextcloud']['units']['valkey']['ports']['tcp']['int'] }}"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

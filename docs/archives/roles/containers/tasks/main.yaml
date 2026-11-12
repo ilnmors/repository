@@ -1,0 +1,200 @@
+---
+- name: Include the actual-budget task
+  ansible.builtin.include_tasks:
+    file: "actual-budget.yaml"
+    apply:
+      tags: ["actual-budget"]
+  when: target_host in services['containers']['actual-budget']['units']['main']['hosts']
+  tags: ["actual-budget"]
+
+- name: Include the affine task
+  ansible.builtin.include_tasks:
+    file: "affine.yaml"
+    apply:
+      tags: ["affine"]
+  when: target_host in services['containers']['affine']['units']['main']['hosts']
+  tags: ["affine"]
+
+- name: Include the bonfire task
+  ansible.builtin.include_tasks:
+    file: "bonfire.yaml"
+    apply:
+      tags: ["bonfire"]
+  when: target_host in services['containers']['bonfire']['units']['main']['hosts']
+  tags: ["bonfire"]
+
+- name: Include the booklogr task
+  ansible.builtin.include_tasks:
+    file: "booklogr.yaml"
+    apply:
+      tags: ["booklogr"]
+  when: target_host in services['containers']['booklogr']['units']['main']['hosts']
+  tags: ["booklogr"]
+
+- name: Include the ca task
+  ansible.builtin.include_tasks:
+    file: "ca.yaml"
+    apply:
+      tags: ["ca"]
+  when: target_host in services['containers']['ca']['units']['main']['hosts']
+  tags: ["ca"]
+
+- name: Include the ezbookkeeping task
+  ansible.builtin.include_tasks:
+    file: "ezbookkeeping.yaml"
+    apply:
+      tags: ["ezbookkeeping"]
+  when: target_host in services['containers']['ezbookkeeping']['units']['main']['hosts']
+  tags: ["ezbookkeeping"]
+
+- name: Include the gitea task
+  ansible.builtin.include_tasks:
+    file: "gitea.yaml"
+    apply:
+      tags: ["gitea"]
+  when: target_host in services['containers']['gitea']['units']['main']['hosts']
+  tags: ["gitea"]
+
+- name: Include the groupoffice task
+  ansible.builtin.include_tasks:
+    file: "groupoffice.yaml"
+    apply:
+      tags: ["groupoffice"]
+  when: target_host in services['containers']['groupoffice']['units']['main']['hosts']
+  tags: ["groupoffice"]
+
+- name: Include the homebox task
+  ansible.builtin.include_tasks:
+    file: "homebox.yaml"
+    apply:
+      tags: ["homebox"]
+  when: target_host in services['containers']['homebox']['units']['main']['hosts']
+  tags: ["homebox"]
+
+- name: Include the linkwarden task
+  ansible.builtin.include_tasks:
+    file: "linkwarden.yaml"
+    apply:
+      tags: ["linkwarden"]
+  when: target_host in services['containers']['linkwarden']['units']['main']['hosts']
+  tags: ["linkwarden"]
+
+- name: Include the llama task
+  ansible.builtin.include_tasks:
+    file: "llama.yaml"
+    apply:
+      tags: ["llama"]
+  when: target_host in services['containers']['llama']['units']['main']['hosts']
+  tags: ["llama"]
+
+- name: Include the maddy task
+  ansible.builtin.include_tasks:
+    file: "maddy.yaml"
+    apply:
+      tags: ["maddy"]
+  when: target_host in services['containers']['maddy']['units']['main']['hosts']
+  tags: ["maddy"]
+
+- name: Include the mealie task
+  ansible.builtin.include_tasks:
+    file: "mealie.yaml"
+    apply:
+      tags: ["mealie"]
+  when: target_host in services['containers']['mealie']['units']['main']['hosts']
+  tags: ["mealie"]
+
+- name: Include the memos task
+  ansible.builtin.include_tasks:
+    file: "memos.yaml"
+    apply:
+      tags: ["memos"]
+  when: target_host in services['containers']['memos']['units']['main']['hosts']
+  tags: ["memos"]
+
+- name: Include the nextcloud task
+  ansible.builtin.include_tasks:
+    file: "nextcloud.yaml"
+    apply:
+      tags: ["nextcloud"]
+  when: target_host in services['containers']['nextcloud']['units']['main']['hosts']
+  tags: ["nextcloud"]
+
+- name: Include the opencloud task
+  ansible.builtin.include_tasks:
+    file: "opencloud.yaml"
+    apply:
+      tags: ["opencloud"]
+  when: target_host in services['containers']['opencloud']['units']['main']['hosts']
+  tags: ["opencloud"]
+
+- name: Include the ovms task
+  ansible.builtin.include_tasks:
+    file: "ovms.yaml"
+    apply:
+      tags: ["ovms"]
+  when: target_host in services['containers']['ovms']['units']['main']['hosts']
+  tags: ["ovms"]
+
+- name: Include the paperless task
+  ansible.builtin.include_tasks:
+    file: "paperless.yaml"
+    apply:
+      tags: ["paperless"]
+  when: target_host in services['containers']['paperless']['units']['main']['hosts']
+  tags: ["paperless"]
+
+- name: Include the readur task
+  ansible.builtin.include_tasks:
+    file: "readur.yaml"
+    apply:
+      tags: ["readur"]
+  when: target_host in services['containers']['readur']['units']['main']['hosts']
+  tags: ["readur"]
+
+- name: Include the romm task
+  ansible.builtin.include_tasks:
+    file: "romm.yaml"
+    apply:
+      tags: ["romm"]
+  when: target_host in services['containers']['romm']['units']['main']['hosts']
+  tags: ["romm"]
+
+- name: Include the stablediffusion task
+  ansible.builtin.include_tasks:
+    file: "stablediffusion.yaml"
+    apply:
+      tags: ["stablediffusion"]
+  when: target_host in services['containers']['stablediffusion']['units']['main']['hosts']
+  tags: ["stablediffusion"]
+
+- name: Include the tandoor task
+  ansible.builtin.include_tasks:
+    file: "tandoor.yaml"
+    apply:
+      tags: ["tandoor"]
+  when: target_host in services['containers']['tandoor']['units']['main']['hosts']
+  tags: ["tandoor"]
+
+- name: Include the trilium task
+  ansible.builtin.include_tasks:
+    file: "trilium.yaml"
+    apply:
+      tags: ["trilium"]
+  when: target_host in services['containers']['trilium']['units']['main']['hosts']
+  tags: ["trilium"]
+
+- name: Include the vikunja task
+  ansible.builtin.include_tasks:
+    file: "vikunja.yaml"
+    apply:
+      tags: ["vikunja"]
+  when: target_host in services['containers']['vikunja']['units']['main']['hosts']
+  tags: ["vikunja"]
+
+- name: Include the wikijs task
+  ansible.builtin.include_tasks:
+    file: "wikijs.yaml"
+    apply:
+      tags: ["wikijs"]
+  when: target_host in services['containers']['wikijs']['units']['main']['hosts']
+  tags: ["wikijs"]

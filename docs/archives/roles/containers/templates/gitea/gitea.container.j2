@@ -1,0 +1,53 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Gitea
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+
+ContainerName=gitea
+HostName=gitea
+
+PublishPort={{ services['containers']['gitea']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['gitea']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['gitea']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/gitea/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/gitea/ssl:/etc/ssl/gitea:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="GITEA__server__DISABLE_SSH=true"
+Environment="GITEA__server__REVERSE_PROXY_LIMIT=2"
+Environment="GITEA__server__REVERSE_PROXY_TRUSTED_PROXIES={{ containers_trusted_proxies | join(',') }}"
+# Database
+Environment="GITEA__database__DB_TYPE=postgres"
+Environment="GITEA__database__HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="GITEA__database__NAME=gitea_db"
+Environment="GITEA__database__USER=gitea"
+Secret=GITEA__database__PASSWD,type=env
+Environment="GITEA__database__SSL_MODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/gitea/{{ site['ca']['x509']['root']['certificate_file'] }}"
+# OAuth2 client
+Environment="GITEA__oauth2_client__ACCOUNT_LINKING=auto"
+# OIDC configuration
+Environment="GITEA__openid__ENABLE_OPENID_SIGNIN=false"
+Environment="GITEA__openid__ENABLE_OPENID_SIGNUP=true"
+Environment="GITEA__openid__WHITELISTED_URIS={{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+# automatic create user via authelia
+Environment="GITEA__service__DISABLE_REGISTRATION=false"
+Environment="GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=true"
+Environment="GITEA__service__SHOW_REGISTRATION_BUTTON=false"
+
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

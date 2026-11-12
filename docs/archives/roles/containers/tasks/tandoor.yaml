@@ -1,0 +1,120 @@
+---
+- name: Register the tandoor database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the tandoor authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "tandoor"
+
+- name: Register the missing tandoor secret key on secrets.yaml
+  vars:
+    secrets_target: '["tandoor"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 50') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['tandoor']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the tandoor fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "TANDOOR_SECRET_KEY"
+        value: "{{ secrets['tandoor']['secret_key'] }}"
+      - name: "TANDOOR_POSTGRES_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['tandoor'] }}"
+      - name: "TANDOOR_SOCIALACCOUNT_PROVIDERS"
+        value: |
+          {
+            "openid_connect": {
+              "SCOPE": ["openid", "profile", "email"],
+              "OAUTH_PKCE_ENABLED": true,
+              "APPS": [
+                {
+                  "provider_id": "authelia",
+                  "name": "authelia",
+                  "client_id": "tandoor",
+                  "secret": "{{ secrets['tandoor']['oidc']['secret'] }}",
+                  "settings": {
+                    "server_url": "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration",
+                    "token_auth_method": "client_secret_basic"
+                  }
+                }
+              ]
+            }
+          }
+  no_log: true
+
+- name: Create the tandoor directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/tandoor"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/tandoor/mediafiles"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/tandoor"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/tandoor/ssl"
+  become: true
+
+- name: Deploy the tandoor root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/tandoor/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_tandoor"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_tandoor"
+  no_log: true
+
+- name: Deploy the tandoor image
+  vars:
+    containers_image_notifications: "notification_restart_tandoor"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the tandoor container file
+  ansible.builtin.template:
+    src: "tandoor/tandoor.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/tandoor.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_tandoor"
+
+- name: Start the tandoor
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "tandoor.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_tandoor_started"
+
+- name: Apply the tandoor configuration handlers
+  ansible.builtin.meta: "flush_handlers"

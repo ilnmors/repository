@@ -1,0 +1,115 @@
+---
+- name: Register the maddy database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "maddy"
+
+- name: Set the maddy fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "MADDY_LDAP_BIND_PASSWORD"
+        value: "{{ secrets['ldap']['password']['services']['maddy'] }}"
+      - name: "MADDY_POSTGRES_URL"
+        value: "postgresql://maddy:{{ secrets['postgresql']['password']['maddy'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/maddy_db?sslmode=verify-full&sslrootcert=/etc/ssl/maddy/{{ site['ca']['x509']['root']['certificate_file'] }}"
+  no_log: true
+
+- name: Create the maddy directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/maddy"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/maddy/ssl"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/maddy"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/maddy/data"
+  become: true
+
+- name: Deploy the maddy root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/maddy/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_maddy"
+  no_log: true
+
+- name: Deploy the maddy certificate and key
+  ansible.builtin.copy:
+    content: |
+      {{ item['value'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/maddy/ssl/{{ item['name'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - name: "{{ site['ca']['x509']['root']['certificate_file'] }}"
+      value: "{{ secrets['ca']['x509']['root']['crt'] }}"
+      mode: "0440"
+    - name: "maddy.crt"
+      value: |
+        {{ secrets['ca']['x509']['leaf'][services['containers']['maddy']['units']['main']['domain']['internal']]['crt'] | trim }}
+        {{ secrets['ca']['x509']['intermediate']['crt'] }}
+      mode: "0440"
+    - name: "maddy.key"
+      value: "{{ secrets['ca']['x509']['leaf'][services['containers']['maddy']['units']['main']['domain']['internal']]['key'] }}"
+      mode: "0400"
+  become: true
+  notify: "notification_restart_maddy"
+  no_log: true
+
+- name: Deploy the maddy maddy.conf
+  ansible.builtin.template:
+    src: "maddy/data/maddy.conf.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/maddy/maddy.conf"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0400"
+  become: true
+  notify: "notification_restart_maddy"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_maddy"
+  no_log: true
+
+- name: Deploy the maddy image
+  vars:
+    containers_image_notifications: "notification_restart_maddy"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the maddy container file
+  ansible.builtin.template:
+    src: "maddy/maddy.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/maddy.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_maddy"
+
+- name: Start the maddy
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "maddy.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_maddy_started"
+
+- name: Apply the maddy configuration handlers
+  ansible.builtin.meta: "flush_handlers"

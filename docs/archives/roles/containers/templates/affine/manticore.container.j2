@@ -1,0 +1,25 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Manticore - affine
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=manticore_affine
+HostName=manticore_affine
+
+PublishPort={{ services['containers']['affine']['units']['manticore']['ports']['tcp']['int'] }}:{{ services['containers']['affine']['units']['manticore']['ports']['tcp']['container'] }}/{{ services['containers']['affine']['units']['manticore']['ports']['tcp']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/affine/manticore:/var/lib/manticore:rw
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+
+[Service]
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

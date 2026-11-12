@@ -1,0 +1,110 @@
+---
+- name: Register the romm database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the romm authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Deploy the romm valkey
+  vars:
+    containers_valkey_service: "romm"
+  ansible.builtin.include_tasks:
+    file: "valkey.yaml"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "romm"
+
+- name: Register the missing romm secret key on secrets.yaml
+  vars:
+    secrets_target: '["romm"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['romm']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the romm fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "ROMM_AUTH_SECRET_KEY"
+        value: "{{ secrets['romm']['secret_key'] }}"
+      - name: "ROMM_DATABASE_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['romm'] }}"
+      - name: "ROMM_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['romm']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the romm directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['romm']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/romm"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/romm/library"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/romm/resources"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/romm/assets"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/romm"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/romm/ssl"
+  become: true
+
+- name: Deploy the romm root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/romm/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['romm']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_romm"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_romm"
+  no_log: true
+
+- name: Deploy the romm image
+  vars:
+    containers_image_notifications: "notification_restart_romm"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the romm container file
+  ansible.builtin.template:
+    src: "romm/romm.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/romm.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_romm"
+
+- name: Start the romm
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "romm.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_romm_started"
+
+- name: Apply the romm configuration handlers
+  ansible.builtin.meta: "flush_handlers"

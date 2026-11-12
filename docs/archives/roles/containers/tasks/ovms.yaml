@@ -1,0 +1,74 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "ovms"
+
+- name: Create the ovms directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['ovms']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ovms"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ovms/models"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ovms/config"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/ovms/cache"
+  become: true
+
+- name: Add the app user to the video and render groups
+  ansible.builtin.user:
+    name: "{{ nodes[target_host]['user'] }}"
+    groups: ["video", "render"]
+    append: true
+  become: true
+
+- name: Sync the ovms models (--delete)
+  ansible.posix.synchronize:
+    src: "{{ nodes[target_host]['paths']['data'] }}/containers/ovms/models/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ovms/models/"
+    owner: true
+    group: true
+    perms: true
+    delete: true
+  delegate_to: "{{ inventory_hostname }}"
+  become: true
+  notify: "notification_restart_ovms"
+
+- name: Deploy the ovms config.json
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ nodes[target_host]['paths']['data'] }}/containers/ovms/config/config.json"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/ovms/config/config.json"
+    owner: "{{ services['containers']['ovms']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_ovms"
+
+- name: Deploy the ovms image
+  vars:
+    containers_image_notifications: "notification_restart_ovms"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the ovms container file
+  ansible.builtin.template:
+    src: "ovms/ovms.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/ovms.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_ovms"
+
+- name: Start the ovms
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "ovms.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_ovms_started"
+
+- name: Apply the ovms configuration handlers
+  ansible.builtin.meta: "flush_handlers"

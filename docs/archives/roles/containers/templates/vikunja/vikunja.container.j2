@@ -1,0 +1,57 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Vikunja
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=vikunja
+HostName=vikunja
+PublishPort={{ services['containers']['vikunja']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['vikunja']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['vikunja']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/vikunja:/app/vikunja/files:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/vikunja/ssl:/etc/ssl/vikunja:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="VIKUNJA_DEFAULTSETTINGS_TIMEZONE={{ site['timezone'] }}"
+Environment="VIKUNJA_SERVICE_TIMEZONE={{ site['timezone'] }}"
+Environment="VIKUNJA_SERVICE_PUBLICURL=https://{{ services['containers']['vikunja']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="VIKUNJA_SERVICE_ENABLEREGISTRATION=false"
+Secret=VIKUNJA_SERVICE_JWTSECRET,type=env
+
+
+# Database
+Environment="VIKUNJA_DATABASE_TYPE=postgres"
+Environment="VIKUNJA_DATABASE_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="VIKUNJA_DATABASE_USER=vikunja"
+Environment="VIKUNJA_DATABASE_DATABASE=vikunja_db"
+Environment="VIKUNJA_DATABASE_SSLMODE=verify-full"
+Environment="VIKUNJA_DATABASE_SSLROOTCERT=/etc/ssl/vikunja/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=VIKUNJA_DATABASE_PASSWORD,type=env
+
+
+# OIDC
+Environment="VIKUNJA_AUTH_OPENID_ENABLED=true"
+Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_NAME=Authelia"
+Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_AUTHURL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_CLIENTID=vikunja"
+# Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_SCOPE=" default value = openid email profile
+# Vikunja doesn't support OIDC and local dual login.
+# Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_USERNAMEFALLBACK=true"
+# Environment="VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_EMAILFALLBACK=true"
+Secret=VIKUNJA_AUTH_OPENID_PROVIDERS_authelia_CLIENTSECRET,type=env
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

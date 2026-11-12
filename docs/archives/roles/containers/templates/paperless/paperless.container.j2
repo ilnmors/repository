@@ -1,0 +1,59 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Paperless
+
+After=valkey_paperless.service
+Wants=valkey_paperless.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=paperless
+HostName=paperless
+PublishPort={{ services['containers']['paperless']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['paperless']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['paperless']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/paperless/data:/usr/src/paperless/data:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/paperless/media:/usr/src/paperless/media:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/paperless/consume:/usr/src/paperless/consume:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/paperless/ssl:/etc/ssl/paperless:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="PAPERLESS_TIME_ZONE={{ site['timezone'] }}"
+Environment="PAPERLESS_URL=https://{{ services['containers']['paperless']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="PAPERLESS_OCR_LANGUAGE=kor+eng"
+Environment="PAPERLESS_OCR_LANGUAGES=kor"
+# Environment="PAPERLESS_OCR_MODE=force"
+# Environment="PAPERLESS_TASK_WORKERS=1"
+# Environment="PAPERLESS_THREADS_PER_WORKER=1"
+Environment="PAPERLESS_WORKER_TIMEOUT=7200"
+Secret=PAPERLESS_SECRET_KEY,type=env
+
+# Redis
+Environment="PAPERLESS_REDIS=redis://host.containers.internal:{{ services['containers']['paperless']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# Database
+Environment="PAPERLESS_DBHOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="PAPERLESS_DBPORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="PAPERLESS_DBNAME=paperless_db"
+Environment="PAPERLESS_DBUSER=paperless"
+Environment="PAPERLESS_DBSSLMODE=verify-full"
+Environment="PAPERLESS_DBSSLROOTCERT=/etc/ssl/paperless/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=PAPERLESS_DBPASS,type=env
+
+# OIDC
+Environment="PAPERLESS_APPS=allauth.socialaccount.providers.openid_connect"
+Environment="PAPERLESS_SOCIAL_AUTO_SIGNUP=true"
+Environment="PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS=true"
+Secret=PAPERLESS_SOCIALACCOUNT_PROVIDERS,type=env
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

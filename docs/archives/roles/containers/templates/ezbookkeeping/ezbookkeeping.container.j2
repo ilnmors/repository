@@ -1,0 +1,61 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=ezBookkeeping
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=ezbookkeeping
+HostName=ezbookkeeping
+
+PublishPort={{ services['containers']['ezbookkeeping']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['ezbookkeeping']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['ezbookkeeping']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/ezbookkeeping/data:/data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/ezbookkeeping/ssl:/etc/ssl/ezbookkeeping:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="EBK_SERVER_DOMAIN={{ services['containers']['ezbookkeeping']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="EBK_SERVER_ROOT_URL=https://{{ services['containers']['ezbookkeeping']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/"
+Environment="EBK_LOG_MODE=console"
+
+# Database
+Environment="EBK_DATABASE_TYPE=postgres"
+Environment="EBK_DATABASE_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="EBK_DATABASE_NAME=ezbookkeeping_db"
+Environment="EBK_DATABASE_USER=ezbookkeeping"
+Secret=EBK_DATABASE_PASSWD,type=env
+Environment="EBK_DATABASE_SSL_MODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/ezbookkeeping/{{ site['ca']['x509']['root']['certificate_file'] }}"
+
+# OIDC
+Environment="EBK_AUTH_ENABLE_OAUTH2_AUTH=true"
+Environment="EBK_AUTH_OAUTH2_PROVIDER=oidc"
+Environment="EBK_AUTH_OAUTH2_CLIENT_ID=ezbookkeeping"
+Secret=EBK_AUTH_OAUTH2_CLIENT_SECRET,type=env
+Environment="EBK_AUTH_OAUTH2_USE_PKCE=true"
+Environment="EBK_AUTH_OIDC_PROVIDER_BASE_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="EBK_AUTH_ENABLE_OIDC_DISPLAY_NAME=true"
+Environment="EBK_AUTH_OIDC_CUSTOM_DISPLAY_NAME=Authelia"
+
+# Registration / auth policy
+Environment="EBK_AUTH_ENABLE_INTERNAL_AUTH=false"
+Environment="EBK_USER_ENABLE_REGISTER=true"
+Environment="EBK_AUTH_OAUTH2_AUTO_REGISTER=true"
+
+# AI / MCP disabled by default
+Environment="EBK_MCP_ENABLE_MCP=false"
+Environment="EBK_LLM_TRANSACTION_FROM_AI_IMAGE_RECOGNITION=false"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

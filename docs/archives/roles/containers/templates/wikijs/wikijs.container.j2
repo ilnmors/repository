@@ -1,0 +1,41 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=Wiki.js
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=wikijs
+HostName=wikijs
+PublishPort={{ services['containers']['wikijs']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['wikijs']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['wikijs']['units']['main']['ports']['http']['protocol'] }}
+
+# Volumes
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/wikijs/data:/wiki/data:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/wikijs/export:/wiki/export:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/wikijs/ssl:/etc/ssl/wiki:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+
+# Database
+Environment="DB_TYPE=postgres"
+Environment="DB_HOST={{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="DB_PORT={{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}"
+Environment="DB_USER=wikijs"
+Environment="DB_NAME=wikijs_db"
+Environment="DB_SSL=true"
+Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/wiki/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=WIKIJS_DB_PASS,type=env,target=DB_PASS
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

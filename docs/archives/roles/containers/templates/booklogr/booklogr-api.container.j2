@@ -1,0 +1,51 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=BookLogr API
+
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=booklogr-api
+HostName=booklogr-api
+
+PublishPort={{ services['containers']['booklogr']['units']['main']['ports']['api']['int'] }}:{{ services['containers']['booklogr']['units']['main']['ports']['api']['container'] }}/{{ services['containers']['booklogr']['units']['main']['ports']['api']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/booklogr/profile_pictures:/app/profile_pictures:rw
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/booklogr/export_data:/app/export_data:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/booklogr/ssl:/etc/ssl/booklogr:ro
+
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+Environment="SINGLE_USER_MODE=false"
+Environment="EXPORT_FOLDER=/app/export_data"
+
+# PostgreSQL
+Environment="DATABASE_URL=postgresql://booklogr@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/booklogr_db"
+Environment="PGSSLMODE=verify-full"
+Environment="PGSSLROOTCERT=/etc/ssl/booklogr/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=BOOKLOGR_POSTGRES_PASSWORD,type=env,target=PGPASSWORD
+
+# Authentication
+Environment="AUTH_ALLOW_REGISTRATION=true"
+Environment="AUTH_REQUIRE_VERIFICATION=false"
+Secret=BOOKLOGR_AUTH_SECRET_KEY,type=env,target=AUTH_SECRET_KEY
+
+# OIDC - Authelia
+Environment="OIDC_CLIENT_ID=booklogr"
+Environment="OIDC_REDIRECT_URI=https://{{ services['containers']['booklogr']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/callback"
+Environment="OIDC_DISCOVERY_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration"
+Secret=BOOKLOGR_OIDC_CLIENT_SECRET,type=env,target=OIDC_CLIENT_SECRET
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

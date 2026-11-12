@@ -1,0 +1,129 @@
+---
+- name: Register the booklogr database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the booklogr authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "booklogr"
+
+- name: Register the missing booklogr secret key on secrets.yaml
+  vars:
+    secrets_target: '["booklogr"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['booklogr']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the booklogr fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "BOOKLOGR_AUTH_SECRET_KEY"
+        value: "{{ secrets['booklogr']['secret_key'] }}"
+      - name: "BOOKLOGR_POSTGRES_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['booklogr'] }}"
+      - name: "BOOKLOGR_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['booklogr']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the booklogr directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/booklogr"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/booklogr/profile_pictures"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/booklogr/export_data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/booklogr"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/booklogr/ssl"
+  become: true
+
+- name: Deploy the booklogr root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/booklogr/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_booklogr"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_booklogr"
+  no_log: true
+
+- name: Deploy the booklogr-api image
+  vars:
+    containers_image_notifications: "notification_restart_booklogr"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the booklogr-api container file
+  ansible.builtin.template:
+    src: "booklogr/booklogr-api.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/booklogr-api.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_booklogr"
+
+- name: Set the booklogr-web target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "booklogr-web"
+
+- name: Deploy the booklogr-web image
+  vars:
+    containers_image_notifications: "notification_restart_booklogr"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the booklogr-web container file
+  ansible.builtin.template:
+    src: "booklogr/booklogr-web.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/booklogr-web.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_booklogr"
+
+- name: Start the booklogr-api
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "booklogr-api.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_booklogr_started"
+
+- name: Start the booklogr-web
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "booklogr-web.service"
+    state: "started"
+    daemon_reload: true
+
+- name: Apply the booklogr configuration handlers
+  ansible.builtin.meta: "flush_handlers"

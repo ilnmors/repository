@@ -1,0 +1,140 @@
+---
+- name: Register the bonfire database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "bonfire"
+
+- name: Register the missing bonfire session secret on secrets.yaml
+  vars:
+    secrets_target: '["bonfire"]["session_secret"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['bonfire']['session_secret'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing bonfire session salt on secrets.yaml
+  vars:
+    secrets_target: '["bonfire"]["session_salt"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['bonfire']['session_salt'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing bonfire encrypt salt on secrets.yaml
+  vars:
+    secrets_target: '["bonfire"]["encrypt_salt"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['bonfire']['encrypt_salt'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing bonfire release cookie on secrets.yaml
+  vars:
+    secrets_target: '["bonfire"]["release_cookie"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -hex 64') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['bonfire']['release_cookie'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the bonfire fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "BONFIRE_SESSION_SECRET"
+        value: "{{ secrets['bonfire']['session_secret'] }}"
+      - name: "BONFIRE_SESSION_SALT"
+        value: "{{ secrets['bonfire']['session_salt'] }}"
+      - name: "BONFIRE_ENCRYPT_SALT"
+        value: "{{ secrets['bonfire']['encrypt_salt'] }}"
+      - name: "BONFIRE_RELEASE_COOKIE"
+        value: "{{ secrets['bonfire']['release_cookie'] }}"
+      - name: "BONFIRE_DB_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['bonfire'] }}"
+      - name: "BONFIRE_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['bonfire']['oidc']['secret'] }}"
+  no_log: true
+
+- name: Create the bonfire directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/bonfire"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/bonfire/uploads"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/bonfire"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/bonfire/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/bonfire/config"
+  become: true
+
+- name: Deploy the bonfire root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/bonfire/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_bonfire"
+  no_log: true
+
+- name: Deploy the bonfire runtime.exs
+  ansible.builtin.template:
+    src: "bonfire/config/runtime.exs"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/bonfire/config/runtime.exs"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_bonfire"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_bonfire"
+  no_log: true
+
+- name: Deploy the bonfire image
+  vars:
+    containers_image_notifications: "notification_restart_bonfire"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the bonfire container file
+  ansible.builtin.template:
+    src: "bonfire/bonfire.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/bonfire.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_bonfire"
+
+- name: Start the bonfire
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "bonfire.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_bonfire_started"
+
+- name: Apply the bonfire configuration handlers
+  ansible.builtin.meta: "flush_handlers"

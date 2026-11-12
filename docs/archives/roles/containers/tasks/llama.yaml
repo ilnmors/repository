@@ -1,0 +1,65 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "llama"
+
+- name: Create the llama directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/llama"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/llama/models"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/llama/config"
+  become: true
+
+- name: Sync the llama models (--delete)
+  ansible.posix.synchronize:
+    src: "{{ nodes[target_host]['paths']['data'] }}/containers/llama/models/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/llama/models/"
+    owner: true
+    group: true
+    perms: true
+    delete: true
+  delegate_to: "{{ inventory_hostname }}"
+  become: true
+  notify: "notification_restart_llama"
+
+- name: Deploy the llama models.ini
+  ansible.builtin.template:
+    src: "llama/config/models.ini.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/llama/config/models.ini"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_llama"
+
+- name: Deploy the llama image
+  vars:
+    containers_image_notifications: "notification_restart_llama"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the llama container file
+  ansible.builtin.template:
+    src: "llama/llama.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/llama.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_llama"
+
+- name: Start the llama
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "llama.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_llama_started"
+
+- name: Apply the llama configuration handlers
+  ansible.builtin.meta: "flush_handlers"

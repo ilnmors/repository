@@ -1,0 +1,49 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=AFFiNE
+
+After=valkey_affine.service manticore_affine.service
+Wants=valkey_affine.service manticore_affine.service
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=affine
+HostName=affine
+
+PublishPort={{ services['containers']['affine']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['affine']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['affine']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/affine:/root/.affine/storage:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/affine/config:/root/.affine/config
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/affine/ssl:/etc/ssl/affine:ro
+
+# General
+Environment="TZ={{ site['timezone'] }}"
+## OIDC callback URIs
+Environment="AFFINE_SERVER_HOST={{ services['containers']['affine']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="AFFINE_SERVER_EXTERNAL_URL=https://{{ services['containers']['affine']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="AFFINE_SERVER_HTTPS=true"
+
+Secret=AFFINE_PRIVATE_KEY,type=env
+
+# Database
+Secret=AFFINE_DATABASE_URL,type=env,target=DATABASE_URL
+## Enable AI function: this needs pgvector
+
+# Redis
+Environment="REDIS_SERVER_HOST=host.containers.internal"
+Environment="REDIS_SERVER_PORT={{ services['containers']['affine']['units']['valkey']['ports']['tcp']['int'] }}"
+
+# Indexer
+Environment="AFFINE_INDEXER_ENABLED=true"
+Environment="AFFINE_INDEXER_SEARCH_ENDPOINT=http://host.containers.internal:{{ services['containers']['affine']['units']['manticore']['ports']['tcp']['int'] }}"
+
+[Service]
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

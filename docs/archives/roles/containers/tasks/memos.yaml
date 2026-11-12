@@ -1,0 +1,88 @@
+---
+- name: Register the memos database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the memos authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "memos"
+
+- name: Set the memos fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "MEMOS_DSN"
+        value: "postgresql://memos:{{ secrets['postgresql']['password']['memos'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/memos_db?sslmode=verify-full&sslrootcert=/etc/ssl/memos/{{ site['ca']['x509']['root']['certificate_file'] }}"
+  no_log: true
+
+- name: Create the memos directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ services['containers']['memos']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/memos"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/memos/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/memos"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/memos/ssl"
+  become: true
+
+- name: Deploy the memos root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/memos/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['memos']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_memos"
+  no_log: true
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_memos"
+  no_log: true
+
+- name: Deploy the memos image
+  vars:
+    containers_image_notifications: "notification_restart_memos"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the memos container file
+  ansible.builtin.template:
+    src: "memos/memos.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/memos.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_memos"
+
+- name: Start the memos
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "memos.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_memos_started"
+
+- name: Apply the memos configuration handlers
+  ansible.builtin.meta: "flush_handlers"
