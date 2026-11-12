@@ -34,6 +34,8 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/oxicloud/ssl:/etc/ss
 
 # General
 Environment="TZ={{ site['timezone'] }}"
+# The image listens on 127.0.0.1 by default; PublishPort needs all interfaces.
+Environment="OXICLOUD_SERVER_HOST=0.0.0.0"
 Environment="OXICLOUD_BASE_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
 Environment="OXICLOUD_TRUST_PROXY_CIDR={{ containers_trusted_proxies | map('regex_replace', '^([^:]+)$', '\\1/32') | map('regex_replace', '^(.*:.*)$', '\\1/128') | join(',') }}"
 Secret=OXICLOUD_JWT_SECRET,type=env,target=OXICLOUD_JWT_SECRET
@@ -50,6 +52,11 @@ Environment="OXICLOUD_OIDC_REDIRECT_URI=https://{{ services['containers']['oxicl
 Environment="OXICLOUD_OIDC_FRONTEND_URL=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
 Environment="OXICLOUD_OIDC_SCOPES=openid profile email groups"
 Environment="OXICLOUD_OIDC_ADMIN_GROUPS=admins"
+# The first OIDC login creates the account, so no local admin setup is needed.
+# OIDC provisioning falls back to user_<sub> for usernames shorter than 3 characters,
+# although the user entity and DB accept 2-64. Rename such accounts to the LDAP id
+# in auth.users.username after their first login.
+Environment="OXICLOUD_OIDC_AUTO_PROVISION=true"
 Environment="OXICLOUD_OIDC_PROVIDER_NAME=Authelia"
 Secret=OXICLOUD_OIDC_CLIENT_SECRET,type=env,target=OXICLOUD_OIDC_CLIENT_SECRET
 
