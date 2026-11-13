@@ -7,7 +7,8 @@ role_assignment:
       - role_name: "admin"
         claim_value: "{{ admin_user }}"
 {% endfor %}
-{% for general_user in ["morsalin", "eunkyoung"] %}
+{# List the preferred_username of each non-admin user. #}
+{% for general_user in [] %}
       - role_name: "user"
         claim_value: "{{ general_user }}"
 {% endfor %}
