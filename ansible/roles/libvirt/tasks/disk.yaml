@@ -53,3 +53,76 @@
   when: ((libvirt_deployed_vm_disk_file_info['stdout'] | from_json)['virtual-size'] | int) < (nodes[target_vm]['system']['disk']['root']['size'] | ansible.builtin.human_to_bytes | int)
   changed_when: "'Cloud-init image resized' in libvirt_cloud_init_image_resized['stdout']"
   register: "libvirt_cloud_init_image_resized"
+
+# Data disks of type "file" are raw images on the vmm SSD, used when the VM has no physical data disk.
+- name: Set the file data disks
+  ansible.builtin.set_fact:
+    libvirt_file_disks: >-
+      {{
+        nodes[target_vm]['system']['disk'] | default({})
+        | dict2items
+        | selectattr('value.type', 'defined')
+        | selectattr('value.type', 'equalto', 'file')
+        | list
+      }}
+
+- name: Validate the file data disks
+  ansible.builtin.assert:
+    that:
+      - (item['value']['size'] | default('') | length) > 0
+      - (item['value']['serial'] | default('') | length) > 0
+      - (item['value']['serial'] | length) <= 20
+      - item['value']['fs']['type'] == 'btrfs'
+      - (item['value']['fs']['label'] | default('') | length) > 0
+    success_msg: "{{ target_vm }} {{ item['key'] }} disk is declared correctly."
+    fail_msg: "{{ target_vm }} {{ item['key'] }}: a file disk needs size, a serial of at most 20 characters and a labelled btrfs filesystem."
+  loop: "{{ libvirt_file_disks }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+
+- name: Install the btrfs-progs package for the file data disks
+  ansible.builtin.apt:
+    name:
+      - "btrfs-progs"
+    state: "present"
+  become: true
+  when: (libvirt_file_disks | length) > 0
+
+- name: Create, format and grow the file data disks
+  ansible.builtin.shell: |
+    set -euo pipefail
+    image={{ (nodes[target_host]['paths']['libvirt'] ~ '/images/' ~ target_vm ~ '-' ~ item['key'] ~ '.raw') | quote }}
+    size={{ item['value']['size'] | ansible.builtin.human_to_bytes | int }}
+    label={{ item['value']['fs']['label'] | quote }}
+    if [[ ! -e "${image}" ]]; then
+      # Sparse: blocks are allocated only when written.
+      qemu-img create -q -f raw "${image}" "${size}"
+      chown root:libvirt-qemu "${image}"
+      chmod 0640 "${image}"
+      echo "Data image created"
+    fi
+    fstype=$(blkid -p -s TYPE -o value "${image}" || true)
+    if [[ -z "${fstype}" ]]; then
+      mkfs.btrfs -q -L "${label}" -d {{ item['value']['fs']['btrfs']['profile'] | quote }} -m {{ item['value']['fs']['btrfs']['metadata'] | quote }} "${image}"
+      echo "Data image formatted"
+    elif [[ "${fstype}" != "btrfs" || "$(blkid -p -s LABEL -o value "${image}")" != "${label}" ]]; then
+      echo "${image} already holds ${fstype} with another label; refusing to touch it." >&2
+      exit 1
+    fi
+    current=$(stat -c %s "${image}")
+    if (( current < size )); then
+      if virsh -c qemu:///system list --name | grep -Fxq {{ target_vm | quote }}; then
+        echo "Shut down {{ target_vm }} before growing its data image." >&2
+        exit 1
+      fi
+      qemu-img resize -q -f raw "${image}" "${size}"
+      echo "Data image grown"
+    fi
+  args:
+    executable: "/bin/bash"
+  become: true
+  loop: "{{ libvirt_file_disks }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+  register: "libvirt_file_disk_result"
+  changed_when: "'Data image' in libvirt_file_disk_result['stdout']"

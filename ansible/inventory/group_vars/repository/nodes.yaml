@@ -113,7 +113,22 @@ nodes:
       memory: "8G"
       disk:
         root:
+          size: "128G"
+        # A raw image on the vmm SSD; no physical disk is needed.
+        data:
+          type: "file"
           size: "512G"
+          serial: "infra-data"
+          fs:
+            type: "btrfs"
+            label: "{{ site['org'] }}_infra_data"
+            mount_point: "/data"
+            # zstd:1 shrinks dumps, logs and archives; discard=async passes TRIM so the sparse image gives space back.
+            mount_opts: ["defaults", "noatime", "nofail", "ssd", "compress=zstd:1", "discard=async"]
+            btrfs:
+              profile: "single"
+              metadata: "dup"
+              min_devices: 1
       nic:
         lan:
           type: "virtio"
@@ -138,7 +153,22 @@ nodes:
       memory: "1G"
       disk:
         root:
+          size: "32G"
+        # A raw image on the vmm SSD for container archives and other data.
+        data:
+          type: "file"
           size: "64G"
+          serial: "auth-data"
+          fs:
+            type: "btrfs"
+            label: "{{ site['org'] }}_auth_data"
+            mount_point: "/data"
+            # zstd:1 shrinks dumps, logs and archives; discard=async passes TRIM so the sparse image gives space back.
+            mount_opts: ["defaults", "noatime", "nofail", "ssd", "compress=zstd:1", "discard=async"]
+            btrfs:
+              profile: "single"
+              metadata: "dup"
+              min_devices: 1
       nic:
         lan:
           type: "virtio"
@@ -181,7 +211,7 @@ nodes:
           }}
       disk:
         root:
-          size: "1T"
+          size: "512G"
         data:
           type: "block"
           serials: "{{ nodes['vmm']['system']['disk']['data']['serials'] }}"
@@ -189,7 +219,8 @@ nodes:
             type: "btrfs"
             label: "{{ nodes['vmm']['system']['disk']['data']['fs']['label'] }}"
             mount_point: "/data"
-            mount_opts: ["defaults", "noatime", "degraded", "nofail"]
+            # zstd:1 is skipped by btrfs for already-compressed media, so photos and videos cost nothing.
+            mount_opts: ["defaults", "noatime", "degraded", "nofail", "compress=zstd:1"]
       nic:
         lan:
           type: "virtio"

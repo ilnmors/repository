@@ -59,6 +59,15 @@ ansible-playbook playbooks/nodes/vmm.yaml
 
 The playbook configures physical storage, management networking, routing/firewall, host packages, Kopia server and libvirt guests according to inventory. Disk initialization and passthrough are host-specific operations; a successful syntax check does not validate the physical disk selection.
 
+VM data disks come in two kinds (`nodes.<vm>.system.disk.data.type`):
+
+- `block`: physical disks found by serial in `hardwares.yaml` (app: the HDD btrfs RAID1).
+- `file`: a raw image `<libvirt>/images/<vm>-data.raw` on the vmm SSD, for VMs without a physical data disk (infra, auth). The libvirt role creates it sparse, formats it as btrfs with the declared label, and attaches it with the declared serial. It only grows the image to a larger declared size, and only while the VM is shut down; the guest then runs `btrfs filesystem resize max`. An image that already holds a filesystem with another label is never touched.
+
+btrfs mount options are set per volume in `nodes.yaml`: the SSD-backed infra and auth volumes use `ssd,compress=zstd:1,discard=async` (TRIM keeps the sparse image small). The app HDD RAID1 adds `compress=zstd:1`, which btrfs skips for media that does not compress. Every data volume gets a monthly scrub timer.
+
+Root disks only grow too: raise `disk.root.size`, shut the VM down and rerun the libvirt role; cloud-init grows the partition at the next boot.
+
 ### Validate the result
 
 ```bash

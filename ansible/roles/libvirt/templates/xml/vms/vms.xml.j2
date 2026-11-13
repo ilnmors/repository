@@ -83,6 +83,22 @@
             <serial>{{ disk_path['serial'] }}</serial>
         </disk>
 {% endfor %}
+{% set libvirt_block_disk_count = libvirt_block_disk_paths | default([]) | length %}
+{%
+    for item in (
+                nodes[target_vm]['system']['disk'] | default({})
+                | dict2items
+                | selectattr('value.type', 'defined')
+                | selectattr('value.type', 'equalto', 'file')
+               )
+%}
+        <disk type='file' device='disk'>
+            <driver name='qemu' type='raw' cache='none' io='native' discard='unmap' />
+            <source file='{{ nodes[target_host]['paths']['libvirt'] }}/images/{{ target_vm }}-{{ item['key'] }}.raw' />
+            <target dev='vd{{ "bcdefghijklmnopqrstuvwxyz"[libvirt_block_disk_count + loop.index0] }}' bus='virtio' />
+            <serial>{{ item['value']['serial'] }}</serial>
+        </disk>
+{% endfor %}
         <tpm model='tpm-crb'>
             <backend type='emulator' version='2.0'/>
         </tpm>

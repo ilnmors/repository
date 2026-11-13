@@ -52,7 +52,7 @@
         file: "data-volume.yaml"
         apply:
           tags: ["default-dir"]
-      when: (nodes[target_host]['system']['disk']['data']['type'] | default('')) == 'block'
+      when: (nodes[target_host]['system']['disk']['data']['type'] | default('')) in ['block', 'file']
 
     - name: Create the user data directory
       ansible.builtin.file:

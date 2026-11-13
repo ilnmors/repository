@@ -1,16 +1,26 @@
 ---
-# The data volume is formatted as btrfs by vmm and passed to the VM as block devices.
+# The data volume is formatted as btrfs by vmm and passed to the VM.
+# type "block": physical disks (serials). type "file": a raw image on the vmm SSD (one serial).
+- name: Set the data disk serials
+  ansible.builtin.set_fact:
+    nodes_data_serials: >-
+      {{
+        nodes[target_host]['system']['disk']['data']['serials'] | default([])
+        if nodes[target_host]['system']['disk']['data']['type'] == 'block'
+        else [nodes[target_host]['system']['disk']['data']['serial'] | default('')] | reject('equalto', '') | list
+      }}
+
 - name: Check the data volume configuration
   ansible.builtin.assert:
     that:
-      - (nodes[target_host]['system']['disk']['data']['serials'] | default([]) | length) > 0
-      - nodes[target_host]['system']['disk']['data']['type'] == 'block'
+      - nodes[target_host]['system']['disk']['data']['type'] in ['block', 'file']
+      - (nodes_data_serials | length) > 0
       - nodes[target_host]['system']['disk']['data']['fs']['type'] == 'btrfs'
       - (nodes[target_host]['system']['disk']['data']['fs']['label'] | default('') | length) > 0
       - nodes[target_host]['system']['disk']['data']['fs']['mount_point'] is abs
       - nodes[target_host]['system']['disk']['data']['fs']['mount_point'] != '/'
     success_msg: "The data volume configuration is correct"
-    fail_msg: "The data volume needs block disks, a btrfs label and an absolute mount point other than /."
+    fail_msg: "The data volume needs block disks or a file disk with a serial, a btrfs label and an absolute mount point other than /."
 
 - name: Install the btrfs-progs package
   ansible.builtin.apt:
@@ -22,7 +32,7 @@
 - name: Set the data disk path
   ansible.builtin.shell: |
     set -o pipefail
-    ls -1 /dev/disk/by-id/*{{ nodes[target_host]['system']['disk']['data']['serials'] | join('* /dev/disk/by-id/*') }}* | \
+    ls -1 /dev/disk/by-id/*{{ nodes_data_serials | join('* /dev/disk/by-id/*') }}* | \
     grep -vE -- '-part[0-9]+$' | \
     xargs -r readlink -f | \
     sort -u
@@ -57,7 +67,7 @@
     that:
       - >-
         (nodes_disk_path['stdout_lines'] | length)
-        == (nodes[target_host]['system']['disk']['data']['serials'] | length)
+        == (nodes_data_serials | length)
       - >-
         nodes_existing_correct_disk_num == (nodes_disk_path['stdout_lines'] | length)
     success_msg: "All data disks have the btrfs filesystem from vmm"
@@ -87,6 +97,16 @@
     executable: "/bin/bash"
   become: true
   changed_when: false
+
+- name: Grow the file data volume to the image size
+  ansible.builtin.shell: |
+    set -euo pipefail
+    /usr/bin/btrfs filesystem resize max {{ nodes[target_host]['system']['disk']['data']['fs']['mount_point'] | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  changed_when: false
+  when: nodes[target_host]['system']['disk']['data']['type'] == 'file'
 
 - name: Set the data volume path permissions
   ansible.builtin.file:
