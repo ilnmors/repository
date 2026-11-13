@@ -2,3 +2,6 @@
 skip_list:
   - no-handler
   - yaml[line-length]
+exclude_paths:
+  # SOPS writes its encrypted comments as "#ENC[...]"
+  - roles/secrets/files/secrets.yaml
