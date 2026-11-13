@@ -1,7 +1,7 @@
 !.gitkeep
 .vscode/
 .ansible/
-.agent-workplace/
+.agent-workspace/
 tools/build/
 *.tmp
 CLAUDE.md
