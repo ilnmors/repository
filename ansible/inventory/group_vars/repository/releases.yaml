@@ -137,11 +137,11 @@ releases:
     rustfs:
       name: "rustfs"
       repository: "docker.io/rustfs/rustfs"
-      tag: "1.0.4"
+      tag: "1.0.5"
     postgresql:
       name: "postgresql"
       repository: "docker.io/library/postgres"
-      tag: "18.6"
+      tag: "18.7"
       build:
         status: true
         vectorchord:
@@ -166,7 +166,7 @@ releases:
     grafana:
       name: "grafana"
       repository: "docker.io/grafana/grafana"
-      tag: "13.3.0"
+      tag: "13.3.1"
     x509-exporter:
       name: "x509-exporter"
       repository: "docker.io/enix/x509-certificate-exporter"
@@ -217,7 +217,7 @@ releases:
     snappymail:
       name: "snappymail"
       repository: "ghcr.io/the-djmaze/snappymail"
-      tag: "v2.38.2.1"
+      tag: "v3.0.1.2"
     mastodon:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
@@ -229,7 +229,7 @@ releases:
     immich:
       name: "immich"
       repository: "ghcr.io/immich-app/immich-server"
-      tag: "v3.3.6"
+      tag: "v3.4.1"
     outline:
       name: "outline"
       repository: "docker.io/outlinewiki/outline"
@@ -237,15 +237,15 @@ releases:
     bookstack:
       name: "bookstack"
       repository: "docker.io/solidnerd/bookstack"
-      tag: "26.9.2"
+      tag: "26.9.3"
     quartermaster:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
-      tag: "v1.8.1"
+      tag: "v1.9.1"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
-      tag: "v0.13.0"
+      tag: "v0.13.3"
     sure:
       name: "sure"
       repository: "ghcr.io/we-promise/sure"
@@ -257,7 +257,7 @@ releases:
     homepage:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"
-      tag: "v2.7.0"
+      tag: "v2.8.0"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
@@ -265,4 +265,4 @@ releases:
     immich-ml:
       name: "immich-ml"
       repository: "ghcr.io/immich-app/immich-machine-learning"
-      tag: "v3.3.6-openvino"
+      tag: "v3.4.1-openvino"
