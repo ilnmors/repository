@@ -28,6 +28,9 @@ Environment="TZ={{ site['timezone'] }}"
 # The new environment from version 2.7.0 to enable CSP
 Environment="IMMICH_HELMET_FILE=true"
 Environment="IMMICH_TRUSTED_PROXIES={{ containers_trusted_proxies | join(',') }}"
+# OAuth lives in the admin settings (system_metadata), not in the environment:
+# OAuth enabled with button text "Login with Authelia", Auto Launch off,
+# Password Login off. Users sign in only by pressing the Authelia button.
 
 # Redis
 Environment="REDIS_HOSTNAME=host.containers.internal"

@@ -34,6 +34,7 @@ Secret=KANEO_DB_PASSWORD,type=env,target=POSTGRES_PASSWORD
 
 # OIDC
 Environment="CUSTOM_OAUTH_CLIENT_ID=kaneo"
+Environment="CUSTOM_OAUTH_NAME=Authelia"
 Environment="CUSTOM_OAUTH_DISCOVERY_URL=https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration"
 Environment="CUSTOM_OAUTH_SCOPES=openid,profile,email"
 Environment="CUSTOM_AUTH_PKCE=true"

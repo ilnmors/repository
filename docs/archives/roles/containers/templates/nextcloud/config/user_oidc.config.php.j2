@@ -1,5 +1,7 @@
 <?php
 $CONFIG = [
+  // Show only the Authelia button; the local form stays reachable with ?direct=1.
+  'hide_login_form' => true,
   'user_oidc' => [
     'default_token_endpoint_auth_method' => 'client_secret_post',
     'auto_provision' => true,

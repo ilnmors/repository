@@ -41,6 +41,9 @@ Environment="GITEA__openid__WHITELISTED_URIS={{ services['containers']['authelia
 Environment="GITEA__service__DISABLE_REGISTRATION=false"
 Environment="GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=true"
 Environment="GITEA__service__SHOW_REGISTRATION_BUTTON=false"
+# Hide the password form. Keep passkeys enabled: with no password form, no passkey
+# and a single OAuth source, Gitea redirects to Authelia without a button press.
+Environment="GITEA__service__ENABLE_PASSWORD_SIGNIN_FORM=false"
 
 
 [Service]

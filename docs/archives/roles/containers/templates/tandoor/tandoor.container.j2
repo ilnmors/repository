@@ -40,7 +40,8 @@ Environment="PGSSLROOTCERT=/etc/ssl/tandoor/{{ site['ca']['x509']['root']['certi
 Secret=TANDOOR_POSTGRES_PASSWORD,type=env,target=POSTGRES_PASSWORD
 
 # Login
-Environment="HIDE_LOGIN_FORM=1"
+# HIDE_LOGIN_FORM was dropped in 2.7; the new login page only reads SOCIALACCOUNT_ONLY.
+Environment="SOCIALACCOUNT_ONLY=1"
 Environment="ENABLE_SIGNUP=0"
 
 # OIDC
