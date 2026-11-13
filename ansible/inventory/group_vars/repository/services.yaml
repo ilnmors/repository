@@ -924,9 +924,6 @@ services:
               scopes: ["openid", "email", "profile", "groups"]
               auth_method: "client_secret_basic"
               pkce: true
-          # Open WebUI model id. Needs secrets['sure']['openwebui_api_key'] (created in Open WebUI). Empty disables AI.
-          ai:
-            model: ""
         worker:
           release: "sure"
           hosts: ["app"]

@@ -61,16 +61,11 @@ Environment="SECURITIES_PROVIDER=yahoo_finance"
 
 # AI backend
 Environment="ASSISTANT_TYPE=builtin"
-{% if containers_sure_ai_enabled %}
-# Open WebUI is the only AI gateway.
-Environment="OPENAI_URI_BASE=http://host.containers.internal:{{ services['containers']['openwebui']['units']['main']['ports']['http']['int'] }}/api"
-Environment="OPENAI_MODEL={{ services['containers']['sure']['units']['main']['ai']['model'] }}"
-Secret=SURE_OPENWEBUI_API_KEY,type=env,target=OPENAI_ACCESS_TOKEN
-{% endif %}
-Environment="LLM_CONTEXT_WINDOW=8192"
-Environment="OPENAI_REQUEST_TIMEOUT=600"
+# The LLM provider (URI base, access token, model, context window, timeouts) is set in
+# Settings > Self-hosting. Leave the OPENAI_*/LLM_*/AI_RESPONSE_TIMEOUT variables unset:
+# when present they lock those fields. An Open WebUI API key with
+# https://openwebui.<public domain>/api works as the OpenAI-compatible endpoint.
 Environment="ASSISTANT_MAX_TOOL_CALL_ITERATIONS=2"
-Environment="AI_RESPONSE_TIMEOUT=2400"
 
 # S3
 Environment="ACTIVE_STORAGE_SERVICE=generic_s3"

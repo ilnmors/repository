@@ -59,21 +59,6 @@
         value: "{{ secrets['rustfs']['password']['sure'] }}"
   no_log: true
 
-- name: Set the sure AI fact
-  ansible.builtin.set_fact:
-    containers_sure_ai_enabled: >-
-      {{
-        (services['containers']['sure']['units']['main']['ai']['model'] | length) > 0
-        and (secrets['sure']['openwebui_api_key'] | default('', true) | length) > 0
-      }}
-  no_log: true
-
-- name: Add the sure AI secret
-  ansible.builtin.set_fact:
-    containers_secrets: "{{ containers_secrets + [{'name': 'SURE_OPENWEBUI_API_KEY', 'value': secrets['sure']['openwebui_api_key']}] }}"
-  when: containers_sure_ai_enabled
-  no_log: true
-
 - name: Create the sure directory
   ansible.builtin.file:
     path: "{{ item }}"
