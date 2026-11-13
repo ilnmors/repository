@@ -1,0 +1,50 @@
+# Operating Notes
+
+Facts and decisions for running the homelab stacks, one directory per stack (`<stack>/README.md`). The configuration itself lives in `ansible/`. These notes describe the running servers as of 2026-11-13, including stacks that are still deployed from the archived homelab repository.
+
+## Stacks
+
+| Host | Stacks |
+| --- | --- |
+| infra | [postgresql](postgresql/README.md), [mariadb](mariadb/README.md), [lldap](lldap/README.md), [step-ca](step-ca/README.md), [rustfs](rustfs/README.md), [prometheus](prometheus/README.md), [loki](loki/README.md), [grafana](grafana/README.md), [x509-exporter](x509-exporter/README.md), [maddy](maddy/README.md), [caddy](caddy/README.md) |
+| auth | [authelia](authelia/README.md), [caddy](caddy/README.md) |
+| app | [oxicloud](oxicloud/README.md), [collabora](collabora/README.md), [sure](sure/README.md), [immich](immich/README.md), [outline](outline/README.md), [bookstack](bookstack/README.md), [kaneo](kaneo/README.md), [linkding](linkding/README.md), [vaultwarden](vaultwarden/README.md), [gitea](gitea/README.md), [mastodon](mastodon/README.md), [openwebui](openwebui/README.md), [llama](llama/README.md), [stablediffusion](stablediffusion/README.md), [homebox](homebox/README.md), [homepage](homepage/README.md), [papra](papra/README.md), [tandoor](tandoor/README.md), [groupoffice](groupoffice/README.md), [snappymail](snappymail/README.md), [nextcloud](nextcloud/README.md), [redis](redis/README.md), [caddy](caddy/README.md) |
+| repository schema only | [forgejo](forgejo/README.md) |
+
+- The 2026-11-13 container upgrade is summarized in `.agent-workspace/upgrade-2026-11-13/index.html` (not tracked).
+- `releases.yaml` was updated to the latest stable releases the same day.
+
+## Hosts and Request Path
+
+- Containers run as rootless Podman quadlets per user (`~/.config/containers/systemd/*.container`).
+- External requests: auth Caddy → `<service>.app.ilnmors.internal` (app Caddy) → `host.containers.internal:<port>`.
+- Inside a container `host.containers.internal` resolves to `169.254.1.2`; Podman adds it, so no host-gateway entry is needed.
+- Public names `<service>.ilnmors.com` are reachable from inside containers through the auth host.
+
+## Access from the Console
+
+- Away from home, the WireGuard connection `ilnmors` must be up (`nmcli con up ilnmors`); it can drop when the Wi-Fi network changes.
+- SSH uses `id_console` with its certificate. Trust the host CA after checking its fingerprint `SHA256:6tqfzyeeEgf6XkSgjrbMqQnzlvIrAF2XN640prQ4PYw` (`@cert-authority app,infra,auth,vmm <CA public key>`). Users: `app@app.ilnmors.internal`, `infra@infra.ilnmors.internal`, `auth@auth.ilnmors.internal`.
+- The OxiCloud WebDAV share is registered in GNOME Online Accounts; mount that volume again from Files or GIO when it drops.
+
+## Working Rules
+
+- Never take passwords or keys in chat. Read them through a hidden-input terminal into a 0600 file under `$XDG_RUNTIME_DIR` and `shred -u` it afterwards.
+- Do not print secret values or personal financial data; report counts and match results only.
+- Back up before changes that are hard to undo. Database scripts run in one transaction, as a dry run (rolled back) first.
+- Push only on an explicit request. The archived homelab repository is not pushed.
+
+## Backups and Rollback
+
+- Regular backups: the PostgreSQL and MariaDB timers (see [postgresql](postgresql/README.md), [mariadb](mariadb/README.md)).
+- Backups taken before the 2026-11-13 work:
+
+  | Work | Location |
+  | --- | --- |
+  | Container upgrade | `~/backups-20261113-upgrade/` on each host (quadlets, Caddy and PostgreSQL build files) plus database dumps from the same time |
+  | Login pages | app `~/backups-20261113-oidc-login/`, infra `~/backups-20261113-oidc-login/immich-system-config.json` |
+  | Sure AI variables | app `~/backups-20261113-sure-ai/` |
+  | Sure Banksalad import | infra `~/data/containers/postgresql/backups/sure/pg_sure_2026-11-13_pre-banksalad.sql` |
+
+- Container rollback: restore the quadlet backup, then `systemctl --user daemon-reload` and restart the unit; the previous image is still on the host.
+- Database rollback: stop the service and restore the dump.
