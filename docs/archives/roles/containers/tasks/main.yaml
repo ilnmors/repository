@@ -143,6 +143,14 @@
   when: target_host in services['containers']['paperless']['units']['main']['hosts']
   tags: ["paperless"]
 
+- name: Include the papra task
+  ansible.builtin.include_tasks:
+    file: "papra.yaml"
+    apply:
+      tags: ["papra"]
+  when: target_host in services['containers']['papra']['units']['main']['hosts']
+  tags: ["papra"]
+
 - name: Include the romm task
   ansible.builtin.include_tasks:
     file: "romm.yaml"

@@ -215,14 +215,6 @@
   when: target_host in services['containers']['sure']['units']['main']['hosts']
   tags: ["sure"]
 
-- name: Include the papra task
-  ansible.builtin.include_tasks:
-    file: "papra.yaml"
-    apply:
-      tags: ["papra"]
-  when: target_host in services['containers']['papra']['units']['main']['hosts']
-  tags: ["papra"]
-
 - name: Include the readur task
   ansible.builtin.include_tasks:
     file: "readur.yaml"

@@ -27,7 +27,7 @@ Reasons come from the homelab notes, commit messages and the owner (2026-11-12).
 | ezbookkeeping | 2026-05-09 (`4527e39`) | No multi-user support for family use (no per-user access control). | sure |
 | wikijs | 2026-05-09 (`4527e39`) | Too heavy and complex for family use. | bookstack, outline |
 | bonfire | 2026-07-05 (`e0df8cf`, Mastodon release) | Did not work properly. | mastodon |
-| paperless | 2026-07-09 (`3a38271`, Papra release) | Too heavy, and the UI/UX was poor. | papra |
+| paperless | 2026-07-09 (`3a38271`, Papra release) | Too heavy, and the UI/UX was poor. | readur |
 | memos | 2026-08-23 (`56fb571`) | Too light as a social service, and overlapped with Outline for notes. | - |
 | booklogr | 2026-08-29 (`9226043`) | Rarely used. | - |
 | linkwarden | 2026-08-29 (`9226043`) | Too limited unless its internal Chromium is enabled. | linkding |
@@ -39,9 +39,17 @@ Reasons come from the homelab notes, commit messages and the owner (2026-11-12).
 
 Readur, archived on 2026-07-09 with the Papra release, was moved back to `ansible/` on 2026-11-13 to replace Papra (see `docs/operating/readur/README.md`).
 
+### Stopped on 2026-11-13
+
+| Stack | Reason | Similar active service |
+| --- | --- | --- |
+| papra | Replaced by Readur; all documents were moved (see `docs/operating/readur/README.md`). Moved here from `ansible/`. | readur |
+| nextcloud | Groupware no longer used. Calendars and contacts went to OxiCloud on 2026-11-12, user files on 2026-11-13 (sample files left out). | oxicloud |
+| groupoffice | Groupware no longer used. Its user files were moved to OxiCloud on 2026-11-13. | oxicloud |
+
 ### Still running in homelab, not yet moved to the repository
 
-groupoffice, homebox, llama, nextcloud, stablediffusion and tandoor ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud was introduced as the groupware stack (`278dd3c`); its CalDAV/CardDAV data was copied to OxiCloud on 2026-11-12 (see `tools/README.md.tmp`).
+homebox, llama, stablediffusion and tandoor ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud had been introduced as the groupware stack (`278dd3c`).
 
 ### Superseded by an active repository service
 
@@ -88,6 +96,7 @@ groupoffice, homebox, llama, nextcloud, stablediffusion and tandoor ran on the h
 | memos | memos.oidc.{secret,hash}, postgresql.password.memos |
 | nextcloud | nextcloud.admin.{id,password}, nextcloud.oidc.{secret,hash}, postgresql.password.nextcloud |
 | opencloud | opencloud.admin |
+| papra | papra.secret_key (generated), papra.oidc.{secret,hash} |
 | paperless | paperless.session_secret (generated), paperless.oidc.{secret,hash}, postgresql.password.paperless |
 | romm | romm.secret_key (generated), romm.oidc.{secret,hash}, postgresql.password.romm |
 | tandoor | tandoor.secret_key (generated), tandoor.oidc.{secret,hash}, postgresql.password.tandoor |

@@ -250,10 +250,6 @@ releases:
       name: "sure"
       repository: "ghcr.io/we-promise/sure"
       tag: "0.7.6"
-    papra:
-      name: "papra"
-      repository: "ghcr.io/papra-hq/papra"
-      tag: "26.7.1-rootless"
     readur:
       name: "readur"
       repository: "ghcr.io/readur/readur"

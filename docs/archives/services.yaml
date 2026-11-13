@@ -495,6 +495,28 @@ services:
               protocol: "tcp"
               int: 6386
               container: 6379
+    papra:
+      units:
+        main:
+          release: "papra"
+          hosts: ["app"]
+          domain:
+            public: "papra"
+            internal: "papra.app"
+          subuid: 100998
+          ports:
+            http:
+              protocol: "tcp"
+              int: 1221
+              container: 1221
+          dependency:
+            web:
+              status: true
+            oidc:
+              status: true
+              redirect_uris: ["/api/auth/oauth2/callback/authelia"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_post"
     romm:
       units:
         main:
