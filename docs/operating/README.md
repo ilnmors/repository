@@ -8,7 +8,7 @@ Facts and decisions for running the homelab stacks, one directory per stack (`<s
 | --- | --- |
 | infra | [postgresql](postgresql/README.md), [mariadb](mariadb/README.md), [lldap](lldap/README.md), [step-ca](step-ca/README.md), [rustfs](rustfs/README.md), [prometheus](prometheus/README.md), [loki](loki/README.md), [grafana](grafana/README.md), [x509-exporter](x509-exporter/README.md), [maddy](maddy/README.md), [caddy](caddy/README.md) |
 | auth | [authelia](authelia/README.md), [caddy](caddy/README.md) |
-| app | [oxicloud](oxicloud/README.md), [collabora](collabora/README.md), [sure](sure/README.md), [immich](immich/README.md), [outline](outline/README.md), [bookstack](bookstack/README.md), [kaneo](kaneo/README.md), [linkding](linkding/README.md), [vaultwarden](vaultwarden/README.md), [gitea](gitea/README.md), [mastodon](mastodon/README.md), [openwebui](openwebui/README.md), [llama](llama/README.md), [stablediffusion](stablediffusion/README.md), [homebox](homebox/README.md), [homepage](homepage/README.md), [papra](papra/README.md), [tandoor](tandoor/README.md), [groupoffice](groupoffice/README.md), [snappymail](snappymail/README.md), [nextcloud](nextcloud/README.md), [redis](redis/README.md), [caddy](caddy/README.md) |
+| app | [oxicloud](oxicloud/README.md), [collabora](collabora/README.md), [sure](sure/README.md), [immich](immich/README.md), [outline](outline/README.md), [bookstack](bookstack/README.md), [kaneo](kaneo/README.md), [linkding](linkding/README.md), [vaultwarden](vaultwarden/README.md), [gitea](gitea/README.md), [mastodon](mastodon/README.md), [openwebui](openwebui/README.md), [llama](llama/README.md), [stablediffusion](stablediffusion/README.md), [homebox](homebox/README.md), [homepage](homepage/README.md), [papra](papra/README.md), [readur](readur/README.md), [tandoor](tandoor/README.md), [groupoffice](groupoffice/README.md), [snappymail](snappymail/README.md), [nextcloud](nextcloud/README.md), [redis](redis/README.md), [caddy](caddy/README.md) |
 | repository schema only | [forgejo](forgejo/README.md) |
 
 - The 2026-11-13 container upgrade is summarized in `.agent-workspace/upgrade-2026-11-13/index.html` (not tracked).
@@ -45,6 +45,7 @@ Facts and decisions for running the homelab stacks, one directory per stack (`<s
   | Login pages | app `~/backups-20261113-oidc-login/`, infra `~/backups-20261113-oidc-login/immich-system-config.json` |
   | Sure AI variables | app `~/backups-20261113-sure-ai/` |
   | Sure Banksalad import | infra `~/data/containers/postgresql/backups/sure/pg_sure_2026-11-13_pre-banksalad.sql` |
+| Papra to Readur migration | app `~/backups-20261113-papra-to-readur/papra-full-20261113.tgz` (Papra documents, database and its backups); infra `~/data/containers/postgresql/backups/readur/pg_readur_2026-11-13_pre-{dates,rename}.sql` |
 
 - Container rollback: restore the quadlet backup, then `systemctl --user daemon-reload` and restart the unit; the previous image is still on the host.
 - Database rollback: stop the service and restore the dump.
