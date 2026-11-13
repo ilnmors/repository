@@ -32,7 +32,7 @@ Environment="IMMICH_TRUSTED_PROXIES={{ containers_trusted_proxies | join(',') }}
 # OAuth enabled with button text "Login with Authelia", Auto Launch off,
 # Password Login off. Users sign in only by pressing the Authelia button.
 
-# Redis
+# Valkey
 Environment="REDIS_HOSTNAME=host.containers.internal"
 Environment="REDIS_PORT={{ services['containers']['immich']['units']['valkey']['ports']['tcp']['int'] }}"
 Environment="REDIS_DBINDEX=0"

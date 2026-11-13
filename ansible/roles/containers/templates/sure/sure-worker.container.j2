@@ -29,7 +29,7 @@ Environment="PGSSLMODE=verify-full"
 Environment="PGSSLROOTCERT=/etc/ssl/sure/{{ site['ca']['x509']['root']['certificate_file'] }}"
 Secret=SURE_POSTGRES_PASSWORD,type=env,target=POSTGRES_PASSWORD
 
-# Redis
+# Valkey
 Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['sure']['units']['valkey']['ports']['tcp']['int'] }}/1"
 
 # AI backend

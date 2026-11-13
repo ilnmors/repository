@@ -36,7 +36,7 @@ Environment="PGSSLMODE=verify-full"
 Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/outline/{{ site['ca']['x509']['root']['certificate_file'] }}"
 Secret=OUTLINE_DATABASE_PASSWORD,type=env,target=DATABASE_PASSWORD
 
-# Redis
+# Valkey
 Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['outline']['units']['valkey']['ports']['tcp']['int'] }}"
 
 # Storage

@@ -35,7 +35,7 @@ Environment="DB_SSLMODE=verify-full"
 Environment="PGSSLROOTCERT=/etc/ssl/mastodon/{{ site['ca']['x509']['root']['certificate_file'] }}"
 Secret=MASTODON_POSTGRES_PASSWORD,type=env,target=DB_PASS
 
-# Redis
+# Valkey
 Environment="REDIS_URL=redis://host.containers.internal:{{ services['containers']['mastodon']['units']['valkey']['ports']['tcp']['int'] }}"
 
 # Rails secrets
