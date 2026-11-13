@@ -601,6 +601,9 @@ services:
               scopes: ["openid", "profile", "email", "groups"]
               auth_method: "client_secret_post"
               pkce: true
+            # Collabora accepts WOPI requests from this unit's public domain.
+            wopi:
+              status: true
     collabora:
       units:
         main:

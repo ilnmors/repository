@@ -12,7 +12,10 @@ HostName=collabora
 PublishPort={{ services['containers']['collabora']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['collabora']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['collabora']['units']['main']['ports']['http']['protocol'] }}
 
 Environment="TZ={{ site['timezone'] }}"
-Environment="aliasgroup1=https://{{ services['containers']['oxicloud']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+# WOPI hosts: units with dependency.wopi.status (containers_collabora_wopi_hosts)
+{% for containers_wopi_host in containers_collabora_wopi_hosts %}
+Environment="aliasgroup{{ loop.index }}={{ containers_wopi_host }}"
+{% endfor %}
 Environment="extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:server_name={{ services['containers']['collabora']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }} --o:admin_console.enable=false"
 
 [Service]

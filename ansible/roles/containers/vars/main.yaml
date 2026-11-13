@@ -199,3 +199,16 @@ containers_build_enabled: >-
       )
     )
   }}
+
+# Public origins Collabora accepts WOPI requests from (one aliasgroup each).
+containers_collabora_wopi_hosts: >-
+  {{
+    containers_unit_entries
+    | selectattr('value.dependency.wopi.status', 'defined')
+    | selectattr('value.dependency.wopi.status', 'equalto', true)
+    | map(attribute='value.domain.public')
+    | map('regex_replace', '^(.+)$', 'https://\1.' ~ site['domain']['public'])
+    | map('regex_replace', '^https://@[.]', 'https://')
+    | unique | sort
+    | list
+  }}
