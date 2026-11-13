@@ -12,7 +12,7 @@ Sure uses English categories with two levels. Banksalad `major > minor` maps as 
 | 카페/간식 | Cafe & Snacks | 커피/음료 Coffee & Drinks, 베이커리 Bakery, 아이스크림/빙수 Ice Cream, 도넛/핫도그 Donuts & Hot Dogs, 디저트/떡 Desserts, 기타간식 Other Snacks |
 | 온라인쇼핑 | Online Shopping | 인터넷쇼핑 Online Stores, 서비스구독 Subscriptions, 앱스토어 App Store, 결제/충전 Top-ups |
 | 의료/건강 | Healthcare | 종합병원 General Hospital, 정형외과 Orthopedics, 약국 Pharmacy, 치과 Dental, 산부인과 Obstetrics & Gynecology, 내과/가정의학 Internal Medicine, 운동 Fitness, 건강용품 Health Products, 보조식품 Supplements, 한의원 Korean Medicine, 기타병원 Other Clinics, 안과 Ophthalmology, 피부과 Dermatology |
-| 금융 | Finance | 보험 Insurance, 은행 Bank Fees, 카드 Card Fees, 세금/과태료 Taxes & Fines, 증권/투자 Brokerage Fees, 이자/대출 Interest |
+| 금융 | Finance | 보험 Insurance, 은행 Bank Fees, 카드 Card Fees, 세금/과태료 Taxes & Fines, 증권/투자 Brokerage Fees, 이자/대출 Interest, (loan principal) Loan Repayment |
 | 교육/학습 | Education | 학교 School, 학원/강의 Courses, 학습교재 Study Materials, 시험료 Exam Fees |
 | 문화/여가 | Entertainment | 게임 Games, 취미/체험 Hobbies, 도서 Books, 스포츠 Sports, 영화 Movies, 공연 Performances, 음악 Music, 전시/관람 Exhibitions |
 | 주거/통신 | Housing & Utilities | 휴대폰 Mobile Phone, 가스비 Gas Bill, 전기세 Electricity, 관리비 Maintenance Fees, 인터넷 Internet |

@@ -30,7 +30,7 @@
   - `start_date`
 - Due dates are `start_date` plus one month each, so pick a `start_date` on the real payment day of the month.
 - Split every repayment by the matching installment in Sure's schedule:
-  1. **Principal:** transfer bank account → loan (`loan_payment`). The loan balance drops by the principal only.
+  1. **Principal:** transfer bank account → loan (`loan_payment`), category Finance > Loan Repayment. The loan balance drops by the principal only. Sure counts `loan_payment` as spending, so a leg without a category shows as uncategorized.
   2. **Interest:** an expense on the bank account named `<loan> interest`, category Finance > Interest. It counts as spending and does not reduce the loan.
   3. **The rest of a combined bill** (for example a card bill): its own transfer.
 - Sure does not split interest or adjust the balance by itself; the schedule is display only. Importers must do the split.
