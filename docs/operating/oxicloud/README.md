@@ -13,6 +13,10 @@
 - OIDC provisioning turns user names shorter than 3 characters into `user_<sub>`; after the first login rename `auth.users.username` to the LDAP id. Upstream PR #880.
 - DAV (WebDAV, CalDAV, CardDAV) uses app passwords from Profile > App Passwords (DAVx5, Console DAV). They are stored only as argon2id hashes in `auth.app_passwords` and cannot be shown again; the Console DAV password is in the console's GNOME Online Accounts keyring.
 - Nextcloud calendars and contacts were moved here on 2026-11-12.
+- Nextcloud and Group-Office user files were moved into il's drive on 2026-11-13 under `Nextcloud/<user>/` and `GroupOffice/`, without the Nextcloud sample files. Files were checked by reading them back and comparing SHA-256.
+- The WebDAV `blob_hash` in `storage.files` is not SHA-256; large uploads are stored as ~1 MiB chunks listed in `storage.chunk_manifests`.
+- Copying multi-GB files through a GNOME (gvfs) WebDAV mount fails: gvfs buffers the whole upload in memory. Use the web UI or a streamed client.
+- Collabora now serves only OxiCloud (single aliasgroup).
 - Collabora: WOPI discovery `http://host.containers.internal:9980/hosting/discovery`; Collabora's aliasgroup must include `https://oxicloud.ilnmors.com`.
 
 ## Login
