@@ -28,7 +28,6 @@ Reasons come from the homelab notes, commit messages and the owner (2026-11-12).
 | wikijs | 2026-05-09 (`4527e39`) | Too heavy and complex for family use. | bookstack, outline |
 | bonfire | 2026-07-05 (`e0df8cf`, Mastodon release) | Did not work properly. | mastodon |
 | paperless | 2026-07-09 (`3a38271`, Papra release) | Too heavy, and the UI/UX was poor. | papra |
-| readur | 2026-07-09 (`3a38271`, Papra release) | Reason not remembered. | papra |
 | memos | 2026-08-23 (`56fb571`) | Too light as a social service, and overlapped with Outline for notes. | - |
 | booklogr | 2026-08-29 (`9226043`) | Rarely used. | - |
 | linkwarden | 2026-08-29 (`9226043`) | Too limited unless its internal Chromium is enabled. | linkding |
@@ -37,6 +36,8 @@ Reasons come from the homelab notes, commit messages and the owner (2026-11-12).
 | ovms | 2026-09-09 (`99536c5`) | Replaced by llama.cpp. | llama |
 | chromium (console) | 2026-05-11 (`0afc841`) | Not used. | - |
 | extract_secret.sh | 2026-05-15 (`a7e2320`) | Not used. | `ansible/roles/secrets/files/scripts/edit_secret.sh` |
+
+Readur, archived on 2026-07-09 with the Papra release, was moved back to `ansible/` on 2026-11-13 to replace Papra (see `docs/operating/readur/README.md`).
 
 ### Still running in homelab, not yet moved to the repository
 
@@ -55,7 +56,7 @@ groupoffice, homebox, llama, nextcloud, stablediffusion and tandoor ran on the h
 
 ## Changes made while converting
 
-- Ports that collide with active services were moved: llama 10000 → 10002, romm 8002 → 8008, memos 3005 → 3008, ovms 5000 → 5001. Stacks that had no port got free ones (actual-budget 5006, affine 3010 + manticore 9308, bonfire 4001, ezbookkeeping 8009, opencloud 9200, paperless 8010, readur 8011, trilium 8012, wikijs 3011). Valkey sidecars: nextcloud 6380, romm 6384, affine 6385, paperless 6386.
+- Ports that collide with active services were moved: llama 10000 → 10002, romm 8002 → 8008, memos 3005 → 3008, ovms 5000 → 5001. Stacks that had no port got free ones (actual-budget 5006, affine 3010 + manticore 9308, bonfire 4001, ezbookkeeping 8009, opencloud 9200, paperless 8010, trilium 8012, wikijs 3011). Valkey sidecars: nextcloud 6380, romm 6384, affine 6385, paperless 6386.
 - Redis sidecars became the repository valkey sidecar (`units.valkey`, `valkey_<service>.service`).
 - `hostvars['fw']` addresses were replaced by `containers_trusted_proxies` and `networks.segments.server.hosts`; certificates use `secrets.ca.x509.{root,intermediate,leaf}`.
 - The secrets key for Actual Budget is `actual-budget` (homelab used `actualbudget`).
@@ -88,7 +89,6 @@ groupoffice, homebox, llama, nextcloud, stablediffusion and tandoor ran on the h
 | nextcloud | nextcloud.admin.{id,password}, nextcloud.oidc.{secret,hash}, postgresql.password.nextcloud |
 | opencloud | opencloud.admin |
 | paperless | paperless.session_secret (generated), paperless.oidc.{secret,hash}, postgresql.password.paperless |
-| readur | readur.jwt_secret (generated), readur.oidc.{secret,hash}, postgresql.password.readur |
 | romm | romm.secret_key (generated), romm.oidc.{secret,hash}, postgresql.password.romm |
 | tandoor | tandoor.secret_key (generated), tandoor.oidc.{secret,hash}, postgresql.password.tandoor |
 | trilium | trilium.oidc.{secret,hash} |

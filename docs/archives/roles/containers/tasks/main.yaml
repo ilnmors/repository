@@ -143,14 +143,6 @@
   when: target_host in services['containers']['paperless']['units']['main']['hosts']
   tags: ["paperless"]
 
-- name: Include the readur task
-  ansible.builtin.include_tasks:
-    file: "readur.yaml"
-    apply:
-      tags: ["readur"]
-  when: target_host in services['containers']['readur']['units']['main']['hosts']
-  tags: ["readur"]
-
 - name: Include the romm task
   ansible.builtin.include_tasks:
     file: "romm.yaml"

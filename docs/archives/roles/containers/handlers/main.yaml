@@ -239,18 +239,6 @@
   listen: "notification_restart_paperless"
   ignore_errors: true
 
-- name: Restart the readur.service
-  ansible.builtin.systemd_service:
-    scope: "user"
-    name: "readur.service"
-    state: "restarted"
-    daemon_reload: true
-  when: not (containers_readur_started['changed'] | default(false))
-  changed_when: false
-  register: "result_restart_readur"
-  listen: "notification_restart_readur"
-  ignore_errors: true
-
 - name: Restart the romm.service
   ansible.builtin.systemd_service:
     scope: "user"

@@ -254,6 +254,10 @@ releases:
       name: "papra"
       repository: "ghcr.io/papra-hq/papra"
       tag: "26.7.1-rootless"
+    readur:
+      name: "readur"
+      repository: "ghcr.io/readur/readur"
+      tag: "3.1.2"
     homepage:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"

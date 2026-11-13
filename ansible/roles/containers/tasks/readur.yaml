@@ -8,6 +8,15 @@
     apply:
       delegate_to: "{{ containers_postgresql_host }}"
 
+- name: Register the readur rustfs client # noqa: var-naming[no-role-prefix]
+  vars:
+    target_host: "{{ containers_rustfs_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "rustfs.yaml"
+    apply:
+      delegate_to: "{{ containers_rustfs_host }}"
+
 - name: Register the readur authelia client # noqa: var-naming[no-role-prefix]
   vars:
     target_host: "{{ containers_authelia_host }}"
@@ -40,6 +49,8 @@
         value: "postgresql://readur:{{ secrets['postgresql']['password']['readur'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/readur_db?sslmode=verify-full&sslrootcert=/etc/ssl/readur/{{ site['ca']['x509']['root']['certificate_file'] }}"
       - name: "READUR_OIDC_CLIENT_SECRET"
         value: "{{ secrets['readur']['oidc']['secret'] }}"
+      - name: "READUR_S3_SECRET_KEY"
+        value: "{{ secrets['rustfs']['password']['readur'] }}"
   no_log: true
 
 - name: Create the readur directory
@@ -55,6 +66,7 @@
     - "{{ nodes[target_host]['paths']['data'] }}/containers/readur/watch"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/readur"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/readur/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/readur/patches"
   become: true
 
 - name: Deploy the readur root certificate
@@ -81,6 +93,53 @@
     containers_image_notifications: "notification_restart_readur"
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
+
+# Readur always opens a document on the Text tab (extracted text). Rewrite the
+# drawer chunk of the deployed image to open on the Details tab and mount it over
+# the original. The chunk name carries a build hash, so it is looked up per image.
+- name: Find the readur document drawer chunk
+  ansible.builtin.shell: |
+    set -o pipefail
+    podman run --rm --network=none --entrypoint sh \
+      "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}" \
+      -c 'ls /app/frontend/dist/assets' | grep -E '^DocumentDrawer-[A-Za-z0-9_-]+\.js$'
+  args:
+    executable: "/bin/bash"
+  register: "containers_readur_drawer_chunk_result"
+  changed_when: false
+
+- name: Set the readur drawer chunk name
+  ansible.builtin.set_fact:
+    containers_readur_drawer_chunk: "{{ containers_readur_drawer_chunk_result['stdout_lines'] | first }}"
+  failed_when: (containers_readur_drawer_chunk_result['stdout_lines'] | length) != 1
+
+- name: Read the readur document drawer chunk
+  ansible.builtin.command: >-
+    podman run --rm --network=none --entrypoint cat
+    "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
+    /app/frontend/dist/assets/{{ containers_readur_drawer_chunk }}
+  register: "containers_readur_drawer_source"
+  changed_when: false
+
+- name: Check the readur tab defaults
+  ansible.builtin.assert:
+    that:
+      - (containers_readur_drawer_source['stdout'] | regex_findall('useState\)\(`text`\)') | length) == 1
+      - (containers_readur_drawer_source['stdout'] | regex_findall('\|\|c\(`text`\)') | length) == 1
+    fail_msg: "The Readur drawer code changed; update the Details tab patch before upgrading."
+    quiet: true
+
+- name: Deploy the readur drawer patch
+  ansible.builtin.copy:
+    content: >-
+      {{ containers_readur_drawer_source['stdout']
+      | regex_replace('useState\)\(`text`\)', 'useState)(`details`)')
+      | regex_replace('\|\|c\(`text`\)', '||c(`details`)') }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/readur/patches/{{ containers_readur_drawer_chunk }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_readur"
 
 - name: Deploy the readur container file
   ansible.builtin.template:

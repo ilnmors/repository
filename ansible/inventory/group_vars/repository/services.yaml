@@ -962,6 +962,38 @@ services:
               redirect_uris: ["/api/auth/oauth2/callback/authelia"]
               scopes: ["openid", "profile", "email"]
               auth_method: "client_secret_post"
+    readur:
+      units:
+        main:
+          release: "readur"
+          hosts: ["app"]
+          domain:
+            public: "readur"
+            internal: "readur.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8011
+              container: 8000
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            s3:
+              status: true
+              buckets:
+                - name: "readur"
+                  actions:
+                    bucket: ["ListBucket", "GetBucketLocation"]
+                    object: ["GetObject", "PutObject", "DeleteObject", "AbortMultipartUpload", "ListMultipartUploadParts"]
+            oidc:
+              status: true
+              redirect_uris: ["/api/auth/oidc/callback"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
+              pkce: true
     homepage:
       units:
         main:

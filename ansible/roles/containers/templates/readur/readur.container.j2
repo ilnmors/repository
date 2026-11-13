@@ -16,15 +16,34 @@ PublishPort={{ services['containers']['readur']['units']['main']['ports']['http'
 Volume={{ nodes[target_host]['paths']['data'] }}/containers/readur/uploads:/app/uploads:rw
 Volume={{ nodes[target_host]['paths']['data'] }}/containers/readur/watch:/app/watch:rw
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/readur/ssl:/etc/ssl/readur:ro
+# Open documents on the Details tab instead of the extracted text (built by readur.yaml)
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/readur/patches/{{ containers_readur_drawer_chunk }}:/app/frontend/dist/assets/{{ containers_readur_drawer_chunk }}:ro
 
 # General
 Environment="TZ={{ site['timezone'] }}"
+Environment="PUBLIC_URL=https://{{ services['containers']['readur']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="SERVER_HOST=0.0.0.0"
+Environment="SERVER_PORT={{ services['containers']['readur']['units']['main']['ports']['http']['container'] }}"
 Environment="ALLOW_LOCAL_AUTH=false"
+Environment="UPLOAD_PATH=/app/uploads"
+Environment="WATCH_FOLDER=/app/watch"
+Environment="MAX_FILE_SIZE_MB=200"
+Environment="MAX_PDF_SIZE_MB=200"
 Environment="OCR_LANGUAGE=eng+kor"
+Environment="CONCURRENT_OCR_JOBS=2"
 Secret=READUR_JWT_SECRET,type=env,target=JWT_SECRET
 
 # Database
 Secret=READUR_DATABASE_URL,type=env,target=DATABASE_URL
+
+# S3 (documents are stored in RustFS)
+Environment="S3_ENABLED=true"
+Environment="S3_BUCKET_NAME={{ services['containers']['readur']['units']['main']['dependency']['s3']['buckets'][0]['name'] }}"
+Environment="S3_REGION=us-east-1"
+Environment="S3_ENDPOINT=https://{{ services['containers']['rustfs']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="S3_FORCE_PATH_STYLE=true"
+Environment="S3_ACCESS_KEY_ID=readur"
+Secret=READUR_S3_SECRET_KEY,type=env,target=S3_SECRET_ACCESS_KEY
 
 # OIDC
 Environment="OIDC_ENABLED=true"
@@ -40,7 +59,7 @@ Environment="RUST_LOG=warn"
 [Service]
 ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
 Restart=always
-RestartSec=60s
+RestartSec=10s
 TimeoutStopSec=120
 
 [Install]

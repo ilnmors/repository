@@ -495,30 +495,6 @@ services:
               protocol: "tcp"
               int: 6386
               container: 6379
-    readur:
-      units:
-        main:
-          release: "readur"
-          hosts: ["app"]
-          domain:
-            public: "readur"
-            internal: "readur.app"
-          ports:
-            http:
-              protocol: "tcp"
-              int: 8011
-              container: 8000
-          dependency:
-            web:
-              status: true
-            db:
-              status: true
-              type: "postgresql"
-            oidc:
-              status: true
-              redirect_uris: ["/api/auth/oidc/callback"]
-              scopes: ["openid", "profile", "email"]
-              auth_method: "client_secret_basic"
     romm:
       units:
         main:
