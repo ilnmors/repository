@@ -7,6 +7,7 @@
 
 ## Notes
 
+- Retired on 2026-11-14, replaced by [forgejo](../forgejo/README.md).
 - 1.27 was followed by 28. Since 28, Git network operations (mirrors, migrations) go through an internal proxy and Actions has `RUN_RETENTION_DAYS`. The archived homelab repository's remote is this Gitea.
 
 ## Login

@@ -1,0 +1,17 @@
+# quartermaster
+
+| Item | Value |
+| --- | --- |
+| Host | app (10000), internal only: `quartermaster.app.ilnmors.internal` |
+| Version (2026-11-15) | v1.9.1, rebuilt locally (`ilnmors.internal/app/quartermaster`) |
+| Backends | llama-server b10796 (Vulkan, from the upstream image), sd-server master-1098 (Vulkan) |
+
+## Notes
+
+- Replaced the separate llama.cpp and stable-diffusion.cpp servers on 2026-11-14. Open WebUI uses it for chat, embeddings and images.
+- All four models (LFM2.5-24B-A2B, LFM2.5-VL-3B, LFM2.5-Embedding-350M, zImage-moodyRealMix) stay loaded together in one routing group and are preloaded at start.
+- The image is rebuilt on Ubuntu 26.04 with the Mesa Vulkan drivers: upstream ships the Vulkan loader only, so the backends fell back to the CPU. The bundled sd-server (master-841) rendered noise on the Iris Xe; master-1098 renders correctly but needs glibc 2.43.
+- 512×512 images render correctly. 1024×1024 renders noise on the Iris Xe, with or without diffusion flash attention (2026-11-15), so Open WebUI requests 512×512 (`IMAGE_SIZE`). 768×768 is untested. Recheck larger sizes on the RX 7900 XT.
+- sd-server has no `/health`; its readiness check is `/v1/models`.
+- The dashboard runs with `-admin-open`, so it has no public route.
+- Unload a model with `POST /api/models/unload/<id>`.
