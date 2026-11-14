@@ -477,6 +477,13 @@
           - (packages_kopia_backup_path | default('') | length) > 0
         fail_msg: "Define the data path for {{ target_host }} in nodes.yaml."
 
+    - name: Check the kopia snapshot root contains the data path
+      ansible.builtin.assert:
+        that:
+          - packages_kopia_backup_path.startswith(packages_kopia_snapshot_root ~ '/')
+        fail_msg: "The data path {{ packages_kopia_backup_path }} must be inside the btrfs data volume {{ packages_kopia_snapshot_root }}."
+      when: (packages_kopia_snapshot_root | length) > 0
+
     - name: Check the kopia client data directory
       ansible.builtin.stat:
         path: "{{ packages_kopia_backup_path }}"

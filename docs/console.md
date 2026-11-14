@@ -107,7 +107,7 @@ Open `https://code.ilnmors.internal`. The backend has no separate authentication
 
 Console is declared as both a backup client and the existing full-management identity `console@console.ilnmors.internal`. The server role grants `FULL` access to snapshot, policy, user, ACL and content operations; the existing encrypted Console password is retained.
 
-Console snapshots `nodes.console.paths.workspace`; other clients retain their data paths. All clients use the existing daily `00:00` timer, up to five minutes of randomized delay and `Persistent=true`. Failed jobs retry after five minutes. The Console declaration was added without installing or running Kopia on this Surface.
+Console snapshots `nodes.console.paths.workspace`; other clients retain their data paths. When the data path sits on a btrfs data volume (infra, auth, app), the client first takes a read-only snapshot of the volume (`/data/.kopia-snapshot`), backs up the data path inside it with `--override-source=<data path>` so the snapshot history continues under the same source, and deletes the snapshot afterwards. All files in one backup then come from the same moment (RustFS objects, database dumps, metrics). All clients use the existing daily `00:00` timer, up to five minutes of randomized delay and `Persistent=true`. Failed jobs retry after five minutes. The Console declaration was added without installing or running Kopia on this Surface.
 
 Apply the VMM Kopia server configuration before enabling new client access. When intentionally deploying the client:
 

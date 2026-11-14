@@ -37,3 +37,15 @@ packages_host_debian_package_list: >-
 packages_backup_path: "{{ nodes[target_host]['system']['disk']['backup']['fs']['mount_point'] }}"
 
 packages_kopia_backup_path: "{{ nodes[target_host]['paths']['workspace'] | default(nodes[target_host]['paths']['data']) }}"
+# Hosts whose data path sits on a btrfs data volume back up a read-only snapshot of that volume.
+packages_kopia_snapshot_root: >-
+  {{
+    nodes[target_host]['system']['disk']['data']['fs']['mount_point']
+    if (
+      (nodes[target_host]['system']['disk']['data']['fs']['type'] | default('')) == 'btrfs'
+      and (nodes[target_host]['system']['disk']['data']['fs']['mount_point'] | default('') | length) > 0
+      and (nodes[target_host]['paths']['workspace'] | default('') | length) == 0
+    )
+    else ''
+  }}
+packages_kopia_snapshot_path: "{{ packages_kopia_snapshot_root ~ '/.kopia-snapshot' }}"
