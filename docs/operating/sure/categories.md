@@ -25,6 +25,8 @@ Sure uses English categories with two levels. Banksalad `major > minor` maps as 
 | 자동차 | Car | 주유 Fuel, 정비/수리 Car Maintenance |
 | 술/유흥 | Alcohol & Bars | 맥주/호프 Pubs |
 
+| (none) | Family | Family events, such as wedding photos. Sure only, no Banksalad source. |
+
 - 뷰티/미용 > 피부과 also goes to Healthcare > Dermatology.
 - Category names are unique per family, so children that would repeat a parent were renamed: 여행 → Trips, 돌봄비 → Care Services.
 
