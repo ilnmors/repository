@@ -96,6 +96,7 @@ prometheus.exporter.unix "system" {
         "filesystem",
         "netdev",
         "textfile",
+        "btrfs",
     ]
     filesystem {
         mount_points_exclude = "^/(boot|sys|proc|dev|run|mnt|var/lib/docker/.+|var/lib/kubelet/.+)($|/)"
@@ -258,6 +259,12 @@ loki.relabel "journal_logs" {
         regex         = "podman"
         target_label  = "job"
         replacement   = "podman"
+    }
+    rule {
+        source_labels = ["__journal__transport"]
+        regex         = "kernel"
+        target_label  = "job"
+        replacement   = "kernel"
     }
     rule {
         source_labels = ["job"]

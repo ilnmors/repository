@@ -30,6 +30,23 @@ groups:
         annotations:
           summary: {% raw %}"rclone backup failed on {{ $labels.instance }}"{% endraw %}{{ '' }}
           description: "rclone emitted error/fatal logs."
+  - name: kernel_logs
+    interval: 1m
+    rules:
+      - alert: BtrfsKernelError
+        expr: |
+          sum by (instance) (
+            count_over_time({job="kernel"} |~ "BTRFS (error|critical)|BTRFS warning.*(missing|csum|corrupt)" [10m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          source: loki
+          category: storage
+          service: btrfs
+        annotations:
+          summary: {% raw %}"btrfs kernel error on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The kernel logged a btrfs error, a missing device or a checksum failure."
   - name: caddy_logs
     interval: 1m
     rules:

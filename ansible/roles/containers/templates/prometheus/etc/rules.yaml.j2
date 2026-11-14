@@ -46,6 +46,50 @@ groups:
           summary: "{{ filename }} expires in 30 days"
           description: "{{ filename }} expires in 30 days. Reissue it with the secrets role (leaf tag) and redeploy the service."
 {% endfor %}
+  - name: btrfs
+    rules:
+{% set btrfs_hosts = [] %}
+{% for name, node in nodes.items() %}
+{%   for disk in (node['system']['disk'] | default({})).values() %}
+{%     if (disk['fs']['type'] | default('')) == 'btrfs' and (disk['fs']['mount_point'] | default('') | length) > 0 and name not in btrfs_hosts %}
+{%       set _ = btrfs_hosts.append(name) %}
+{%     endif %}
+{%   endfor %}
+{% endfor %}
+{% for host in btrfs_hosts | sort %}
+      - alert: {{ host }}_btrfs_metrics_missing
+        expr: |
+          absent_over_time(node_btrfs_info{instance="{{ host }}"}[15m])
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "btrfs metrics are missing on {{ host }}"
+          description: "No node_btrfs_info from {{ host }} for 15 minutes. Check the Alloy btrfs collector and that the btrfs volumes are mounted."
+{% endfor %}
+{% for name, node in nodes.items() | sort %}
+{%   set data = node['system']['disk']['data'] | default({}) %}
+{%   if (data['type'] | default('')) == 'block' and (data['fs']['type'] | default('')) == 'btrfs' %}
+      - alert: {{ name }}_btrfs_raid_degraded
+        expr: |
+          (count by (instance) (node_btrfs_device_size_bytes{instance="{{ name }}", btrfs_dev_uuid=""} * on (uuid) group_left (label) node_btrfs_info{instance="{{ name }}", label="{{ data['fs']['label'] }}"}) or on() vector(0)) < {{ data['serials'] | length }}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "btrfs {{ data['fs']['label'] }} on {{ name }} is missing a disk"
+          description: "{{ data['fs']['label'] }} should have {{ data['serials'] | length }} devices. The volume is mounted with 'degraded', so services keep running on one disk. Replace the failed disk (spare HDD) and run btrfs replace."
+{%   endif %}
+{% endfor %}
+      - alert: BtrfsDeviceErrors
+        expr: |
+          increase(node_btrfs_device_errors_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"btrfs {{ $labels.type }} errors on {{ $labels.instance }} {{ $labels.device }}"{% endraw %}{{ '' }}
+          description: "btrfs device error counters increased. Run btrfs device stats and a scrub, and check SMART."
   - name: smartctl
     rules:
       - alert: SmartctlMetricsMissing
