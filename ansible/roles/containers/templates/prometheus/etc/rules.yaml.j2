@@ -48,15 +48,14 @@ groups:
 {% endfor %}
   - name: btrfs
     rules:
-{% set btrfs_hosts = [] %}
-{% for name, node in nodes.items() %}
-{%   for disk in (node['system']['disk'] | default({})).values() %}
-{%     if (disk['fs']['type'] | default('')) == 'btrfs' and (disk['fs']['mount_point'] | default('') | length) > 0 and name not in btrfs_hosts %}
-{%       set _ = btrfs_hosts.append(name) %}
-{%     endif %}
-{%   endfor %}
-{% endfor %}
-{% for host in btrfs_hosts | sort %}
+{% for host, node in nodes.items() | sort %}
+{%   if (
+       node['system']['disk'] | default({}) | dict2items | map(attribute='value')
+       | selectattr('fs', 'defined')
+       | selectattr('fs.type', 'equalto', 'btrfs')
+       | selectattr('fs.mount_point', 'defined')
+       | list | length
+     ) > 0 %}
       - alert: {{ host }}_btrfs_metrics_missing
         expr: |
           absent_over_time(node_btrfs_info{instance="{{ host }}"}[15m])
@@ -66,6 +65,7 @@ groups:
         annotations:
           summary: "btrfs metrics are missing on {{ host }}"
           description: "No node_btrfs_info from {{ host }} for 15 minutes. Check the Alloy btrfs collector and that the btrfs volumes are mounted."
+{%   endif %}
 {% endfor %}
 {% for name, node in nodes.items() | sort %}
 {%   set data = node['system']['disk']['data'] | default({}) %}
