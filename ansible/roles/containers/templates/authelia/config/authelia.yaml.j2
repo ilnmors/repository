@@ -71,7 +71,8 @@ notifier:
     sender: 'Authelia <authelia@{{ site['domain']['internal'] }}>'
     identifier: '{{ authelia['domain']['public'] }}.{{ site['domain']['public'] }}'
     subject: '[Authelia] {title}'
-    startup_check_address: 'authelia@{{ site['domain']['internal'] }}'
+    # Must be a deliverable address: service accounts have no mailbox, postmaster is an alias.
+    startup_check_address: 'postmaster@{{ site['domain']['internal'] }}'
     disable_require_tls: false
     disable_starttls: false
     disable_html_emails: false
