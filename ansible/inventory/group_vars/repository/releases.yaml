@@ -242,9 +242,14 @@ releases:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
       tag: "v1.9.1"
-      # Built on the upstream image to add the Mesa Vulkan drivers, which upstream does not ship.
+      # Rebuilt on a newer Ubuntu with the Mesa Vulkan drivers (upstream ships the loader only) and a newer
+      # sd-server: the bundled master-841 renders noise on the Iris Xe Vulkan backend, and newer releases need glibc 2.43.
       build:
         status: true
+        base:
+          tag: "26.04"
+        sd_server:
+          tag: "master-1098-b521db4"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
