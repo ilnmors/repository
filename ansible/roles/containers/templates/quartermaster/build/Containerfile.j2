@@ -1,0 +1,7 @@
+FROM {{ releases['containers']['quartermaster']['repository'] }}:{{ releases['containers']['quartermaster']['tag'] }}
+
+# The upstream image ships the Vulkan loader but no GPU driver, so llama-server and
+# sd-server silently fall back to the CPU. Mesa provides the Intel and AMD Vulkan ICDs.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends mesa-vulkan-drivers && \
+    rm -rf /var/lib/apt/lists/*

@@ -242,6 +242,9 @@ releases:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
       tag: "v1.9.1"
+      # Built on the upstream image to add the Mesa Vulkan drivers, which upstream does not ship.
+      build:
+        status: true
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"

@@ -15,13 +15,14 @@ PublishPort={{ services['containers']['quartermaster']['units']['main']['ports']
 # GPU access for Vulkan
 AddDevice=/dev/dri:/dev/dri
 PodmanArgs=--group-add keep-groups
-Volume=/usr/share/vulkan/icd.d:/usr/share/vulkan/icd.d:ro
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data:/data:rw
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config:/data/config:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:ro
 
 Environment="TZ={{ site['timezone'] }}"
+# The image entrypoint seeds its autogen file on first start; keep it out of the read-only config mount.
+Environment="QM_GENERATE_FILE=/data/quartermaster-generate.yaml"
 
 # Without -generate the config is loaded as written and never regenerated.
 Exec=-config /data/config/config.yaml -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open
