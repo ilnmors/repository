@@ -26,6 +26,8 @@ Sure uses English categories with two levels. Banksalad `major > minor` maps as 
 | 술/유흥 | Alcohol & Bars | 맥주/호프 Pubs |
 
 | (none) | Family | Family events, such as wedding photos. Sure only, no Banksalad source. |
+| (none) | Housing & Utilities > Rent | Monthly room rent. A room deposit is not an expense: it is a transfer to the `Rental deposit` asset account, whose value is kept with valuations. Sure only. |
+| (none) | Finance > Legal Fees | Attorney and court fees. Sure only. |
 
 - 뷰티/미용 > 피부과 also goes to Healthcare > Dermatology.
 - Category names are unique per family, so children that would repeat a parent were renamed: 여행 → Trips, 돌봄비 → Care Services.
