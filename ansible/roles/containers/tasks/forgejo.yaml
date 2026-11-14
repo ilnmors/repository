@@ -131,7 +131,7 @@
         --key forgejo
         --secret "$FORGEJO_OIDC_SECRET"
         --auto-discover-url "{{ containers_forgejo_authelia_url }}/.well-known/openid-configuration"
-        {% for scope in services['containers']['forgejo']['units']['main']['oidc']['scopes'] %}--scopes {{ scope }} {% endfor %}
+        {% for scope in services['containers']['forgejo']['units']['main']['dependency']['oidc']['scopes'] %}--scopes {{ scope }} {% endfor %}
   # update-oauth runs every time and cannot report a diff; only a new source counts as a change.
   changed_when: (containers_forgejo_authelia_source_id | length) == 0
   no_log: true
