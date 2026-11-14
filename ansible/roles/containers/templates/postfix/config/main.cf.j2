@@ -9,7 +9,7 @@ myorigin = $mydomain
 mydestination =
 mynetworks = 127.0.0.0/8
 inet_interfaces = all
-inet_protocols = ipv4
+inet_protocols = all
 biff = no
 alias_maps =
 alias_database =
@@ -21,7 +21,7 @@ maillog_file = /var/log/postfix/postfix.log
 
 # Local mailboxes live in dovecot; LDAP decides which addresses exist.
 virtual_mailbox_domains = {{ postfix['mail']['domains'] | join(', ') }}
-# proxy: keeps the root-only map files (bind_pw) readable through proxymap.
+# proxy: one shared LDAP connection through proxymap (maps are root:postfix 0640 in the container).
 virtual_mailbox_maps = proxy:ldap:/etc/postfix/maps/mailboxes.cf
 virtual_transport = lmtp:unix:/run/mail/lmtp
 virtual_alias_maps = inline:{ {% for domain in postfix['mail']['domains'] %}postmaster@{{ domain }}={{ postfix['mail']['postmaster'] }}@{{ postfix['mail']['domains'] | first }}{{ ', ' if not loop.last }}{% endfor %} }

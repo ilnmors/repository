@@ -9,4 +9,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /etc/postfix/main.cf /etc/postfix/master.cf
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/usr/sbin/postfix", "start-fg"]
+# Map files carry bind_pw: they are mounted root-only at maps-src and copied as root:postfix 0640,
+# because proxymap/smtpd read them as the postfix user.
+CMD ["/bin/sh", "-c", "install -d -m 0750 -g postfix /etc/postfix/maps && find /etc/postfix/maps-src -maxdepth 1 -type f -exec install -m 0640 -g postfix {} /etc/postfix/maps/ \\; && exec /usr/sbin/postfix start-fg"]

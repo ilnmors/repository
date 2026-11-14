@@ -20,7 +20,7 @@ PublishPort={{ services['containers']['postfix']['units']['main']['ports']['subm
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/main.cf:/etc/postfix/main.cf:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/master.cf:/etc/postfix/master.cf:ro
-Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps:/etc/postfix/maps:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/config/maps:/etc/postfix/maps-src:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/postfix/ssl:/etc/ssl/postfix:ro
 Volume={{ nodes[target_host]['paths']['data'] }}/containers/postfix/spool:/var/spool/postfix:rw
 # dovecot creates the auth (SASL) and lmtp sockets here.
