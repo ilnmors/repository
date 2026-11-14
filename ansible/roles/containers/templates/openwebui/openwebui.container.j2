@@ -71,7 +71,8 @@ Environment="IMAGE_GENERATION_ENGINE=openai"
 Environment="IMAGES_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
 Environment="IMAGES_OPENAI_API_KEY=none"
 Environment="IMAGE_GENERATION_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['image_model'] }}"
-Environment="IMAGE_SIZE=1024x1024"
+# sd-server renders 512x512 correctly but noise at 1024x1024 on the Iris Xe Vulkan backend (master-1098, with or without flash attention).
+Environment="IMAGE_SIZE=512x512"
 {% else %}
 Environment="ENABLE_IMAGE_GENERATION=false"
 {% endif %}
@@ -81,7 +82,10 @@ Environment="ENABLE_TITLE_GENERATION=false"
 Environment="ENABLE_TAGS_GENERATION=false"
 Environment="ENABLE_FOLLOW_UP_GENERATION=false"
 Environment="ENABLE_AUTOCOMPLETE_GENERATION=false"
-Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false}}"
+# Models must not create or save skills and memories on their own. Skills and memories added by the user
+# still apply: attached skills are inlined into the system prompt and memories into the system context.
+Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false,\"skills\":false,\"memory\":false}}"
+Environment="ENABLE_MEMORY_BACKGROUND_REVIEW=false"
 
 # RAG Embedding
 {% if (services['containers']['openwebui']['units']['main']['ai']['embedding_model'] | length) > 0 %}
