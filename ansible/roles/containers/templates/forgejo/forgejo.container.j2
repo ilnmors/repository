@@ -35,6 +35,8 @@ Secret=FORGEJO__database__PASSWD,type=env
 Environment="FORGEJO__database__SSL_MODE=verify-full"
 Environment="PGSSLROOTCERT=/etc/ssl/forgejo/{{ site['ca']['x509']['root']['certificate_file'] }}"
 # OAuth2 client
+# ACCOUNT_LINKING only applies with auto registration; otherwise Forgejo shows the link/sign-up page.
+Environment="FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION=true"
 Environment="FORGEJO__oauth2_client__ACCOUNT_LINKING=auto"
 # OIDC configuration
 Environment="FORGEJO__openid__ENABLE_OPENID_SIGNIN=false"
