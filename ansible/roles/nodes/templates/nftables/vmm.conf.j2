@@ -47,6 +47,8 @@ define PORTS_VPN = {{ services['packages']['wireguard']['units']['main']['ports'
 define PORTS_CROWDSEC = {{ services['packages']['crowdsec']['units']['lapi']['ports']['https']['ext'] }}
 define PORTS_WEB = { 80, 443 }
 define PORTS_KOPIA = {{ services['packages']['kopia']['units']['server']['ports']['http']['int'] }}
+define PORTS_SMTP = {{ services['containers']['postfix']['units']['main']['ports']['submission']['ext'] }}
+define PORTS_IMAPS = {{ services['containers']['dovecot']['units']['main']['ports']['imaps']['ext'] }}
 
 
 table inet nat {
@@ -147,6 +149,11 @@ table inet filter {
         # Reverse proxy (internal servers)
         oifname $IF_SERVER ip saddr $HOSTS4_CONSOLE ip daddr { $HOSTS4_INFRA, $HOSTS4_APP } tcp dport $PORTS_WEB accept comment "allow ipv4 web connection: CONSOLE > VMM > SERVER INFRA/APP"
         oifname $IF_SERVER ip6 saddr $HOSTS6_CONSOLE ip6 daddr { $HOSTS6_INFRA, $HOSTS6_APP } tcp dport $PORTS_WEB accept comment "allow ipv6 web connection: CONSOLE > VMM > SERVER INFRA/APP"
+        # Mail clients on the console (submission, IMAPS); other clients use the webmail
+        oifname $IF_SERVER ip saddr $HOSTS4_CONSOLE ip daddr $HOSTS4_INFRA tcp dport $PORTS_SMTP accept comment "allow ipv4 smtp connection: CONSOLE > VMM > SERVER INFRA"
+        oifname $IF_SERVER ip6 saddr $HOSTS6_CONSOLE ip6 daddr $HOSTS6_INFRA tcp dport $PORTS_SMTP accept comment "allow ipv6 smtp connection: CONSOLE > VMM > SERVER INFRA"
+        oifname $IF_SERVER ip saddr $HOSTS4_CONSOLE ip daddr $HOSTS4_INFRA tcp dport $PORTS_IMAPS accept comment "allow ipv4 imaps connection: CONSOLE > VMM > SERVER INFRA"
+        oifname $IF_SERVER ip6 saddr $HOSTS6_CONSOLE ip6 daddr $HOSTS6_INFRA tcp dport $PORTS_IMAPS accept comment "allow ipv6 imaps connection: CONSOLE > VMM > SERVER INFRA"
 
         iifname $IF_WAN jump wan comment "set WAN interface rules"
         iifname $IF_CLIENT jump client comment "set CLIENT interface rules"

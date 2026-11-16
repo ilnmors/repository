@@ -78,10 +78,10 @@ table inet filter {
         ip6 saddr $NET6_SERVER tcp dport $PORTS_PROMETHEUS accept comment "allow ipv6 prometheus connection: SERVER > INFRA"
         ip saddr $NET4_SERVER tcp dport $PORTS_LOKI accept comment "allow ipv4 loki connection: SERVER > INFRA"
         ip6 saddr $NET6_SERVER tcp dport $PORTS_LOKI accept comment "allow ipv6 loki connection: SERVER > INFRA"
-        ip saddr $NET4_SERVER tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv4 smtp connection: SERVER > INFRA"
-        ip6 saddr $NET6_SERVER tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv6 smtp connection: SERVER > INFRA"
-        ip saddr $NET4_SERVER tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv4 imaps connection: SERVER > INFRA"
-        ip6 saddr $NET6_SERVER tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv6 imaps connection: SERVER > INFRA"
+        ip saddr { $NET4_SERVER, $HOSTS4_CONSOLE } tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv4 smtp connection: SERVER, CONSOLE > INFRA"
+        ip6 saddr { $NET6_SERVER, $HOSTS6_CONSOLE } tcp dport $PORTS_SMTP_FORWARD ct original proto-dst $PORTS_SMTP accept comment "allow ipv6 smtp connection: SERVER, CONSOLE > INFRA"
+        ip saddr { $NET4_SERVER, $HOSTS4_CONSOLE } tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv4 imaps connection: SERVER, CONSOLE > INFRA"
+        ip6 saddr { $NET6_SERVER, $HOSTS6_CONSOLE } tcp dport $PORTS_IMAPS_FORWARD ct original proto-dst $PORTS_IMAPS accept comment "allow ipv6 imaps connection: SERVER, CONSOLE > INFRA"
     }
     chain forward {
         type filter hook forward priority filter; policy drop;
