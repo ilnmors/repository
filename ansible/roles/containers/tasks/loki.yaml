@@ -25,8 +25,6 @@
     - "{{ nodes[target_host]['paths']['home'] }}/containers/loki"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/loki/etc"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/loki/ssl"
-    - "{{ nodes[target_host]['paths']['home'] }}/containers/loki/etc/rules"
-    - "{{ nodes[target_host]['paths']['home'] }}/containers/loki/etc/rules/{{ site['domain']['internal'] }}"
     - "{{ nodes[target_host]['paths']['data'] }}/containers/loki"
     - "{{ nodes[target_host]['paths']['data'] }}/containers/loki/data"
   become: true
@@ -35,16 +33,6 @@
   ansible.builtin.template:
     src: "loki/etc/loki.yaml.j2"
     dest: "{{ nodes[target_host]['paths']['home'] }}/containers/loki/etc/loki.yaml"
-    owner: "{{ services['containers']['loki']['units']['main']['subuid'] }}"
-    group: "{{ nodes[target_host]['group'] }}"
-    mode: "0600"
-  become: true
-  notify: "notification_restart_loki"
-
-- name: Deploy the loki rules
-  ansible.builtin.template:
-    src: "loki/etc/rules.yaml.j2"
-    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/loki/etc/rules/{{ site['domain']['internal'] }}/rules.yaml"
     owner: "{{ services['containers']['loki']['units']['main']['subuid'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0600"

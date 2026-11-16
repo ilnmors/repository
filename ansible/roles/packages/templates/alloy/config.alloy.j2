@@ -1,6 +1,14 @@
-// prometheus
+// Label schema (metrics and logs)
+//   instance  host name from the inventory
+//   job       service name from the inventory (node for host metrics, kernel for kernel logs)
+//   level     logs only: debug | info | warn | error | fatal
+//   stream    logs only, for services with a second log file: access (caddy), eve (suricata)
+// Values with many distinct values (HTTP status, method, URI, client IP, SSH user, Suricata
+// severity) are structured metadata, not labels.
 
-// Metrics output
+// ---------------------------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------------------------
 
 prometheus.remote_write "prometheus" {
     endpoint {
@@ -11,18 +19,23 @@ prometheus.remote_write "prometheus" {
     }
 }
 
-// System metrics relabel
-
-prometheus.relabel "system_metrics" {
+// Every series gets instance=<host>; job is set per input below.
+prometheus.relabel "metrics" {
     forward_to = [prometheus.remote_write.prometheus.receiver]
 
     rule {
         target_label = "instance"
         replacement  = "{{ target_host }}"
     }
+}
+
+// Host metrics: systemd unit names lose the .service suffix (timers and sockets keep theirs).
+prometheus.relabel "node" {
+    forward_to = [prometheus.relabel.metrics.receiver]
+
     rule {
         target_label = "job"
-        replacement  = "system"
+        replacement  = "node"
     }
     rule {
         source_labels = ["name"]
@@ -30,71 +43,22 @@ prometheus.relabel "system_metrics" {
         target_label  = "name"
         replacement   = "$1"
     }
-    rule {
-        source_labels = ["name"]
-        regex         = "(.+)\\.timer"
-        target_label  = "name"
-        replacement   = "$1.timer"
-    }
-    rule {
-        source_labels = ["name"]
-        regex         = "(.+)\\.socket"
-        target_label  = "name"
-        replacement   = "$1.socket"
-    }
 {% if target_host in services['packages']['smart-exporter']['units']['main']['hosts'] %}
+    // smart-exporter writes smartctl_* through the textfile collector.
     rule {
         source_labels = ["__name__"]
         regex         = "smartctl_.+"
         target_label  = "job"
-        replacement   = "smartctl"
+        replacement   = "smart-exporter"
     }
 {% endif %}
 }
 
-// Generic service metrics relabel
-
-prometheus.relabel "service_metrics" {
-    forward_to = [prometheus.remote_write.prometheus.receiver]
-
-    rule {
-        target_label = "instance"
-        replacement  = "{{ target_host }}"
-    }
-    rule {
-        source_labels = ["job"]
-        regex         = "prometheus\\.scrape\\.(.+)"
-        target_label  = "job"
-        replacement   = "$1"
-    }
-    rule {
-        source_labels = ["job"]
-        regex         = "integrations\\/(.+)"
-        target_label  = "job"
-        replacement   = "$1"
-    }
-    rule {
-        source_labels = ["name", "job"]
-        separator     = ";"
-        regex         = ";(.+)"
-        target_label  = "name"
-        replacement   = "$1"
-    }
-}
-
-// Metrics input
-
-// System metrics input
-
-prometheus.exporter.unix "system" {
+prometheus.exporter.unix "node" {
     enable_collectors = [
         "systemd",
         "cgroup",
         "processes",
-        "cpu",
-        "meminfo",
-        "filesystem",
-        "netdev",
         "textfile",
         "btrfs",
     ]
@@ -109,79 +73,66 @@ prometheus.exporter.unix "system" {
 {% endif %}
 }
 
-prometheus.scrape "system" {
-    targets    = prometheus.exporter.unix.system.targets
-    forward_to = [prometheus.relabel.system_metrics.receiver]
+prometheus.scrape "node" {
+    targets    = prometheus.exporter.unix.node.targets
+    forward_to = [prometheus.relabel.node.receiver]
 }
 {% if target_host in services['packages']['crowdsec']['units']['lapi']['hosts'] %}
 
-// CrowdSec metrics input
 prometheus.scrape "crowdsec" {
-    targets = [
-        {
-            "__address__" = "{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['crowdsec']['units']['lapi']['ports']['metrics']['ext'] }}",
-            "job"         = "crowdsec",
-            "name"        = "crowdsec",
-        },
-    ]
-
-    honor_labels = true
-    forward_to   = [prometheus.relabel.service_metrics.receiver]
+    targets = [{
+        "__address__" = "{{ services['packages']['crowdsec']['units']['lapi']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['packages']['crowdsec']['units']['lapi']['ports']['metrics']['ext'] }}",
+        "job"         = "crowdsec",
+    }]
+    forward_to = [prometheus.relabel.metrics.receiver]
 }
 {% endif %}
 {% if target_host in services['containers']['x509-exporter']['units']['main']['hosts'] %}
 
-// x509-exporter metrics input
-prometheus.scrape "x509" {
-    targets = [
-        {
-            "__address__" = "127.0.0.1:{{ services['containers']['x509-exporter']['units']['main']['ports']['http']['int'] }}",
-            "job"         = "x509-exporter",
-            "name"        = "x509-exporter",
-        },
-    ]
-
-    honor_labels = true
-    forward_to   = [prometheus.relabel.service_metrics.receiver]
+prometheus.scrape "x509_exporter" {
+    targets = [{
+        "__address__" = "127.0.0.1:{{ services['containers']['x509-exporter']['units']['main']['ports']['http']['int'] }}",
+        "job"         = "x509-exporter",
+    }]
+    forward_to = [prometheus.relabel.metrics.receiver]
 }
 {% endif %}
 {% if target_host in services['containers']['postgresql']['units']['main']['hosts'] %}
 
-// PostgreSQL metrics input
 prometheus.exporter.postgres "postgresql" {
     data_source_names = [
         "postgres://alloy@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/postgres?sslmode=verify-full",
     ]
 }
 
+discovery.relabel "postgresql" {
+    targets = prometheus.exporter.postgres.postgresql.targets
+    rule {
+        target_label = "job"
+        replacement  = "postgresql"
+    }
+}
+
 prometheus.scrape "postgresql" {
-    targets    = prometheus.exporter.postgres.postgresql.targets
-    forward_to = [prometheus.relabel.service_metrics.receiver]
+    targets    = discovery.relabel.postgresql.output
+    forward_to = [prometheus.relabel.metrics.receiver]
 }
 {% endif %}
 {% if target_host in services['containers']['caddy']['units']['main']['hosts'] %}
 
-// Caddy metrics input
 prometheus.scrape "caddy" {
-    targets = [
-        {
-            "__address__" = "caddy.{{ target_host }}.{{ site['domain']['internal'] }}:443",
-            "job"         = "caddy",
-            "name"        = "caddy",
-        },
-    ]
-
-    scheme       = "https"
-    metrics_path = "/metrics"
-    honor_labels = true
-    forward_to   = [prometheus.relabel.service_metrics.receiver]
+    targets = [{
+        "__address__" = "caddy.{{ target_host }}.{{ site['domain']['internal'] }}:443",
+        "job"         = "caddy",
+    }]
+    scheme     = "https"
+    forward_to = [prometheus.relabel.metrics.receiver]
 }
 {% endif %}
 
-
-// Loki
-
-// Logs output
+// ---------------------------------------------------------------------------------------------
+// Logs
+// ---------------------------------------------------------------------------------------------
 
 loki.write "loki" {
     endpoint {
@@ -193,66 +144,51 @@ loki.write "loki" {
     }
 }
 
-// Journald logs relabel
-
-loki.relabel "journal_logs" {
+// journald: job is the systemd (user) unit without .service; container is a temporary label
+// for the level parser and is dropped before the logs are written.
+loki.relabel "journal" {
     forward_to = []
+
     rule {
         target_label = "instance"
         replacement  = "{{ target_host }}"
     }
     rule {
         target_label = "job"
-        replacement  = "systemd-journal"
+        replacement  = "journal"
     }
+    // Fallback: the syslog identifier (sudo, sshd in a session scope, ...).
     rule {
-        source_labels = ["__journal__systemd_unit", "__journal__systemd_user_unit", "__journal_syslog_identifier"]
-        separator     = ";"
-        regex         = ";;(ssh|sshd|sudo|su|login|polkitd|cron|crond)"
+        source_labels = ["__journal_syslog_identifier"]
+        regex         = "(.+)"
         target_label  = "job"
         replacement   = "$1"
     }
+    // Services, timers and sockets name the job; scopes (login sessions) keep the syslog identifier.
     rule {
         source_labels = ["__journal__systemd_unit"]
-        regex         = "(.+)\\.service"
+        regex         = "(.+)\\.service|(.+\\.(?:timer|socket))"
         target_label  = "job"
-        replacement   = "$1"
+        replacement   = "$1$2"
     }
     rule {
-        source_labels = ["__journal__systemd_unit"]
-        regex         = "(.+)\\.timer"
+        source_labels = ["__journal__systemd_user_unit"]
+        regex         = "(.+)\\.service|(.+\\.(?:timer|socket))"
         target_label  = "job"
-        replacement   = "$1.timer"
+        replacement   = "$1$2"
     }
+    // Messages of the service managers themselves: PID 1 and the per-user manager.
     rule {
         source_labels = ["__journal__systemd_unit"]
-        regex         = "(.+)\\.socket"
+        regex         = "init\\.scope"
         target_label  = "job"
-        replacement   = "$1.socket"
+        replacement   = "systemd"
     }
     rule {
         source_labels = ["job"]
         regex         = "user@\\d+"
         target_label  = "job"
-        replacement   = "systemd-journal"
-    }
-    rule {
-        source_labels = ["__journal__systemd_user_unit"]
-        regex         = "(.+)\\.service"
-        target_label  = "job"
-        replacement   = "$1"
-    }
-    rule {
-        source_labels = ["__journal__systemd_user_unit"]
-        regex         = "(.+)\\.timer"
-        target_label  = "job"
-        replacement   = "$1.timer"
-    }
-    rule {
-        source_labels = ["__journal__systemd_user_unit"]
-        regex         = "(.+)\\.socket"
-        target_label  = "job"
-        replacement   = "$1.socket"
+        replacement   = "systemd-user"
     }
     rule {
         source_labels = ["__journal_syslog_identifier"]
@@ -267,17 +203,12 @@ loki.relabel "journal_logs" {
         replacement   = "kernel"
     }
     rule {
-        source_labels = ["job"]
+        source_labels = ["__journal_container_name"]
         regex         = "(.+)"
-        target_label  = "service_name"
+        target_label  = "container"
         replacement   = "$1"
     }
-    rule {
-        source_labels = ["__journal_priority_keyword"]
-        regex         = "(.+)"
-        target_label  = "journal_level"
-        replacement   = "$1"
-    }
+    // journald priority keywords: emerg alert crit error warning notice info debug
     rule {
         target_label = "level"
         replacement  = "info"
@@ -290,232 +221,224 @@ loki.relabel "journal_logs" {
     }
     rule {
         source_labels = ["__journal_priority_keyword"]
-        regex         = "info|notice"
-        target_label  = "level"
-        replacement   = "info"
-    }
-    rule {
-        source_labels = ["__journal_priority_keyword"]
         regex         = "warning"
         target_label  = "level"
         replacement   = "warn"
     }
     rule {
         source_labels = ["__journal_priority_keyword"]
-        regex         = "err"
+        regex         = "error"
         target_label  = "level"
         replacement   = "error"
     }
     rule {
         source_labels = ["__journal_priority_keyword"]
-        regex         = "crit|alert|emerg"
+        regex         = "emerg|alert|crit"
         target_label  = "level"
         replacement   = "fatal"
     }
 }
 
-// Journald logs parser
+loki.source.journal "journal" {
+    forward_to    = [loki.process.journal.receiver]
+    relabel_rules = loki.relabel.journal.rules
+}
 
-loki.process "journal_parser" {
+loki.process "journal" {
     forward_to = [loki.write.loki.receiver]
+
+    // Containers write everything to stdout/stderr, and journald files stderr as error.
+    // Start from info and take the level from the message instead.
     stage.match {
-        selector = "{job=~\".+\"} |~ \"container health_status .*health_status=\""
-        stage.regex {
-            expression = "container (?P<podman_event>health_status) (?P<container_id>[^ ]+)"
+        selector = "{container=~\".+\"}"
+        stage.static_labels {
+            values = { level = "info" }
         }
+    }
+
+    // Level written in the message: key=value or JSON (level, lvl, severity; pino numbers),
+    // or a level word among the first tokens ([WARN], ERROR:, FATAL ...). Only info lines are
+    // re-read, so real journald priorities from host services stay as they are.
+    stage.match {
+        selector = "{level=\"info\"} |~ \"(?i)(^|[\\\\s{,\\\"'])(level|lvl|severity|loglevel)[\\\"']?\\\\s*[=:]\\\\s*[\\\"']?(trace|debug|dbg|10|20)\\\\b\""
+        stage.static_labels {
+            values = { level = "debug" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"(?i)(^|[\\\\s{,\\\"'])(level|lvl|severity|loglevel)[\\\"']?\\\\s*[=:]\\\\s*[\\\"']?(warn|warning|40)\\\\b\""
+        stage.static_labels {
+            values = { level = "warn" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"(?i)(^|[\\\\s{,\\\"'])(level|lvl|severity|loglevel)[\\\"']?\\\\s*[=:]\\\\s*[\\\"']?(err|error|50)\\\\b\""
+        stage.static_labels {
+            values = { level = "error" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"(?i)(^|[\\\\s{,\\\"'])(level|lvl|severity|loglevel)[\\\"']?\\\\s*[=:]\\\\s*[\\\"']?(fatal|crit|critical|panic|emerg|alert|60)\\\\b\""
+        stage.static_labels {
+            values = { level = "fatal" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"^(\\\\S+\\\\s+){0,4}(\\\\x1b\\\\[[0-9;]*m)?\\\\[?(WARN|WARNING)\\\\]?(\\\\x1b\\\\[[0-9;]*m)?([\\\\s:\\\\]]|$)\""
+        stage.static_labels {
+            values = { level = "warn" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"^(\\\\S+\\\\s+){0,4}(\\\\x1b\\\\[[0-9;]*m)?\\\\[?(ERR|ERROR)\\\\]?(\\\\x1b\\\\[[0-9;]*m)?([\\\\s:\\\\]]|$)\""
+        stage.static_labels {
+            values = { level = "error" }
+        }
+    }
+    stage.match {
+        selector = "{level=\"info\"} |~ \"^(\\\\S+\\\\s+){0,4}(\\\\x1b\\\\[[0-9;]*m)?\\\\[?(CRIT|CRITICAL|FATAL|PANIC)\\\\]?(\\\\x1b\\\\[[0-9;]*m)?([\\\\s:\\\\]]|$)\""
+        stage.static_labels {
+            values = { level = "fatal" }
+        }
+    }
+
+    // Normal shutdowns some programs log as fatal: Go's http.ErrServerClosed
+    // (crowdsec 1.4: level=fatal msg="while serving local API: http: Server closed").
+    stage.match {
+        selector = "{level=~\"error|fatal\"} |= \"http: Server closed\""
+        stage.static_labels {
+            values = { level = "info" }
+        }
+    }
+
+    // Crashes are fatal whatever the stream says.
+    stage.match {
+        selector = "{level!=\"fatal\"} |~ \"(?i)(\\\\bpanic: |segfault at |out of memory: killed process|invoked oom-killer|kernel BUG at|assertion .* failed)\""
+        stage.static_labels {
+            values = { level = "fatal" }
+        }
+    }
+
+    // podman health checks: job is the container, health_status=healthy|unhealthy.
+    stage.match {
+        selector = "{job=\"podman\"} |~ \"container health_status .*health_status=\""
         stage.regex {
-            expression = "name=(?P<container_name>[^,\\)]+)"
+            expression = "container health_status (?P<container_id>[^ ]+) .*name=(?P<container_name>[^,\\)]+)"
         }
         stage.regex {
             expression = "health_status=(?P<health_status>[^,\\)]+)"
         }
         stage.labels {
             values = {
-                job = "container_name",
-                service_name = "container_name",
-                podman_event = "",
+                job           = "container_name",
                 health_status = "",
             }
         }
         stage.structured_metadata {
-            values = {
-                container_id = "",
-            }
+            values = { container_id = "" }
         }
         stage.static_labels {
-            values = {
-                level = "info",
-            }
+            values = { level = "info" }
         }
     }
     stage.match {
-        selector = "{podman_event=\"health_status\",health_status=\"unhealthy\"}"
+        selector = "{health_status=\"unhealthy\"}"
         stage.static_labels {
-            values = {
-                level = "error",
-            }
+            values = { level = "error" }
         }
     }
-    stage.match {
-        selector = "{level!=\"fatal\", job!~\"loki|prometheus|grafana\"} |~ \"(?i)(panic|assertion failed|out of memory|segfault|killed process)\""
-        stage.static_labels {
-            values = {
-                level = "fatal",
-            }
-        }
-    }
-    stage.match {
-        selector = "{level=~\"info|debug\", job!~\"loki|prometheus|grafana\"} |~ \"(?i)(\\berror\\b|\\berr\\b|\\bfailed\\b|\\bfailure\\b|\\bexception\\b|traceback|exit-code|container died|permission denied|access denied|connection refused|connection reset|timed out|timeout exceeded|no such file|authentication failed|sqlstate|duplicate key|relation .* does not exist|column .* does not exist|database .* does not exist|relation .* already exists|column .* already exists|\\bx509:|unknown authority|certificate .*expired|tls handshake|bad gateway|upstream .*failed|upstream .*error)\""
-        stage.static_labels {
-            values = {
-                level = "error",
-            }
-        }
-    }
-    stage.match {
-        selector = "{level=~\"info|debug\", job!~\"loki|prometheus|grafana\"} |~ \"(?i)(Main process exited|Failed with result|start request repeated too quickly|Dependency failed|Unit .* entered failed state)\""
 
-        stage.static_labels {
-            values = {
-                level = "error",
-            }
-        }
-    }
+    // sshd: accepted logins keep the user as structured metadata.
     stage.match {
-        selector = "{level=~\"info|debug\", job!~\"loki|prometheus|grafana\"} |~ \"(?i)(\\bwarn\\b|warning|deprecated|retrying|rate.?limit|too many requests|slow query|slow request)\""
-
-        stage.static_labels {
-            values = {
-                level = "warn",
-            }
-        }
-    }
-    stage.match {
-        selector = "{job=~\"ssh|sshd\"}"
-
+        selector = "{job=~\"ssh|sshd\"} |= \"Accepted \""
         stage.regex {
-            expression = "Accepted \\w+ for (?P<user>[^ ]+) from (?P<ip>[0-9a-fA-F:.]+)"
+            expression = "Accepted \\w+ for (?P<user>[^ ]+) from (?P<remote_ip>[0-9a-fA-F:.]+)"
         }
-
-        stage.labels {
+        stage.structured_metadata {
             values = {
-                user = "",
+                user      = "",
+                remote_ip = "",
             }
         }
+    }
+
+    stage.label_drop {
+        values = ["container"]
     }
 }
 {% if target_host in services['packages']['suricata']['units']['main']['hosts'] %}
 
-// Suricata logs relabel
-
-loki.relabel "suricata_logs" {
-    forward_to = [loki.process.suricata_parser.receiver]
-
-    rule {
-        target_label = "instance"
-        replacement  = "{{ target_host }}"
-    }
-    rule {
-        target_label = "job"
-        replacement  = "suricata_eve"
-    }
-    rule {
-        target_label = "service_name"
-        replacement  = "suricata_eve"
-    }
-    rule {
-        target_label = "level"
-        replacement  = "info"
-    }
+// Suricata eve.json: event_type is a label; alerts are warn, severity 1-2 errors.
+local.file_match "suricata" {
+    path_targets = [{
+        "__path__" = "/var/log/suricata/eve.json",
+        "instance" = "{{ target_host }}",
+        "job"      = "suricata",
+        "stream"   = "eve",
+        "level"    = "info",
+    }]
 }
 
-// Suricata logs parser
+loki.source.file "suricata" {
+    targets    = local.file_match.suricata.targets
+    forward_to = [loki.process.suricata.receiver]
+}
 
-loki.process "suricata_parser" {
+loki.process "suricata" {
     forward_to = [loki.write.loki.receiver]
 
     stage.json {
         expressions = {
             event_type = "event_type",
+            severity   = "alert.severity",
+            src_ip     = "src_ip",
         }
     }
     stage.labels {
+        values = { event_type = "" }
+    }
+    stage.structured_metadata {
         values = {
-            event_type = "",
+            severity = "",
+            src_ip   = "",
         }
     }
     stage.match {
         selector = "{event_type=\"alert\"}"
-        stage.json {
-            expressions = {
-                severity = "alert.severity",
-            }
-        }
-        stage.labels {
-            values = {
-                severity = "",
-            }
-        }
         stage.static_labels {
-            values = {
-                level = "warn",
-            }
+            values = { level = "warn" }
         }
     }
     stage.match {
-        selector = "{event_type=\"alert\", severity=~\"1|2\"}"
+        selector = "{event_type=\"alert\"} |~ \"\\\"severity\\\":[12][,}]\""
         stage.static_labels {
-            values = {
-                level = "error",
-            }
+            values = { level = "error" }
         }
     }
-}
-
-// Suricata eve.json input
-
-local.file_match "suricata_logs" {
-    path_targets = [
-        { "__path__" = "/var/log/suricata/eve.json" },
-    ]
-}
-
-loki.source.file "suricata" {
-    targets    = local.file_match.suricata_logs.targets
-    forward_to = [loki.relabel.suricata_logs.receiver]
+    stage.label_drop {
+        values = ["filename"]
+    }
 }
 {% endif %}
 {% if target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts'] and target_host in services['containers']['caddy']['units']['main']['build']['crowdsec-bouncer']['hosts'] %}
 
-// Caddy access logs relabel
-
-loki.relabel "caddy_logs" {
-    forward_to = [loki.process.caddy_parser.receiver]
-
-    rule {
-        target_label = "instance"
-        replacement  = "{{ target_host }}"
-    }
-
-    rule {
-        target_label = "job"
-        replacement  = "caddy_access"
-    }
-
-    rule {
-        target_label = "service_name"
-        replacement  = "caddy_access"
-    }
-
-    rule {
-        target_label = "level"
-        replacement  = "info"
-    }
+// Caddy access log: host is a label; 401/403/429 are warn, 5xx errors.
+local.file_match "caddy_access" {
+    path_targets = [{
+        "__path__" = "/var/log/caddy/access.log",
+        "instance" = "{{ target_host }}",
+        "job"      = "caddy",
+        "stream"   = "access",
+        "level"    = "info",
+    }]
 }
 
-// Caddy access logs parser
+loki.source.file "caddy_access" {
+    targets    = local.file_match.caddy_access.targets
+    forward_to = [loki.process.caddy_access.receiver]
+}
 
-loki.process "caddy_parser" {
+loki.process "caddy_access" {
     forward_to = [loki.write.loki.receiver]
 
     stage.json {
@@ -529,56 +452,31 @@ loki.process "caddy_parser" {
         }
     }
     stage.labels {
-        values = {
-            status = "",
-            method = "",
-            host   = "",
-        }
+        values = { host = "" }
     }
     stage.structured_metadata {
         values = {
+            status    = "",
+            method    = "",
             uri       = "",
             remote_ip = "",
             duration  = "",
         }
     }
     stage.match {
-        selector = "{status=~\"401|403|429\"}"
-
+        selector = "{job=\"caddy\"} |~ \"\\\"status\\\":(401|403|429)[,}]\""
         stage.static_labels {
-            values = {
-                level = "warn",
-            }
+            values = { level = "warn" }
         }
     }
     stage.match {
-        selector = "{status=~\"5..\"}"
-
+        selector = "{job=\"caddy\"} |~ \"\\\"status\\\":5[0-9][0-9][,}]\""
         stage.static_labels {
-            values = {
-                level = "error",
-            }
+            values = { level = "error" }
         }
     }
-}
-
-// Caddy access log input
-
-local.file_match "caddy_logs" {
-    path_targets = [
-        { "__path__" = "/var/log/caddy/access.log" },
-    ]
-}
-
-loki.source.file "caddy" {
-    targets    = local.file_match.caddy_logs.targets
-    forward_to = [loki.relabel.caddy_logs.receiver]
+    stage.label_drop {
+        values = ["filename"]
+    }
 }
 {% endif %}
-
-// Journald logs input
-
-loki.source.journal "systemd" {
-    forward_to    = [loki.process.journal_parser.receiver]
-    relabel_rules = loki.relabel.journal_logs.rules
-}

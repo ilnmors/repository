@@ -1,0 +1,362 @@
+{#
+  Prometheus-format alert rules, converted to Grafana-managed rules by
+  provisioning/alerting/rules.yaml.j2 and evaluated by Grafana.
+  Labels: severity critical (act now) or warning (look at it today).
+  Series labels follow the Alloy schema: instance=<host>, job=<service> (node for host metrics).
+#}
+{% set fs = 'job="node", fstype!~"tmpfs|vfat|ramfs|squashfs|overlay"' %}
+{% set smart = '* on (instance, device) group_left (model_name, serial_number) smartctl_device' %}
+groups:
+  - name: hosts
+    rules:
+{% for host in services['packages']['alloy']['units']['main']['hosts'] | unique | sort %}
+      - alert: {{ host }}_down
+        expr: |
+          (max_over_time(up{job="node", instance="{{ host }}"}[5m]) or on() vector(0)) == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ host }} is down"
+          description: "No host metrics from {{ host }} for 5 minutes. The host, its network or Alloy is down."
+{% endfor %}
+      - alert: ScrapeTargetDown
+        expr: |
+          up{job!="node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.job }} metrics endpoint on {{ $labels.instance }} is down"{% endraw %}{{ '' }}
+          description: "The scrape target has failed for 5 minutes. The service or its metrics endpoint is down."
+      - alert: FilesystemAlmostFull
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{ {{- fs -}} } / node_filesystem_size_bytes{ {{- fs -}} }) > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.mountpoint }} on {{ $labels.instance }} is {{ printf \"%.0f\" $values.A.Value }}% full"{% endraw %}{{ '' }}
+          description: "Free space is below 10%. Clean up or grow the volume."
+      - alert: FilesystemFull
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{ {{- fs -}} } / node_filesystem_size_bytes{ {{- fs -}} }) > 97
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ $labels.mountpoint }} on {{ $labels.instance }} is full"{% endraw %}{{ '' }}
+          description: "Free space is below 3%. Writes will fail soon."
+      # Pressure, not usage: vmm keeps guest RAM allocated and always looks ~97% used.
+      - alert: MemoryPressure
+        expr: |
+          rate(node_pressure_memory_stalled_seconds_total{job="node"}[5m]) * 100 > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.instance }} stalls {{ printf \"%.0f\" $values.A.Value }}% of the time on memory"{% endraw %}{{ '' }}
+          description: "All tasks waited for memory more than 10% of the time for 15 minutes (PSI full). Expect swapping or OOM kills."
+      - alert: SystemdUnitFailed
+        expr: |
+          node_systemd_unit_state{job="node", state="failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.name }} failed on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "A system unit is in the failed state. Check systemctl status and the journal."
+
+  - name: postgresql
+    rules:
+      - alert: PostgresqlDown
+        expr: |
+          (max_over_time(pg_up{job="postgresql", instance="{{ containers_postgresql_host }}"}[5m]) or on() vector(0)) == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "postgres_exporter on {{ containers_postgresql_host }} has not reached PostgreSQL for 5 minutes."
+      - alert: PostgresqlConnectionsHigh
+        expr: |
+          100 * sum(pg_stat_database_numbackends{job="postgresql"}) / max(pg_settings_max_connections{job="postgresql"}) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"PostgreSQL uses {{ printf \"%.0f\" $values.A.Value }}% of max_connections"{% endraw %}{{ '' }}
+          description: "A service may be leaking connections."
+      - alert: PostgresqlDeadlocks
+        expr: |
+          sum by (datname) (increase(pg_stat_database_deadlocks{job="postgresql"}[1h])) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"Deadlocks in {{ $labels.datname }}"{% endraw %}{{ '' }}
+          description: "PostgreSQL resolved a deadlock in the last hour. Check the service that owns the database."
+
+  - name: certificates
+    rules:
+      - alert: CertificateMetricsMissing
+        expr: |
+          absent_over_time(x509_cert_not_after{job="x509-exporter"}[15m])
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Certificate expiry metrics are missing"
+          description: "No x509_cert_not_after for 15 minutes. Check x509-exporter on {{ services['containers']['x509-exporter']['units']['main']['hosts'] | join(', ') }}."
+      - alert: CertificateExpiresSoon
+        expr: |
+          (x509_cert_not_after{job="x509-exporter"} - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.filename }} expires in {{ printf \"%.0f\" $values.A.Value }} days"{% endraw %}{{ '' }}
+          description: "Reissue it with the secrets role (leaf tag) and redeploy the service."
+      - alert: CertificateExpiresVerySoon
+        expr: |
+          (x509_cert_not_after{job="x509-exporter"} - time()) / 86400 < 7
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ $labels.filename }} expires in {{ printf \"%.1f\" $values.A.Value }} days"{% endraw %}{{ '' }}
+          description: "Reissue it with the secrets role (leaf tag) and redeploy the service now."
+      - alert: CertificateSourceErrors
+        expr: |
+          sum by (instance) (increase(x509_source_errors_total{job="x509-exporter"}[1h])) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "x509-exporter cannot read some certificates"
+          description: "Read or parse errors in the last hour. Check the mounted certificate files."
+
+  - name: btrfs
+    rules:
+{% for host, node in nodes.items() | sort %}
+{%   if (
+       node['system']['disk'] | default({}) | dict2items | map(attribute='value')
+       | selectattr('fs', 'defined')
+       | selectattr('fs.type', 'equalto', 'btrfs')
+       | selectattr('fs.mount_point', 'defined')
+       | list | length
+     ) > 0 %}
+      - alert: {{ host }}_btrfs_metrics_missing
+        expr: |
+          absent_over_time(node_btrfs_info{job="node", instance="{{ host }}"}[15m])
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "btrfs metrics are missing on {{ host }}"
+          description: "No node_btrfs_info from {{ host }} for 15 minutes. Check that the btrfs volumes are mounted and the Alloy btrfs collector runs."
+{%   endif %}
+{% endfor %}
+{% for name, node in nodes.items() | sort %}
+{%   set data = node['system']['disk']['data'] | default({}) %}
+{%   if (data['type'] | default('')) == 'block' and (data['fs']['type'] | default('')) == 'btrfs' %}
+      - alert: {{ name }}_btrfs_raid_degraded
+        expr: |
+          (count by (instance) (node_btrfs_device_size_bytes{job="node", instance="{{ name }}"} * on (instance, uuid) group_left (label) node_btrfs_info{job="node", instance="{{ name }}", label="{{ data['fs']['label'] }}"}) or on() vector(0)) < {{ data['serials'] | length }}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "btrfs {{ data['fs']['label'] }} on {{ name }} is missing a disk"
+          description: "{{ data['fs']['label'] }} should have {{ data['serials'] | length }} devices. It is mounted with 'degraded', so services keep running on one disk. Replace the failed disk (spare HDD) and run btrfs replace."
+{%   endif %}
+{% endfor %}
+      - alert: BtrfsDeviceErrors
+        expr: |
+          increase(node_btrfs_device_errors_total{job="node"}[1h]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"btrfs {{ $labels.type }} errors on {{ $labels.instance }} {{ $labels.device }}"{% endraw %}{{ '' }}
+          description: "btrfs device error counters increased. Run btrfs device stats and a scrub, and check SMART."
+
+{% set smart_host = services['packages']['smart-exporter']['units']['main']['hosts'] | first %}
+{% set devices_count = nodes[smart_host]['system']['disk'] | dict2items | map(attribute='value.serials') | flatten | unique | list | length %}
+  - name: smart
+    rules:
+      - alert: SmartMetricsMissing
+        expr: |
+          absent_over_time(smartctl_devices{job="smart-exporter", instance="{{ smart_host }}"}[15m])
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMART metrics are missing on {{ smart_host }}"
+          description: "No smartctl_devices for 15 minutes. Check smart-exporter.timer and /etc/smartctl-exporter/smartctl.prom."
+      - alert: SmartDeviceMissing
+        expr: |
+          max_over_time(smartctl_devices{job="smart-exporter", instance="{{ smart_host }}"}[5m]) < {{ devices_count }}
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ printf \"%.0f\" $values.A.Value }} of {% endraw %}{{ devices_count }}{% raw %} disks report SMART on {% endraw %}{{ smart_host }}"
+          description: "A disk dropped off the bus or smartctl cannot read it. Check cabling, USB filtering and smartctl output."
+      - alert: SmartHealthFailed
+        expr: |
+          (smartctl_device_smart_status{job="smart-exporter"} {{ smart }}) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"SMART health FAILED on {{ $labels.device }} ({{ $labels.model_name }} {{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "The drive reports overall-health FAILED. Evacuate and replace it."
+      - alert: SmartDiskFailing
+        expr: |
+          ((floor(smartctl_device_smartctl_exit_status{job="smart-exporter"} / 8) % 2) {{ smart }}) == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"smartctl reports {{ $labels.device }} ({{ $labels.serial_number }}) as failing"{% endraw %}{{ '' }}
+          description: "smartctl exit status bit 3 (disk failing). Evacuate and replace the device."
+      - alert: SmartPrefailThreshold
+        expr: |
+          ((floor(smartctl_device_smartctl_exit_status{job="smart-exporter"} / 16) % 2) {{ smart }}) == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"SMART prefail attribute at threshold on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "smartctl exit status bit 4. Check the attribute table and plan a replacement."
+      - alert: SmartReadFailed
+        expr: |
+          ((floor(smartctl_device_smartctl_exit_status{job="smart-exporter"} / 4) % 2) * on (instance, device) group_left (model_name, serial_number) smartctl_device{protocol!~"NVMe|nvme"}) == 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"smartctl cannot read data from {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "smartctl exit status bit 2 on a SATA device. Check cable and USB bridge. NVMe is excluded: optional log pages set this bit."
+      - alert: SmartSectorsChanged
+        expr: |
+          (max_over_time(smartctl_device_attribute{job="smart-exporter", attribute_value_type="raw", attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect"}[24h])
+            - min_over_time(smartctl_device_attribute{job="smart-exporter", attribute_value_type="raw", attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect"}[24h])) {{ smart }} > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ $labels.attribute_name }} grew on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "Bad sectors increased in the last 24 hours. Run a long self-test and plan a replacement."
+      - alert: SmartPendingSectors
+        expr: |
+          (smartctl_device_attribute{job="smart-exporter", attribute_value_type="raw", attribute_name="Current_Pending_Sector"} {{ smart }}) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ printf \"%.0f\" $values.A.Value }} pending sectors on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "Sectors are waiting to be reallocated. A scrub or long self-test rewrites them."
+      - alert: SmartCrcErrors
+        expr: |
+          (delta(smartctl_device_attribute{job="smart-exporter", attribute_value_type="raw", attribute_name="UDMA_CRC_Error_Count"}[24h]) {{ smart }}) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"Interface CRC errors on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "UDMA_CRC_Error_Count increased in 24 hours. Check the SATA cable, backplane or USB bridge."
+      - alert: SmartErrorLogGrew
+        expr: |
+          (delta(smartctl_device_error_log_count{job="smart-exporter"}[24h]) {{ smart }}) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"SMART error log grew on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "The drive logged new errors in 24 hours. Check smartctl -x."
+      - alert: SmartSelfTestErrors
+        expr: |
+          (smartctl_device_self_test_log_error_count{job="smart-exporter"} {{ smart }}) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"SMART self-test errors on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "The self-test log has failed tests. Rerun a long self-test."
+      - alert: DiskTemperatureHigh
+        expr: |
+          (smartctl_device_temperature{job="smart-exporter", temperature_type="current"} {{ smart }}) > 50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.device }} is at {{ printf \"%.0f\" $values.A.Value }}°C"{% endraw %}{{ '' }}
+          description: "Above 50°C for 15 minutes. Check airflow."
+      - alert: DiskTemperatureCritical
+        expr: |
+          (smartctl_device_temperature{job="smart-exporter", temperature_type="current"} {{ smart }}) > 55
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ $labels.device }} is at {{ printf \"%.0f\" $values.A.Value }}°C"{% endraw %}{{ '' }}
+          description: "Above 55°C. Check cooling and workload now."
+      - alert: NvmeCriticalWarning
+        expr: |
+          (smartctl_device_critical_warning{job="smart-exporter"} {{ smart }}) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"NVMe critical warning on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "critical_warning is non-zero (spare, temperature, reliability or read-only). Check smartctl -x."
+      - alert: NvmeMediaErrors
+        expr: |
+          (delta(smartctl_device_media_errors{job="smart-exporter"}[24h]) {{ smart }}) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"NVMe media errors on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "Media and data integrity errors increased in 24 hours."
+      - alert: NvmeWearHigh
+        expr: |
+          (smartctl_device_percentage_used{job="smart-exporter"} {{ smart }}) > 90
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.device }} has used {{ printf \"%.0f\" $values.A.Value }}% of its rated endurance"{% endraw %}{{ '' }}
+          description: "Plan a replacement."
+      - alert: NvmeSpareLow
+        expr: |
+          (smartctl_device_available_spare{job="smart-exporter"} <= on (instance, device) smartctl_device_available_spare_threshold{job="smart-exporter"}) {{ smart }}
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"NVMe spare blocks exhausted on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
+          description: "available_spare reached the threshold. Replace the drive."
+
+  - name: edge
+    rules:
+      - alert: CaddyReloadFailed
+        expr: |
+          caddy_config_last_reload_successful{job="caddy"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"Caddy on {{ $labels.instance }} failed to load its config"{% endraw %}{{ '' }}
+          description: "Caddy keeps serving the previous config. Check the Caddyfile and the caddy journal."
+      - alert: CaddyUpstreamUnhealthy
+        expr: |
+          caddy_reverse_proxy_upstreams_healthy{job="caddy"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.upstream }} is unhealthy behind Caddy on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The reverse proxy marks the upstream down. Check the backend service."

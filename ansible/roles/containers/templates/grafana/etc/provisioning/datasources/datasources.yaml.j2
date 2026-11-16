@@ -5,6 +5,7 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: PBFA97CFB590B2093
     type: prometheus
     url: https://{{ prometheus['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ prometheus['ports']['https']['int'] }}
     access: proxy
@@ -13,10 +14,13 @@ datasources:
       tlsAuth: false
       tlsAuthWithCACert: true
       httpMethod: POST
+      # Alloy scrapes every 60 s; $__rate_interval is derived from this.
+      timeInterval: 60s
     secureJsonData:
       tlsCACert: "$__file{/etc/ssl/grafana/{{ site['ca']['x509']['root']['certificate_file'] }}}"
 
   - name: Loki
+    uid: P8E80F9AEF21F6940
     type: loki
     url: https://{{ loki['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ loki['ports']['https']['int'] }}
     access: proxy

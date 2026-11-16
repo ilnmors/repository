@@ -38,7 +38,6 @@
     mode: "0600"
   loop:
     - "prometheus.yaml"
-    - "rules.yaml"
     - "web-config.yaml"
   become: true
   notify: "notification_restart_prometheus"

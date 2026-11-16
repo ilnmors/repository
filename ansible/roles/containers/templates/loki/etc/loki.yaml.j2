@@ -1,20 +1,27 @@
+{% set loki = services['containers']['loki']['units']['main'] %}
 ---
+# Single-binary Loki on the local filesystem. Alloy pushes with tenant {{ site['domain']['internal'] }};
+# Grafana reads with the same X-Scope-OrgID. Alert rules are evaluated by Grafana, so the ruler is off.
 auth_enabled: true
 
 server:
   http_listen_address: "::"
-  http_listen_port: {{ services['containers']['loki']['units']['main']['ports']['https']['container'] }}
+  http_listen_port: {{ loki['ports']['https']['container'] }}
   http_tls_config:
-    cert_file: /etc/ssl/loki/{{ services['containers']['loki']['units']['main']['domain']['internal'] }}.crt
-    key_file: /etc/ssl/loki/{{ services['containers']['loki']['units']['main']['domain']['internal'] }}.key
+    cert_file: /etc/ssl/loki/{{ loki['domain']['internal'] }}.crt
+    key_file: /etc/ssl/loki/{{ loki['domain']['internal'] }}.key
+  log_level: warn
 
-ruler:
-  enable_api: true
-  rule_path: /loki/rules
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  replication_factor: 1
   storage:
-    type: local
-    local:
-      directory: /etc/loki/rules
+    filesystem:
+      chunks_directory: /loki/chunks
+  ring:
+    kvstore:
+      store: inmemory
 
 schema_config:
   configs:
@@ -30,18 +37,13 @@ limits_config:
   retention_period: 180d
   reject_old_samples: true
   reject_old_samples_max_age: 168h
-
-common:
-  instance_addr: localhost
-  path_prefix: /loki
-  replication_factor: 1
-  storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
-  ring:
-    kvstore:
-      store: inmemory
+  # Alloy sets level and job itself; Loki should not guess.
+  discover_log_levels: false
+  allow_structured_metadata: true
+  # Log volume histograms in Grafana (Explore, Logs Drilldown).
+  volume_enabled: true
+  max_query_series: 5000
+  max_entries_limit_per_query: 10000
 
 compactor:
   working_directory: /loki/compactor
@@ -49,3 +51,6 @@ compactor:
   compaction_interval: 10m
   retention_enabled: true
   retention_delete_delay: 2h
+
+analytics:
+  reporting_enabled: false

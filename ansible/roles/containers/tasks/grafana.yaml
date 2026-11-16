@@ -57,8 +57,7 @@
     - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning/datasources"
-    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning/dashboards"
-    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/dashboards"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/provisioning/alerting"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/ssl"
   become: true
 
@@ -85,17 +84,7 @@
     - "grafana.ini"
     - "ldap.toml"
     - "provisioning/datasources/datasources.yaml"
-    - "provisioning/dashboards/dashboards.yaml"
-  become: true
-  notify: "notification_restart_grafana"
-
-- name: Deploy the grafana dashboards
-  ansible.builtin.copy:
-    src: "{{ role_path }}/templates/grafana/etc/dashboards/"
-    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/grafana/etc/dashboards/"
-    owner: "{{ services['containers']['grafana']['units']['main']['subuid'] }}"
-    group: "{{ nodes[target_host]['group'] }}"
-    mode: "0440"
+    - "provisioning/alerting/rules.yaml"
   become: true
   notify: "notification_restart_grafana"
 

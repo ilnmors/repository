@@ -1,0 +1,58 @@
+{#
+  Grafana evaluates every alert rule. The rules are kept in Prometheus rule format in
+  grafana/etc/rules/ and converted here: query A runs the rule expression as an instant query
+  and condition B fires for every series it returns, as Prometheus and the Loki ruler would.
+  The contact point and notification policy live in the Grafana database.
+#}
+{% set alert_sources = [
+  {'name': 'prometheus', 'type': 'prometheus', 'uid': 'PBFA97CFB590B2093', 'interval': '30s'},
+  {'name': 'loki', 'type': 'loki', 'uid': 'P8E80F9AEF21F6940', 'interval': '1m'},
+] %}
+# https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/file-provisioning/
+apiVersion: 1
+
+groups:
+{% for source in alert_sources %}
+{%   set rule_file = lookup('ansible.builtin.template', 'grafana/etc/rules/' ~ source['name'] ~ '.yaml.j2') | from_yaml %}
+{%   for group in rule_file['groups'] %}
+  - orgId: 1
+    name: {{ group['name'] | to_json }}
+    folder: Alerts
+    interval: {{ group['interval'] | default(source['interval']) }}
+    rules:
+{%     for rule in group['rules'] %}
+      - uid: {{ (source['name'] ~ ':' ~ rule['alert']) | hash('sha1') | truncate(20, true, '') }}
+        title: {{ rule['alert'] | to_json }}
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: {{ source['uid'] }}
+            model:
+              refId: A
+              datasource:
+                type: {{ source['type'] }}
+                uid: {{ source['uid'] }}
+              expr: {{ rule['expr'] | trim | to_json }}
+{%       if source['type'] == 'prometheus' %}
+              instant: true
+              range: false
+{%       else %}
+              queryType: instant
+{%       endif %}
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: math
+              expression: "is_number($A) || is_nan($A) || is_inf($A)"
+        noDataState: OK
+        execErrState: Error
+        for: {{ rule['for'] | default('0s') }}
+        labels: {{ rule['labels'] | default({}) | to_json }}
+        annotations: {{ rule['annotations'] | default({}) | to_json }}
+{%     endfor %}
+{%   endfor %}
+{% endfor %}

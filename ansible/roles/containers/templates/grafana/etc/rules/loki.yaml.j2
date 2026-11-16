@@ -1,0 +1,116 @@
+{#
+  Loki (LogQL) alert rules, converted to Grafana-managed rules by
+  provisioning/alerting/rules.yaml.j2 and evaluated by Grafana.
+  Labels: severity critical (act now) or warning (look at it today).
+  Streams follow the Alloy schema: instance, job, level, stream (access|eve).
+#}
+groups:
+  - name: logs
+    interval: 1m
+    rules:
+{% for host in services['packages']['alloy']['units']['main']['hosts'] | unique | sort %}
+      - alert: {{ host }}_logs_missing
+        expr: |
+          absent_over_time({instance="{{ host }}"}[15m])
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No logs from {{ host }}"
+          description: "Loki received nothing from {{ host }} for 15 minutes. Check alloy.service on {{ host }}."
+{% endfor %}
+      - alert: FatalLogged
+        expr: |
+          sum by (instance, job) (count_over_time({level="fatal"}[10m])) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"Fatal log from {{ $labels.job }} on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "A panic, segfault, OOM kill or fatal-level message. Open the Loki dashboard for the line."
+
+  - name: services
+    interval: 1m
+    rules:
+      - alert: ContainerUnhealthy
+        expr: |
+          sum by (instance, job) (count_over_time({health_status="unhealthy"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.job }} is unhealthy on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The podman health check has failed for 5 minutes."
+      - alert: ServiceFailed
+        expr: |
+          sum by (instance, unit) (count_over_time({job=~"systemd|systemd-user"} |~ "\\.service: Failed with result" | regexp "(?P<unit>[^ ]+)\\.service: Failed with result" [15m])) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.unit }} failed on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "systemd recorded a failed run (system or user unit, containers included). Check its journal."
+      - alert: BackupFailed
+        expr: |
+          sum by (instance, job) (count_over_time({job=~"kopia.*|rclone", level=~"error|fatal"}[30m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"{{ $labels.job }} failed on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The backup job logged errors. Check the journal and the repository state."
+
+  - name: storage_logs
+    interval: 1m
+    rules:
+      - alert: BtrfsKernelError
+        expr: |
+          sum by (instance) (count_over_time({job="kernel"} |~ "BTRFS (error|critical)|BTRFS warning.*(missing|csum|corrupt)" [10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"btrfs kernel error on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The kernel logged a btrfs error, a missing device or a checksum failure."
+      - alert: DiskIoError
+        expr: |
+          sum by (instance) (count_over_time({job="kernel"} |~ "(?i)(I/O error, dev|critical medium error|blk_update_request: .*error|nvme.*(timeout|reset controller))" [10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: {% raw %}"Disk I/O errors on {{ $labels.instance }}"{% endraw %}{{ '' }}
+          description: "The kernel reported block device errors. Check SMART and cabling."
+
+  - name: edge_logs
+    interval: 1m
+    rules:
+      - alert: Caddy5xxBurst
+        expr: |
+          sum by (instance, host) (count_over_time({job="caddy", stream="access"} | status=~"5.." [5m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.host }} returns 5xx"{% endraw %}{{ '' }}
+          description: {% raw %}"More than 5 server errors in 5 minutes through Caddy on {{ $labels.instance }}."{% endraw %}{{ '' }}
+      - alert: CaddyRateLimitBurst
+        expr: |
+          sum by (instance, host) (count_over_time({job="caddy", stream="access"} | status="429" [10m])) > 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"{{ $labels.host }} is rate limiting"{% endraw %}{{ '' }}
+          description: "More than 20 rate-limited responses in 10 minutes."
+      # Inbound scans and blocklisted sources are constant background noise; an internal
+      # source matching a severity 1-2 signature is not.
+      - alert: SuricataInternalSource
+        expr: |
+          sum by (instance, src_ip) (count_over_time({job="suricata", stream="eve", event_type="alert", level="error"} | src_ip=~"(192\\.168\\.|fd00:).*" [10m])) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: {% raw %}"Internal host {{ $labels.src_ip }} triggered a severity 1-2 Suricata signature"{% endraw %}{{ '' }}
+          description: "Check the Security section of the Logs dashboard for the signature and destination."
