@@ -46,7 +46,7 @@ hardwares:
       disk01:
         type: "ssd"
         model: "Samsung 990 PRO 2TB"
-        serial: "S7DDNJ0X158483T"
+        serial: "S7DNNJ0X158483T"
         size: "1.8190T"
         role: "root"
       disk02:
