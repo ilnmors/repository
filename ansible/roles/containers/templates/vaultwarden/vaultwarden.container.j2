@@ -21,6 +21,19 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/vaultwarden/ssl:/etc
 Environment="TZ={{ site['timezone'] }}"
 Environment="DOMAIN=https://{{ services['containers']['vaultwarden']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
 Environment="SIGNUPS_ALLOWED=false"
+{% set postfix = services['containers']['postfix']['units']['main'] %}
+# Mail goes through postfix as the vaultwarden LDAP account (services group, send only).
+# OpenSSL reads the internal root CA from SSL_CERT_FILE and the public CAs from /etc/ssl/certs.
+Environment="SMTP_HOST={{ postfix['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+Environment="SMTP_PORT={{ postfix['ports']['submission']['int'] if target_host in postfix['hosts'] else postfix['ports']['submission']['ext'] }}"
+Environment="SMTP_SECURITY=starttls"
+Environment="SMTP_FROM=vaultwarden@{{ site['domain']['internal'] }}"
+Environment="SMTP_FROM_NAME=Vaultwarden"
+Environment="SMTP_USERNAME=vaultwarden"
+Environment="SMTP_AUTH_MECHANISM=Plain"
+Environment="HELO_NAME={{ services['containers']['vaultwarden']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="SSL_CERT_FILE=/etc/ssl/vaultwarden/{{ site['ca']['x509']['root']['certificate_file'] }}"
+Secret=VW_SMTP_PASSWORD,type=env,target=SMTP_PASSWORD
 Secret=VW_ADMIN_TOKEN,type=env,target=ADMIN_TOKEN
 Secret=VW_DATABASE_URL,type=env,target=DATABASE_URL
 

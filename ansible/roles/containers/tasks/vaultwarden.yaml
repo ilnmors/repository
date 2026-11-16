@@ -63,6 +63,9 @@
           @{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}\
           :{{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}/\
           vaultwarden_db?sslmode=verify-full&sslrootcert=/etc/ssl/vaultwarden/{{ site['ca']['x509']['root']['certificate_file'] }}"
+      # The vaultwarden account must exist in LLDAP with this password and the services group.
+      - name: "VW_SMTP_PASSWORD"
+        value: "{{ secrets['ldap']['password']['services']['vaultwarden'] }}"
   no_log: true
 
 - name: Create the vaultwarden directory

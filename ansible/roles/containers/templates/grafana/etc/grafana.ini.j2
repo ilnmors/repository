@@ -1,5 +1,6 @@
 {% set grafana = services['containers']['grafana']['units']['main'] %}
 {% set postgresql = services['containers']['postgresql']['units']['main'] %}
+{% set postfix = services['containers']['postfix']['units']['main'] %}
 # https://github.com/grafana/grafana/blob/main/conf/defaults.ini
 [paths]
 data = /var/lib/grafana
@@ -39,6 +40,18 @@ admin_password = $__file{/run/secrets/GF_ADMIN_PASSWORD}
 cookie_secure = true
 cookie_samesite = lax
 allow_embedding = false
+
+[smtp]
+# Alert mail goes through postfix as the grafana LDAP bind account (services group).
+# The postfix certificate is trusted through SSL_CERT_DIR (grafana.container).
+enabled = true
+host = {{ postfix['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ postfix['ports']['submission']['int'] if target_host in postfix['hosts'] else postfix['ports']['submission']['ext'] }}
+user = grafana
+password = $__file{/run/secrets/GF_LDAP_BIND_PASSWORD}
+from_address = grafana@{{ site['domain']['internal'] }}
+from_name = Grafana
+ehlo_identity = {{ grafana['domain']['internal'] }}.{{ site['domain']['internal'] }}
+startTLS_policy = MandatoryStartTLS
 
 [analytics]
 reporting_enabled = false

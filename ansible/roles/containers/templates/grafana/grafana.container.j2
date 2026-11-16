@@ -14,7 +14,7 @@ Image={{ containers_container_repository }}:{{ releases['containers'][target_con
 
 ContainerName=grafana
 HostName=grafana
-{% for service in ['postgresql', 'ldap', 'prometheus', 'loki'] %}
+{% for service in ['postgresql', 'ldap', 'prometheus', 'loki', 'postfix'] %}
 {% if target_host in services['containers'][service]['units']['main']['hosts'] %}
 AddHost={{ services['containers'][service]['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:host-gateway
 {% endif %}
@@ -29,6 +29,8 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/grafana/ssl:/etc/ssl
 Environment="TZ={{ site['timezone'] }}"
 Environment="GF_PATHS_CONFIG=/etc/grafana/grafana.ini"
 Environment="GF_FEATURE_TOGGLES_EXPAND_ENV_VARS=true"
+# Go reads the internal root CA from here in addition to the system bundle (postfix STARTTLS).
+Environment="SSL_CERT_DIR=/etc/ssl/grafana"
 
 Secret=GF_DB_PASSWORD,target=/run/secrets/GF_DB_PASSWORD
 Secret=GF_LDAP_BIND_PASSWORD,target=/run/secrets/GF_LDAP_BIND_PASSWORD
