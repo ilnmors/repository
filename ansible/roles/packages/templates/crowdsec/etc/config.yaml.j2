@@ -14,7 +14,9 @@ config_paths:
   hub_dir: /var/lib/crowdsec/hub/
   index_path: /var/lib/crowdsec/hub/.index.json
   notification_dir: /etc/crowdsec/notifications/
-  plugin_dir: /usr/lib/crowdsec/plugins/
+  # Debian installs the plugins as plugins/<type>; crowdsec only loads notification-<type>.
+  # This directory holds correctly named links to the packaged binaries (crowdsec.yaml task).
+  plugin_dir: /usr/local/lib/crowdsec/plugins/
 crowdsec_service:
   acquisition_path: /etc/crowdsec/acquis.yaml
   acquisition_dir: /etc/crowdsec/acquis.d

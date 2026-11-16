@@ -116,6 +116,56 @@
       become: true
       notify: "notification_restart_crowdsec"
       no_log: true
+
+    - name: Deploy the crowdsec profiles
+      ansible.builtin.template:
+        src: "crowdsec/etc/profiles.yaml.j2"
+        dest: "/etc/crowdsec/profiles.yaml"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      become: true
+      notify: "notification_restart_crowdsec"
+
+    - name: Create the crowdsec notification directory
+      ansible.builtin.file:
+        path: "/etc/crowdsec/notifications"
+        state: "directory"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      become: true
+
+    - name: Create the crowdsec plugin directory
+      ansible.builtin.file:
+        path: "/usr/local/lib/crowdsec/plugins"
+        state: "directory"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      become: true
+
+    - name: Link the packaged http plugin under the name crowdsec expects
+      ansible.builtin.file:
+        src: "/usr/lib/crowdsec/plugins/http"
+        dest: "/usr/local/lib/crowdsec/plugins/notification-http"
+        state: "link"
+        owner: "root"
+        group: "root"
+      become: true
+      notify: "notification_restart_crowdsec"
+
+    # The plugin runs as nobody but crowdsec reads this file as root and passes the config.
+    - name: Deploy the crowdsec Discord notification
+      ansible.builtin.template:
+        src: "crowdsec/notifications/discord.yaml.j2"
+        dest: "/etc/crowdsec/notifications/discord.yaml"
+        owner: "root"
+        group: "root"
+        mode: "0600"
+      become: true
+      notify: "notification_restart_crowdsec"
+      no_log: true
     # Machines configuration
 
     - name: Get the existing crowdsec machine list

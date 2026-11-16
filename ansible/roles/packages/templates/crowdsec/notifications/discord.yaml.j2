@@ -1,0 +1,31 @@
+# Ban notifications to Discord, sent with the name CrowdSec. Webhook: secrets notification.discord.crowdsec,
+# falling back to notification.discord.default.
+# Alerts are batched: one message per 30 s or per 10 alerts (Discord allows 10 embeds per message).
+type: http
+name: discord
+log_level: info
+group_wait: 30s
+group_threshold: 10
+format: |
+  {
+    "username": "CrowdSec",
+    "embeds": [
+  {{- '{{' }} range $i, $alert := . {{ '}}' }}{{ '{{' }} if $i {{ '}}' }},{{ '{{' }} end {{ '}}' }}
+      {
+        "title": {{ '{{' }} $alert.Scenario | toJson {{ '}}' }},
+        "color": 15105570,
+        "fields": [
+          {"name": "Source", "value": {{ '{{' }} $alert.Source.Value | toJson {{ '}}' }}, "inline": true},
+          {"name": "Country", "value": {{ '{{' }} $alert.Source.Cn | default "-" | toJson {{ '}}' }}, "inline": true},
+          {"name": "AS", "value": {{ '{{' }} $alert.Source.AsName | default "-" | toJson {{ '}}' }}, "inline": true},
+          {"name": "Ban", "value": {{ '{{' }} (index $alert.Decisions 0).Duration | toJson {{ '}}' }}, "inline": true},
+          {"name": "Machine", "value": {{ '{{' }} $alert.MachineID | toJson {{ '}}' }}, "inline": true}
+        ]
+      }
+  {{- '{{' }} end {{ '}}' }}
+    ]
+  }
+url: "{{ secrets['notification']['discord']['crowdsec'] | default(secrets['notification']['discord']['default']) }}"
+method: POST
+headers:
+  Content-Type: application/json
