@@ -202,6 +202,20 @@ loki.relabel "journal" {
         target_label  = "job"
         replacement   = "kernel"
     }
+    // Processes PID 1 forks before exec, such as generators: "(sd-exec-strv)" cut to 15 characters.
+    rule {
+        source_labels = ["__journal_syslog_identifier"]
+        regex         = "\\(sd-.+"
+        target_label  = "job"
+        replacement   = "systemd"
+    }
+    // Ansible modules log as ansible-<module>; keep them under one job.
+    rule {
+        source_labels = ["__journal_syslog_identifier"]
+        regex         = "ansible-.+"
+        target_label  = "job"
+        replacement   = "ansible"
+    }
     rule {
         source_labels = ["__journal_container_name"]
         regex         = "(.+)"
