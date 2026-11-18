@@ -114,10 +114,13 @@
   failed_when: (containers_readur_drawer_chunk_result['stdout_lines'] | length) != 1
 
 - name: Read the readur document drawer chunk
-  ansible.builtin.command: >-
-    podman run --rm --network=none --entrypoint cat
-    "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}"
-    /app/frontend/dist/assets/{{ containers_readur_drawer_chunk }}
+  ansible.builtin.shell: |
+    set -euo pipefail
+    podman run --rm --network=none --entrypoint cat \
+      "{{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}" \
+      /app/frontend/dist/assets/{{ containers_readur_drawer_chunk }}
+  args:
+    executable: "/bin/bash"
   register: "containers_readur_drawer_source"
   changed_when: false
 

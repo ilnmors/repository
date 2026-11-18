@@ -90,7 +90,11 @@
 # The OAuth2 login source lives in the forgejo database (no app.ini/env option):
 # add it when missing, otherwise update it so the client secret and URL follow secrets.yaml.
 - name: Wait for the forgejo CLI
-  ansible.builtin.command: "podman exec -u git forgejo forgejo admin auth list"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    podman exec -u git forgejo forgejo admin auth list
+  args:
+    executable: "/bin/bash"
   register: "containers_forgejo_auth_list"
   retries: 30
   delay: 5
@@ -112,26 +116,19 @@
     containers_forgejo_authelia_url: "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
   environment:
     FORGEJO_OIDC_SECRET: "{{ secrets['forgejo']['oidc']['secret'] }}"
-  ansible.builtin.command:
-    argv:
-      - "podman"
-      - "exec"
-      - "-u"
-      - "git"
-      - "-e"
-      - "FORGEJO_OIDC_SECRET"
-      - "forgejo"
-      - "sh"
-      - "-c"
-      - >-
-        exec forgejo admin auth
-        {{ ('update-oauth --id ' ~ containers_forgejo_authelia_source_id) if (containers_forgejo_authelia_source_id | length) > 0 else 'add-oauth' }}
-        --name authelia
-        --provider openidConnect
-        --key forgejo
-        --secret "$FORGEJO_OIDC_SECRET"
-        --auto-discover-url "{{ containers_forgejo_authelia_url }}/.well-known/openid-configuration"
-        {% for scope in services['containers']['forgejo']['units']['main']['dependency']['oidc']['scopes'] %}--scopes {{ scope }} {% endfor %}
+  # The secret reaches the container as an environment variable and is expanded inside it (single quotes).
+  ansible.builtin.shell: |
+    set -euo pipefail
+    podman exec -u git -e FORGEJO_OIDC_SECRET forgejo sh -c 'exec forgejo admin auth \
+      {{ ('update-oauth --id ' ~ containers_forgejo_authelia_source_id) if (containers_forgejo_authelia_source_id | length) > 0 else 'add-oauth' }} \
+      --name authelia \
+      --provider openidConnect \
+      --key forgejo \
+      --secret "$FORGEJO_OIDC_SECRET" \
+      --auto-discover-url "{{ containers_forgejo_authelia_url }}/.well-known/openid-configuration" \
+      {% for scope in services['containers']['forgejo']['units']['main']['dependency']['oidc']['scopes'] %}--scopes {{ scope }} {% endfor %}'
+  args:
+    executable: "/bin/bash"
   # update-oauth runs every time and cannot report a diff; only a new source counts as a change.
   changed_when: (containers_forgejo_authelia_source_id | length) == 0
   no_log: true
