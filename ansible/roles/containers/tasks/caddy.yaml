@@ -44,13 +44,14 @@
     - "{{ nodes[target_host]['paths']['home'] }}/containers/caddy/data"
   become: true
 
+# Group adm lets Alloy (a member of adm) read the access log; the rootless container writes as the owner.
 - name: Create the caddy log directory
   ansible.builtin.file:
     path: "/var/log/caddy"
     state: "directory"
     owner: "{{ nodes[target_host]['user'] }}"
-    group: "{{ nodes[target_host]['group'] }}"
-    mode: "0770"
+    group: "adm"
+    mode: "0750"
   become: true
   when: >-
     target_host in services['containers']['caddy']['units']['main']['build']['http-bouncer']['hosts']
