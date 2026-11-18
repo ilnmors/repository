@@ -11,34 +11,10 @@
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0770"
   loop:
-    - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster"
-    - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data"
-    - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models"
   become: true
-
-- name: Synchronize the quartermaster models
-  delegate_to: "{{ inventory_hostname }}"
-  ansible.posix.synchronize:
-    src: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/"
-    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models/"
-    owner: true
-    group: true
-    perms: true
-    delete: true
-  notify: "notification_restart_quartermaster"
-
-- name: Deploy the quartermaster configuration
-  ansible.builtin.template:
-    src: "quartermaster/config/config.yaml.j2"
-    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config/config.yaml"
-    owner: "{{ nodes[target_host]['user'] }}"
-    group: "{{ nodes[target_host]['group'] }}"
-    mode: "0640"
-  become: true
-  notify: "notification_restart_quartermaster"
 
 - name: Deploy the quartermaster image
   vars:

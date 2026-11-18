@@ -860,7 +860,7 @@ services:
           dependency:
             web:
               status: true
-          # Models, backends and routing groups: templates/quartermaster/config/config.yaml.j2.
+          # Models, backends and per-model commands are managed in the dashboard (generate mode).
     openwebui:
       units:
         main:

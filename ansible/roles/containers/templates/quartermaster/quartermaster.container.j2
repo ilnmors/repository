@@ -17,15 +17,16 @@ AddDevice=/dev/dri:/dev/dri
 PodmanArgs=--group-add keep-groups
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data:/data:rw
-Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config:/data/config:ro
-Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:ro
+# Downloaded from the dashboard's model hub; they can be fetched again, so they stay out of DATA and its backups.
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:rw
 
 Environment="TZ={{ site['timezone'] }}"
-# The image entrypoint seeds its autogen file on first start; keep it out of the read-only config mount.
+# The image entrypoint seeds the autogen control file on first start.
 Environment="QM_GENERATE_FILE=/data/quartermaster-generate.yaml"
 
-# Without -generate the config is loaded as written and never regenerated.
-Exec=-config /data/config/config.yaml -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open
+# Generate mode: models, settings and per-model commands are managed in the dashboard, which
+# regenerates and hot-reloads /data/config.yaml. Naming only -config would freeze it as written.
+Exec=-config /data/config.yaml -generate /data/quartermaster-generate.yaml -models-dir /data/models -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open
 
 [Service]
 Restart=always
