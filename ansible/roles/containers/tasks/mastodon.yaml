@@ -320,3 +320,33 @@
 
 - name: Apply the mastodon configuration handlers
   ansible.builtin.meta: "flush_handlers"
+
+# Home feeds live only in valkey under HOME, so a rebuilt host starts with empty timelines while the
+# posts come back with the database. Build them once per valkey data directory.
+- name: Check the mastodon feeds marker
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/valkey/mastodon/.feeds_built"
+  register: "containers_mastodon_feeds_marker"
+
+- name: Build the mastodon home feeds
+  when: not containers_mastodon_feeds_marker['stat']['exists']
+  block:
+    - name: Rebuild the mastodon home feeds from the database
+      ansible.builtin.shell: |
+        set -euo pipefail
+        /usr/bin/podman exec mastodon-web bin/tootctl feeds build --concurrency 4
+      args:
+        executable: "/bin/bash"
+      register: "containers_mastodon_feeds_built"
+      retries: 30
+      delay: 10
+      until: containers_mastodon_feeds_built['rc'] == 0
+      changed_when: true
+
+    - name: Create the mastodon feeds marker
+      ansible.builtin.file:
+        path: "{{ nodes[target_host]['paths']['home'] }}/containers/valkey/mastodon/.feeds_built"
+        state: "touch"
+        owner: "{{ nodes[target_host]['user'] }}"
+        group: "{{ nodes[target_host]['group'] }}"
+        mode: "0644"
