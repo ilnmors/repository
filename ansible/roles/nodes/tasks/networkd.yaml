@@ -23,11 +23,18 @@
   become: true
   notify: "notification_restart_networkd"
 
+# The Debian cloud image used by the VMs ships without ifupdown, so the unit only exists on vmm.
+- name: Check the networking.service unit
+  ansible.builtin.stat:
+    path: "/usr/lib/systemd/system/networking.service"
+  register: "nodes_networking_unit"
+
 - name: Disable the networking.service
   ansible.builtin.systemd_service:
     name: "networking.service"
     enabled: false
   become: true
+  when: nodes_networking_unit['stat']['exists']
 
 - name: Enable the systemd-networkd.service
   ansible.builtin.systemd_service:
