@@ -11,6 +11,17 @@ RUN curl -fsSL -o /tmp/sd-server.zip \
       https://github.com/leejet/stable-diffusion.cpp/releases/download/{{ sd_tag }}/sd-master-{{ sd_tag.split('-') | last }}-bin-Linux-Ubuntu-{{ qm['build']['base']['tag'] }}-x86_64-vulkan.zip && \
     unzip -q /tmp/sd-server.zip -d /out && \
     chmod 0755 /out/sd-server /out/sd-cli
+# Quartermaster adopts a backend directory only when it holds this install record (as upstream's llama-server does).
+RUN printf '%s\n' \
+      '{' \
+      '  "component": "sd-server",' \
+      '  "version": "{{ sd_tag }}",' \
+      '  "variant": "vulkan",' \
+      '  "exe": "sd-server",' \
+      '  "asset": "sd-master-{{ sd_tag.split('-') | last }}-bin-Linux-Ubuntu-{{ qm['build']['base']['tag'] }}-x86_64-vulkan.zip",' \
+      '  "installedAt": "1970-01-01T00:00:00Z",' \
+      '  "sizeBytes": 0' \
+      '}' > /out/.qm-install.json
 
 # Same runtime as upstream (Ubuntu, ca-certificates, libgomp1, libvulkan1) plus the Mesa Vulkan drivers.
 FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }}
