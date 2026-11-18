@@ -37,14 +37,15 @@ ExecStartPre=/usr/bin/kopia repository connect server \
 
 {% if (packages_kopia_snapshot_root | length) > 0 %}
 # Back up a read-only btrfs snapshot so every file comes from the same moment (RustFS, dumps, metrics).
-# "+" runs these steps as root outside the sandbox; "-" ignores a missing snapshot.
-ExecStartPre=-+/usr/bin/btrfs subvolume delete {{ packages_kopia_snapshot_path }}
+# "+" runs these steps as root outside the sandbox. A leftover snapshot is deleted only when it exists:
+# btrfs logs a missing one as "ERROR: Could not statfs", which the BackupFailed alert counts.
+ExecStartPre=+/bin/sh -c 'if [ -e {{ packages_kopia_snapshot_path }} ]; then exec /usr/bin/btrfs subvolume delete {{ packages_kopia_snapshot_path }}; fi'
 ExecStartPre=+/usr/bin/btrfs subvolume snapshot -r {{ packages_kopia_snapshot_root }} {{ packages_kopia_snapshot_path }}
 
 ExecStart=/usr/bin/kopia snapshot create {{ packages_kopia_snapshot_path }}{{ packages_kopia_backup_path[packages_kopia_snapshot_root | length:] }} \
     --override-source={{ packages_kopia_backup_path }}
 
-ExecStopPost=-+/usr/bin/btrfs subvolume delete {{ packages_kopia_snapshot_path }}
+ExecStopPost=-+/bin/sh -c 'if [ -e {{ packages_kopia_snapshot_path }} ]; then exec /usr/bin/btrfs subvolume delete {{ packages_kopia_snapshot_path }}; fi'
 {% else %}
 ExecStart=/usr/bin/kopia snapshot create {{ packages_kopia_backup_path }}
 {% endif %}
