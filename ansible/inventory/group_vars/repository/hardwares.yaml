@@ -73,6 +73,13 @@ hardwares:
         size: "1.8180T"
         role: "backup"
       # spare.serial: "WMC6N0E617S8" # HGST Ultrastar 7K2
+  console:
+    nic:
+      nic01:
+        # USB-C hub Ethernet; kea reserves the console address for this MAC
+        type: "rj45"
+        reserved: true
+        mac: "d8:e2:df:ff:1b:d5"
   switch:
     nic:
       nic01:
