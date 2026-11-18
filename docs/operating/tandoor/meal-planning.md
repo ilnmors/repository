@@ -38,7 +38,7 @@ Tandoor's own automations only normalize food names and recipe imports. Planning
 - Start read-only plus shopping-list write. Give meal-plan write only after a few reviewed weeks.
 - Run on Tandoor 2.7.3 or later (API permission fixes) before any token gets write access.
 - Sure access is read-only (transactions in `Food` categories), never imports or edits.
-- Keep the token outside Git (secrets.yaml or `.agent-workspace`), and revoke it when the agent setup changes.
+- Keep the token in secrets.yaml, and revoke it when the agent setup changes.
 
 ## Data Quality
 

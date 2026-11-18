@@ -20,4 +20,4 @@
 
 ## Dashboards
 
-- `Metrics` and `Loki` live in the Grafana database (no dashboard provisioning). Their source is `.agent-workspace/grafana-dashboards/build.py`; `--labels homelab` builds the variant for the old Alloy labels.
+- `Metrics` and `Loki` live in the Grafana database (no dashboard provisioning); edit them there or replace them through the Grafana API.

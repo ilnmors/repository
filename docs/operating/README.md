@@ -14,7 +14,6 @@ Facts and decisions for running the homelab stacks, one directory per stack (`<s
 | retired 2026-11-14 | [gitea](gitea/README.md) (→ forgejo), [maddy](maddy/README.md) (→ mail), [llama](llama/README.md) and [stablediffusion](stablediffusion/README.md) (→ quartermaster) |
 | stopped 2026-11-13 | [papra](papra/README.md), [nextcloud](nextcloud/README.md), [groupoffice](groupoffice/README.md) |
 
-- The 2026-11-13 container upgrade is summarized in `.agent-workspace/upgrade-2026-11-13/index.html` (not tracked).
 - `releases.yaml` was updated to the latest stable releases the same day.
 
 ## Hosts and Request Path
