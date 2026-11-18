@@ -1,7 +1,7 @@
 {#
   Prometheus-format alert rules, converted to Grafana-managed rules by
   provisioning/alerting/rules.yaml.j2 and evaluated by Grafana.
-  Labels: severity critical (act now) or warning (look at it today).
+  Labels: severity fatal (hardware failure or data at risk; the only one that notifies), critical (act now) or warning (look at it today).
   Series labels follow the Alloy schema: instance=<host>, job=<service> (node for host metrics).
 #}
 {% set fs = 'job="node", fstype!~"tmpfs|vfat|ramfs|squashfs|overlay"' %}
@@ -15,7 +15,7 @@ groups:
           (max_over_time(up{job="node", instance="{{ host }}"}[5m]) or on() vector(0)) == 0
         for: 1m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: "{{ host }} is down"
           description: "No host metrics from {{ host }} for 5 minutes. The host, its network or Alloy is down."
@@ -43,7 +43,7 @@ groups:
           100 * (1 - node_filesystem_avail_bytes{ {{- fs -}} } / node_filesystem_size_bytes{ {{- fs -}} }) > 97
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"{{ $labels.mountpoint }} on {{ $labels.instance }} is full"{% endraw %}{{ '' }}
           description: "Free space is below 3%. Writes will fail soon."
@@ -165,7 +165,7 @@ groups:
           (count by (instance) (node_btrfs_device_size_bytes{job="node", instance="{{ name }}"} * on (instance, uuid) group_left (label) node_btrfs_info{job="node", instance="{{ name }}", label="{{ data['fs']['label'] }}"}) or on() vector(0)) < {{ data['serials'] | length }}
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: "btrfs {{ data['fs']['label'] }} on {{ name }} is missing a disk"
           description: "{{ data['fs']['label'] }} should have {{ data['serials'] | length }} devices. It is mounted with 'degraded', so services keep running on one disk. Replace the failed disk (spare HDD) and run btrfs replace."
@@ -176,7 +176,7 @@ groups:
           increase(node_btrfs_device_errors_total{job="node"}[1h]) > 0
         for: 0s
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"btrfs {{ $labels.type }} errors on {{ $labels.instance }} {{ $labels.device }}"{% endraw %}{{ '' }}
           description: "btrfs device error counters increased. Run btrfs device stats and a scrub, and check SMART."
@@ -199,7 +199,7 @@ groups:
           max_over_time(smartctl_devices{job="smart-exporter", instance="{{ smart_host }}"}[5m]) < {{ devices_count }}
         for: 10m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"{{ printf \"%.0f\" $values.A.Value }} of {% endraw %}{{ devices_count }}{% raw %} disks report SMART on {% endraw %}{{ smart_host }}"
           description: "A disk dropped off the bus or smartctl cannot read it. Check cabling, USB filtering and smartctl output."
@@ -208,7 +208,7 @@ groups:
           (smartctl_device_smart_status{job="smart-exporter"} {{ smart }}) == 0
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"SMART health FAILED on {{ $labels.device }} ({{ $labels.model_name }} {{ $labels.serial_number }})"{% endraw %}{{ '' }}
           description: "The drive reports overall-health FAILED. Evacuate and replace it."
@@ -217,7 +217,7 @@ groups:
           ((floor(smartctl_device_smartctl_exit_status{job="smart-exporter"} / 8) % 2) {{ smart }}) == 1
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"smartctl reports {{ $labels.device }} ({{ $labels.serial_number }}) as failing"{% endraw %}{{ '' }}
           description: "smartctl exit status bit 3 (disk failing). Evacuate and replace the device."
@@ -226,7 +226,7 @@ groups:
           ((floor(smartctl_device_smartctl_exit_status{job="smart-exporter"} / 16) % 2) {{ smart }}) == 1
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"SMART prefail attribute at threshold on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
           description: "smartctl exit status bit 4. Check the attribute table and plan a replacement."
@@ -245,7 +245,7 @@ groups:
             - min_over_time(smartctl_device_attribute{job="smart-exporter", attribute_value_type="raw", attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect"}[24h])) {{ smart }} > 0
         for: 0s
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"{{ $labels.attribute_name }} grew on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
           description: "Bad sectors increased in the last 24 hours. Run a long self-test and plan a replacement."
@@ -299,7 +299,7 @@ groups:
           (smartctl_device_temperature{job="smart-exporter", temperature_type="current"} {{ smart }}) > 55
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"{{ $labels.device }} is at {{ printf \"%.0f\" $values.A.Value }}°C"{% endraw %}{{ '' }}
           description: "Above 55°C. Check cooling and workload now."
@@ -308,7 +308,7 @@ groups:
           (smartctl_device_critical_warning{job="smart-exporter"} {{ smart }}) > 0
         for: 5m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"NVMe critical warning on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
           description: "critical_warning is non-zero (spare, temperature, reliability or read-only). Check smartctl -x."
@@ -335,7 +335,7 @@ groups:
           (smartctl_device_available_spare{job="smart-exporter"} <= on (instance, device) smartctl_device_available_spare_threshold{job="smart-exporter"}) {{ smart }}
         for: 10m
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"NVMe spare blocks exhausted on {{ $labels.device }} ({{ $labels.serial_number }})"{% endraw %}{{ '' }}
           description: "available_spare reached the threshold. Replace the drive."

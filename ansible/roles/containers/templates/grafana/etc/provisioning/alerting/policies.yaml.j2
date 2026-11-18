@@ -1,0 +1,24 @@
+---
+# Only severity "fatal" (hardware failure or data at risk) is sent; every other alert stays visible in
+# Grafana but is muted. The "homelab" contact point (email, Discord) is kept in the Grafana database.
+apiVersion: 1
+
+muteTimes:
+  - orgId: 1
+    name: "always"
+    time_intervals:
+      - weekdays: ["sunday:saturday"]
+
+policies:
+  - orgId: 1
+    receiver: "homelab"
+    group_by: ["grafana_folder", "alertname"]
+    routes:
+      - receiver: "homelab"
+        object_matchers:
+          - ["severity", "=", "fatal"]
+      - receiver: "homelab"
+        object_matchers:
+          - ["severity", "!=", "fatal"]
+        mute_time_intervals:
+          - "always"

@@ -1,7 +1,7 @@
 {#
   Loki (LogQL) alert rules, converted to Grafana-managed rules by
   provisioning/alerting/rules.yaml.j2 and evaluated by Grafana.
-  Labels: severity critical (act now) or warning (look at it today).
+  Labels: severity fatal (hardware failure or data at risk; the only one that notifies), critical (act now) or warning (look at it today).
   Streams follow the Alloy schema: instance, job, level, stream (access|eve).
 #}
 groups:
@@ -68,7 +68,7 @@ groups:
           sum by (instance) (count_over_time({job="kernel"} |~ "BTRFS (error|critical)|BTRFS warning.*(missing|csum|corrupt)" [10m])) > 0
         for: 0s
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"btrfs kernel error on {{ $labels.instance }}"{% endraw %}{{ '' }}
           description: "The kernel logged a btrfs error, a missing device or a checksum failure."
@@ -77,7 +77,7 @@ groups:
           sum by (instance) (count_over_time({job="kernel"} |~ "(?i)(I/O error, dev|critical medium error|blk_update_request: .*error|nvme.*(timeout|reset controller))" [10m])) > 0
         for: 0s
         labels:
-          severity: critical
+          severity: fatal
         annotations:
           summary: {% raw %}"Disk I/O errors on {{ $labels.instance }}"{% endraw %}{{ '' }}
           description: "The kernel reported block device errors. Check SMART and cabling."

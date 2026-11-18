@@ -85,6 +85,7 @@
     - "ldap.toml"
     - "provisioning/datasources/datasources.yaml"
     - "provisioning/alerting/rules.yaml"
+    - "provisioning/alerting/policies.yaml"
   become: true
   notify: "notification_restart_grafana"
 
