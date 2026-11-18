@@ -106,8 +106,8 @@
     containers_forgejo_authelia_source_id: >-
       {{
         containers_forgejo_auth_list['stdout_lines']
-        | select('search', '^\\d+\\s+authelia\\s')
-        | map('regex_replace', '^(\\d+)\\s.*$', '\\1')
+        | select('search', '^\d+\s+authelia\s')
+        | map('regex_replace', '^(\d+)\s.*$', '\1')
         | first | default('')
       }}
 
