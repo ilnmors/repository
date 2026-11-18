@@ -34,6 +34,10 @@ schema_config:
         period: 24h
 
 limits_config:
+  # Agents replay their journal backlog after Loki or a host comes back; the 4 MB/s default
+  # rejects that burst with 429s until the retries drain it.
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
   retention_period: 180d
   reject_old_samples: true
   reject_old_samples_max_age: 168h
