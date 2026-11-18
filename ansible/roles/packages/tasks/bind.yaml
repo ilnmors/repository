@@ -77,8 +77,11 @@
 - name: Synchronize the BIND zones with inventory
   become: true
   block:
-    - name: Gather the service facts for BIND
-      ansible.builtin.service_facts:
+    # Not service_facts: it injects a top-level `services` variable that shadows the inventory `services`.
+    - name: Check whether named is running
+      ansible.builtin.systemd_service:
+        name: "named.service"
+      register: "packages_bind_named_active"
 
     - name: Freeze the BIND zones
       ansible.builtin.shell: |
@@ -87,7 +90,7 @@
         echo "BIND zones frozen"
       args:
         executable: "/bin/bash"
-      when: ((ansible_facts['services']['named.service'] | default({}))['state'] | default(none)) == 'running'
+      when: (packages_bind_named_active['status']['ActiveState'] | default('')) == 'active'
       changed_when: "'BIND zones frozen' in packages_bind_zones_frozen['stdout']"
       register: "packages_bind_zones_frozen"
 
