@@ -1,4 +1,12 @@
 ---
+# The hostname must match the 127.0.1.1 entry below, otherwise sudo waits on name resolution
+# (about 30 s per call) and Ansible's become times out. The first become after a rename is slow once.
+- name: Set the hostname
+  ansible.builtin.hostname:
+    name: "{{ target_host }}"
+    use: "systemd"
+  become: true
+
 - name: Deploy the /etc/hosts file
   ansible.builtin.template:
     src: "hosts/hosts.j2"
