@@ -24,8 +24,8 @@ InaccessiblePaths=/boot /root
 BindReadOnlyPaths={{ packages_backup_path }}
 
 # In root namescope, %u always bring 0
-BindPaths=/etc/secrets/{{ nodes[target_host]['user'] }}
-Environment="RCLONE_CONFIG=/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+BindPaths=/etc/secrets/{{ nodes[target_host]['user'] }}/rclone
+Environment="RCLONE_CONFIG=/etc/secrets/{{ nodes[target_host]['user'] }}/rclone/rclone.config"
 
 ExecStart=/usr/bin/rclone copy {{ packages_backup_path }} gdrive:{{ site['org'] }} \
     --transfers=4 \

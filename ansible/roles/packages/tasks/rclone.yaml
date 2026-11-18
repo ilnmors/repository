@@ -1,13 +1,29 @@
 ---
+# rclone saves refreshed OAuth tokens next to its config, and /etc/secrets/<user> is read-only (0500).
+- name: Create the rclone configuration directory
+  ansible.builtin.file:
+    path: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+  become: true
+
 - name: Deploy the rclone config
   ansible.builtin.template:
     src: "rclone/etc/rclone.config.j2"
-    dest: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+    dest: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone/rclone.config"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0600"
   become: true
   no_log: true
+
+- name: Delete the old rclone config location
+  ansible.builtin.file:
+    path: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+    state: "absent"
+  become: true
 
 - name: Delete the lost+found directory
   ansible.builtin.file:
@@ -37,7 +53,7 @@
 - name: Restore the rclone data directory
   when: packages_rclone_data_dir_empty['matched'] == 0 or packages_rclone_restore_pending['stat']['exists']
   environment:
-    RCLONE_CONFIG: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone.config"
+    RCLONE_CONFIG: "/etc/secrets/{{ nodes[target_host]['user'] }}/rclone/rclone.config"
   block:
     - name: Check the remote rclone data directory is empty
       ansible.builtin.shell: |
