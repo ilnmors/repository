@@ -49,7 +49,7 @@ Readur, archived on 2026-07-09 with the Papra release, was moved back to `ansibl
 
 ### Still running in homelab, not yet moved to the repository
 
-homebox, llama, stablediffusion and tandoor ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud had been introduced as the groupware stack (`278dd3c`).
+homebox, llama and stablediffusion ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud had been introduced as the groupware stack (`278dd3c`). tandoor was promoted into `ansible/` on 2026-11-17 (see `docs/operating/tandoor/README.md`).
 
 ### Superseded by an active repository service
 
@@ -99,7 +99,6 @@ homebox, llama, stablediffusion and tandoor ran on the homelab `app` host when t
 | papra | papra.secret_key (generated), papra.oidc.{secret,hash} |
 | paperless | paperless.session_secret (generated), paperless.oidc.{secret,hash}, postgresql.password.paperless |
 | romm | romm.secret_key (generated), romm.oidc.{secret,hash}, postgresql.password.romm |
-| tandoor | tandoor.secret_key (generated), tandoor.oidc.{secret,hash}, postgresql.password.tandoor |
 | trilium | trilium.oidc.{secret,hash} |
 | vikunja | vikunja.session_secret (generated), vikunja.oidc.{secret,hash}, postgresql.password.vikunja |
 | wikijs | wikijs.oidc.{secret,hash}, postgresql.password.wikijs |

@@ -95,10 +95,6 @@ releases:
       name: "stablediffusion"
       repository: "ghcr.io/leejet/stable-diffusion.cpp"
       tag: "master-sycl@sha256:67ccb5d11bf55578f7938daeb7c9fee1d0dd1344c089c090b9065714d7960fd5"
-    tandoor:
-      name: "tandoor"
-      repository: "docker.io/vabene1111/recipes"
-      tag: "2.6.13"
     trilium:
       name: "trilium"
       repository: "docker.io/triliumnext/trilium"

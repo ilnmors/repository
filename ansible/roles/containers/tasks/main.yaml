@@ -223,6 +223,14 @@
   when: target_host in services['containers']['readur']['units']['main']['hosts']
   tags: ["readur"]
 
+- name: Include the tandoor task
+  ansible.builtin.include_tasks:
+    file: "tandoor.yaml"
+    apply:
+      tags: ["tandoor"]
+  when: target_host in services['containers']['tandoor']['units']['main']['hosts']
+  tags: ["tandoor"]
+
 - name: Include the homepage task
   ansible.builtin.include_tasks:
     file: "homepage.yaml"

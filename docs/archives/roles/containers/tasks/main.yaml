@@ -167,14 +167,6 @@
   when: target_host in services['containers']['stablediffusion']['units']['main']['hosts']
   tags: ["stablediffusion"]
 
-- name: Include the tandoor task
-  ansible.builtin.include_tasks:
-    file: "tandoor.yaml"
-    apply:
-      tags: ["tandoor"]
-  when: target_host in services['containers']['tandoor']['units']['main']['hosts']
-  tags: ["tandoor"]
-
 - name: Include the trilium task
   ansible.builtin.include_tasks:
     file: "trilium.yaml"

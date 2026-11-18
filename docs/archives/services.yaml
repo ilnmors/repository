@@ -115,30 +115,6 @@ services:
             models:
               active: "zImage"
               zImage: "--diffusion-model /models/zImage/moodyRealMix_zitV7Global-Q8_0.gguf \\\n--llm /models/zImage/Qwen3-4B-Instruct-2507-Q4_K_M.gguf \\\n--vae /models/zImage/ae.safetensors \\\n--backend gpu \\\n--cfg-scale 1.0 \\\n--steps 9 \\\n--vae-tiling \\\n--vae-tile-size 32x32 \\\n--vae-tile-overlap 0.5\n"
-    tandoor:
-      units:
-        main:
-          release: "tandoor"
-          hosts: ["app"]
-          domain:
-            public: "tandoor"
-            internal: "tandoor.app"
-          ports:
-            http:
-              protocol: "tcp"
-              int: 8003
-              container: 80
-          dependency:
-            web:
-              status: true
-            db:
-              status: true
-              type: "postgresql"
-            oidc:
-              status: true
-              redirect_uris: ["/accounts/oidc/authelia/login/callback/"]
-              scopes: ["openid", "profile", "email"]
-              auth_method: "client_secret_basic"
     gitea:
       units:
         main:

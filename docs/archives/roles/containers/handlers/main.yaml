@@ -275,18 +275,6 @@
   listen: "notification_restart_stablediffusion"
   ignore_errors: true
 
-- name: Restart the tandoor.service
-  ansible.builtin.systemd_service:
-    scope: "user"
-    name: "tandoor.service"
-    state: "restarted"
-    daemon_reload: true
-  when: not (containers_tandoor_started['changed'] | default(false))
-  changed_when: false
-  register: "result_restart_tandoor"
-  listen: "notification_restart_tandoor"
-  ignore_errors: true
-
 - name: Restart the trilium.service
   ansible.builtin.systemd_service:
     scope: "user"

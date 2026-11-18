@@ -977,6 +977,30 @@ services:
               scopes: ["openid", "profile", "email"]
               auth_method: "client_secret_basic"
               pkce: true
+    tandoor:
+      units:
+        main:
+          release: "tandoor"
+          hosts: ["app"]
+          domain:
+            public: "tandoor"
+            internal: "tandoor.app"
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8003
+              container: 80
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/accounts/oidc/authelia/login/callback/"]
+              scopes: ["openid", "profile", "email"]
+              auth_method: "client_secret_basic"
     homepage:
       units:
         main:

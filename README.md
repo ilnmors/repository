@@ -22,7 +22,7 @@ Infrastructure as code for a single-node homelab: one physical hypervisor, three
 | auth | Public entry point: Caddy with the CrowdSec bouncer, and Authelia for single sign-on (OIDC and forward auth). |
 | app | User applications behind their own Caddy, listed below. |
 
-Applications on app: BookStack, Collabora, Forgejo, Homepage, Immich, Kaneo, Linkding, Mastodon, Open WebUI, Outline, OxiCloud, Quartermaster (local LLM and image models), Readur, SnappyMail, Sure, Vaultwarden.
+Applications on app: BookStack, Collabora, Forgejo, Homepage, Immich, Kaneo, Linkding, Mastodon, Open WebUI, Outline, OxiCloud, Quartermaster (local LLM and image models), Readur, SnappyMail, Sure, Tandoor, Vaultwarden.
 
 Every container runs as a rootless Podman quadlet under a per-host service account.
 

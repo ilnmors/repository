@@ -23,6 +23,12 @@
         description: Money & personal finance
         href: https://{{ services['containers']['sure']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
         siteMonitor: http://host.containers.internal:{{ services['containers']['sure']['units']['main']['ports']['http']['int'] }}
+    - Tandoor:
+        id: tandoor
+        icon: tandoor-recipes
+        description: Recipes & meal plans
+        href: https://{{ services['containers']['tandoor']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}
+        siteMonitor: http://host.containers.internal:{{ services['containers']['tandoor']['units']['main']['ports']['http']['int'] }}
     - Mastodon:
         id: mastodon
         icon: mastodon

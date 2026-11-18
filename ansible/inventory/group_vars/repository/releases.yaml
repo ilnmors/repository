@@ -262,6 +262,10 @@ releases:
       name: "readur"
       repository: "ghcr.io/readur/readur"
       tag: "3.1.2"
+    tandoor:
+      name: "tandoor"
+      repository: "docker.io/vabene1111/recipes"
+      tag: "2.7.3"
     homepage:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"
