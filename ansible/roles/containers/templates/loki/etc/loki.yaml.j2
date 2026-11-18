@@ -1,7 +1,7 @@
 {% set loki = services['containers']['loki']['units']['main'] %}
 ---
 # Single-binary Loki on the local filesystem. Alloy pushes with tenant {{ site['domain']['internal'] }};
-# Grafana reads with the same X-Scope-OrgID. Alert rules are evaluated by Grafana, so the ruler is off.
+# Grafana reads with the same X-Scope-OrgID. Alert rules are evaluated by Grafana; the ruler only sees an empty directory.
 auth_enabled: true
 
 server:
@@ -44,6 +44,14 @@ limits_config:
   volume_enabled: true
   max_query_series: 5000
   max_entries_limit_per_query: 10000
+
+# The single binary always starts the ruler module and fails without a rules store, so point it
+# at an empty local directory; alert rules stay in Grafana.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
 
 compactor:
   working_directory: /loki/compactor

@@ -27,6 +27,7 @@
     - "{{ nodes[target_host]['paths']['home'] }}/containers/loki/ssl"
     - "{{ nodes[target_host]['paths']['data'] }}/containers/loki"
     - "{{ nodes[target_host]['paths']['data'] }}/containers/loki/data"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/loki/data/rules"
   become: true
 
 - name: Deploy the loki configuration
