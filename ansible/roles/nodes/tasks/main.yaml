@@ -87,9 +87,7 @@
     file: "timesyncd.yaml"
     apply:
       tags: ["timesyncd"]
-  when:
-    - not nodes[target_host]['control_node']
-    - target_host not in services['packages']['chrony']['units']['main']['hosts']
+  when: target_host not in services['packages']['chrony']['units']['main']['hosts']
   tags: ["timesyncd"]
 
 - name: Include the physical-disk task

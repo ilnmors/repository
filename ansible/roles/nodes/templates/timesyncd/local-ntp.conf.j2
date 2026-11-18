@@ -1,3 +1,5 @@
 [Time]
-NTP={{ services['packages']['chrony']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}
+# The control node is a laptop that also runs away from home: list public servers after the local one,
+# because timesyncd ignores FallbackNTP whenever NTP= is set.
+NTP={{ services['packages']['chrony']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}{{ ' 0.debian.pool.ntp.org 1.debian.pool.ntp.org' if nodes[target_host]['control_node'] else '' }}
 FallbackNTP=0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org

@@ -85,6 +85,8 @@ ansible-playbook playbooks/nodes/console.yaml --tags site
 
 Run as the Console user. The playbook loads encrypted secrets, reads the declared sudo password, and configures the account's operational services. Node templates replace their managed configuration files; this is not a snapshot of every manual desktop setting.
 
+Time is synchronized by systemd-timesyncd (nodes role, `timesyncd` tag) against `ntp.<internal domain>` first and the Debian pool next, so the laptop keeps time away from home too.
+
 ### Local code-server
 
 - [services.yaml](../ansible/inventory/group_vars/repository/services.yaml) declares `code`, its web/PKI dependency and HTTP backend.
