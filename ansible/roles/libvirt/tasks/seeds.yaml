@@ -29,11 +29,32 @@
   register: "libvirt_vm_user_data"
   no_log: true
 
+# The same static addresses as nodes/templates/networkd/common/20-lan.network. Without them the first
+# boot has no configured link and systemd-networkd-wait-online waits out its 120 s timeout before
+# write_files installs the networkd files. user-data removes this cloud-init copy before the reboot.
 - name: Create the temporary network-config
+  vars:
+    libvirt_vm_segment: "{{ networks['segments']['server'] }}"
   ansible.builtin.copy:
     content: |
       version: 2
-      ethernets: {}
+      ethernets:
+        lan:
+          match:
+            macaddress: "{{ nodes[target_vm]['system']['nic']['lan']['mac'] }}"
+          accept-ra: false
+          addresses:
+            - "{{ libvirt_vm_segment['hosts'][target_vm]['ipv4'] }}/{{ libvirt_vm_segment['subnet']['ipv4'] | split('/') | last }}"
+            - "{{ libvirt_vm_segment['hosts'][target_vm]['ipv6'] }}/{{ libvirt_vm_segment['subnet']['ipv6'] | split('/') | last }}"
+          routes:
+            - to: "default"
+              via: "{{ libvirt_vm_segment['gateway']['ipv4'] }}"
+            - to: "default"
+              via: "{{ libvirt_vm_segment['gateway']['ipv6'] }}"
+          nameservers:
+            addresses:
+              - "{{ libvirt_vm_segment['hosts']['bind']['ipv4'] }}"
+              - "{{ libvirt_vm_segment['hosts']['bind']['ipv6'] }}"
     dest: "/run/user/{{ nodes[target_host]['uid'] }}/{{ target_vm }}-network-config"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"

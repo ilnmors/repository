@@ -58,7 +58,15 @@ write_files:
       permissions: "0640"
 {% endfor %}
 
+    # The networkd files above own the network from the second boot; cloud-init only bridges the first.
+    - path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+      content: |
+        network: {config: disabled}
+      owner: "root:root"
+      permissions: "0644"
+
 runcmd:
+    - rm -f /etc/systemd/network/10-cloud-init-*.network /etc/systemd/network/10-cloud-init-*.link /etc/netplan/50-cloud-init.yaml
     - groupmod -g {{ group['gid'] }} {{ group['name'] }}
     - chown -R {{ nodes[target_vm]['user'] }}:{{ group['name'] }} {{ nodes[target_vm]['paths']['home'] }}
     - update-initramfs -u
