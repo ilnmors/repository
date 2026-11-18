@@ -1,4 +1,6 @@
 ---
+# No validate: the Debian AppArmor profile lets kea-dhcp4 read only /etc/kea and grants no
+# dac_override, so it cannot check template's temporary file under ~/.ansible/tmp.
 - name: Deploy the kea-dhcp4 configuration
   ansible.builtin.template:
     src: "kea/kea-dhcp4.conf.j2"
@@ -6,7 +8,6 @@
     owner: "_kea"
     group: "_kea"
     mode: "0600"
-    validate: "/usr/sbin/kea-dhcp4 -t %s"
   become: true
   notify: "notification_restart_kea"
 
