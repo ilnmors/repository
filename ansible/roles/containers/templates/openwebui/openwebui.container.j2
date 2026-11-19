@@ -27,9 +27,11 @@ Secret=OPEN_WEBUI_SECRET_KEY,type=env,target=WEBUI_SECRET_KEY
 Environment="ENABLE_API_KEYS=true"
 # Every API key, admin keys included, reaches only the OpenAI-compatible model endpoints
 # (chat, model list, embeddings); chats, files, users and settings stay out of reach.
+# /api/v1/chat/completions is the same endpoint for clients that append /v1 (Sure's ruby-openai);
+# /api/v1/models is left out because the prefix would also open the model management API.
 # Service keys belong to dedicated non-admin users granted features.api_keys through a group.
 Environment="ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS=true"
-Environment="API_KEYS_ALLOWED_ENDPOINTS=/api/chat/completions,/api/models,/api/embeddings"
+Environment="API_KEYS_ALLOWED_ENDPOINTS=/api/chat/completions,/api/v1/chat/completions,/api/models,/api/embeddings"
 # We use OpenAI-compatible backends, not Ollama
 Environment="ENABLE_OLLAMA_API=false"
 

@@ -59,12 +59,18 @@ Environment="WEBAUTHN_ALLOWED_ORIGINS=https://{{ services['containers']['sure'][
 Environment="EXCHANGE_RATE_PROVIDER=yahoo_finance"
 Environment="SECURITIES_PROVIDER=yahoo_finance"
 
-# AI backend
+# AI backend: the careful local chat model through Open WebUI (financial data favours accuracy over speed).
+# These variables lock the matching fields in Settings > Self-hosting. ruby-openai appends /v1, so
+# requests go to /api/v1/chat/completions, which Open WebUI allows for API keys.
 Environment="ASSISTANT_TYPE=builtin"
-# The LLM provider (URI base, access token, model, context window, timeouts) is set in
-# Settings > Self-hosting. Leave the OPENAI_*/LLM_*/AI_RESPONSE_TIMEOUT variables unset:
-# when present they lock those fields. An Open WebUI API key with
-# https://openwebui.<public domain>/api works as the OpenAI-compatible endpoint.
+Environment="LLM_PROVIDER=openai"
+Environment="OPENAI_URI_BASE=https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api"
+Environment="OPENAI_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['chat_models'][1] }}"
+Secret=SURE_OPENAI_ACCESS_TOKEN,type=env,target=OPENAI_ACCESS_TOKEN
+# quartermaster shares a 65536-token cache between two parallel requests.
+Environment="LLM_CONTEXT_WINDOW=32768"
+# Long enough for a model swap on the RX 7900 XT plus a long answer.
+Environment="OPENAI_REQUEST_TIMEOUT=600"
 Environment="ASSISTANT_MAX_TOOL_CALL_ITERATIONS=2"
 
 # S3

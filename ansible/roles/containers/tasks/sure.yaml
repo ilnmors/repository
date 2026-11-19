@@ -57,6 +57,8 @@
         value: "{{ secrets['sure']['oidc']['secret'] }}"
       - name: "SURE_S3_SECRET_KEY"
         value: "{{ secrets['rustfs']['password']['sure'] }}"
+      - name: "SURE_OPENAI_ACCESS_TOKEN"
+        value: "{{ secrets['openwebui']['api']['console'] }}"
   no_log: true
 
 - name: Create the sure directory
