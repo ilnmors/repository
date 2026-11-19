@@ -25,6 +25,11 @@ Environment="ENABLE_PASSWORD_CHANGE_FORM=false"
 Secret=OPEN_WEBUI_SECRET_KEY,type=env,target=WEBUI_SECRET_KEY
 # Sure uses an Open WebUI API key as its AI gateway.
 Environment="ENABLE_API_KEYS=true"
+# Every API key, admin keys included, reaches only the OpenAI-compatible model endpoints
+# (chat, model list, embeddings); chats, files, users and settings stay out of reach.
+# Service keys belong to dedicated non-admin users granted features.api_keys through a group.
+Environment="ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS=true"
+Environment="API_KEYS_ALLOWED_ENDPOINTS=/api/chat/completions,/api/models,/api/embeddings"
 # We use OpenAI-compatible backends, not Ollama
 Environment="ENABLE_OLLAMA_API=false"
 
