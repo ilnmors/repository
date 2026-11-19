@@ -65,14 +65,19 @@ Secret=OPEN_WEBUI_OAUTH_CLIENT_SECRET,type=env,target=OAUTH_CLIENT_SECRET
 # Quartermaster routes every model (llama-server, sd-server) and manages the VRAM.
 Environment="OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
 Environment="OPENAI_API_KEY=none"
+{% if (services['containers']['openwebui']['units']['main']['ai']['chat_models'] | default([])) | length > 0 %}
+# Quartermaster also serves the embedding and image models; list only the chat models in the picker.
+Environment='OPENAI_API_CONFIGS={{ {"0": {"enable": true, "model_ids": services['containers']['openwebui']['units']['main']['ai']['chat_models']}} | to_json }}'
+Environment="DEFAULT_MODELS={{ services['containers']['openwebui']['units']['main']['ai']['chat_models'] | first }}"
+{% endif %}
 {% if (services['containers']['openwebui']['units']['main']['ai']['image_model'] | length) > 0 %}
 Environment="ENABLE_IMAGE_GENERATION=true"
 Environment="IMAGE_GENERATION_ENGINE=openai"
 Environment="IMAGES_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
 Environment="IMAGES_OPENAI_API_KEY=none"
 Environment="IMAGE_GENERATION_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['image_model'] }}"
-# sd-server renders 512x512 correctly but noise at 1024x1024 on the Iris Xe Vulkan backend (master-1098, with or without flash attention).
-Environment="IMAGE_SIZE=512x512"
+# sd-server runs on the RX 7900 XT; on the Iris Xe 1024x1024 rendered noise and took about ten minutes.
+Environment="IMAGE_SIZE=1024x1024"
 {% else %}
 Environment="ENABLE_IMAGE_GENERATION=false"
 {% endif %}
@@ -93,9 +98,7 @@ Environment="RAG_EMBEDDING_ENGINE=openai"
 Environment="RAG_EMBEDDING_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['embedding_model'] }}"
 Environment="RAG_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
 Environment="RAG_OPENAI_API_KEY=none"
-# Asymmetric embedding
-Environment="RAG_EMBEDDING_QUERY_PREFIX=query: "
-Environment="RAG_EMBEDDING_CONTENT_PREFIX=document: "
+# BGE-M3 embeds queries and documents the same way, so no query or document prefix.
 {% endif %}
 # Chunking
 Environment="RAG_TEXT_SPLITTER=token"
