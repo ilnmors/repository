@@ -1,0 +1,28 @@
+{# Open WebUI lists the chat models in services.containers.openwebui.units.main.ai: [fast, careful]. #}
+{% set ai = services['containers']['openwebui']['units']['main']['ai'] %}
+# Continue in code-server: the local models through Open WebUI (its API keys reach only the
+# chat, model and embedding endpoints). The key is read from ~/.continue/.env.
+name: Local models
+version: 1.0.0
+schema: v1
+models:
+  - name: Qwen3.8 27B
+    provider: openai
+    model: {{ ai['chat_models'][1] }}
+    apiBase: https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api
+    apiKey: {{ '${{ secrets.OPENWEBUI_API_KEY }}' }}
+    roles: [chat, edit, apply]
+    capabilities: [tool_use, image_input]
+    defaultCompletionOptions:
+      contextLength: 65536
+      maxTokens: 16384
+  - name: Gemma 4 26B-A4B
+    provider: openai
+    model: {{ ai['chat_models'][0] }}
+    apiBase: https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api
+    apiKey: {{ '${{ secrets.OPENWEBUI_API_KEY }}' }}
+    roles: [chat, edit, apply]
+    capabilities: [tool_use, image_input]
+    defaultCompletionOptions:
+      contextLength: 65536
+      maxTokens: 16384

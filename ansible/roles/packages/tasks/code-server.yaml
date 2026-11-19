@@ -25,6 +25,7 @@
     - "redhat.vscode-yaml"
     - "ms-python.python"
     - "mhutchie.git-graph"
+    - "continue.continue"
   when: item not in packages_code_server_extensions['stdout_lines']
   changed_when: true
 
@@ -43,6 +44,31 @@
     executable: "/bin/bash"
   register: "packages_code_server_python_tools"
   changed_when: "'Python environment tools installed:' in packages_code_server_python_tools['stdout']"
+
+- name: Create the Continue directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/.continue"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0700"
+
+- name: Deploy the Continue configuration
+  ansible.builtin.template:
+    src: "continue/config.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.continue/config.yaml"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+
+- name: Deploy the Open WebUI API key for Continue
+  ansible.builtin.copy:
+    content: "OPENWEBUI_API_KEY={{ secrets['openwebui']['api']['console'] }}\n"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.continue/.env"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  no_log: true
 
 - name: Create the VS Code settings directory
   ansible.builtin.file:
