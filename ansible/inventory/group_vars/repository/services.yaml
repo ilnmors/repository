@@ -42,6 +42,11 @@ services:
         main:
           release: "step"
           hosts: ["console"]
+    opencode:
+      units:
+        main:
+          release: "opencode"
+          hosts: ["console"]
     code-server:
       units:
         main:

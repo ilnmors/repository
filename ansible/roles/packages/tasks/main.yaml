@@ -48,6 +48,14 @@
   when: target_host in services['packages']['code-server']['units']['main']['hosts']
   tags: ["code-server"]
 
+- name: Include the opencode task
+  ansible.builtin.include_tasks:
+    file: "opencode.yaml"
+    apply:
+      tags: ["opencode"]
+  when: target_host in services['packages']['opencode']['units']['main']['hosts']
+  tags: ["opencode"]
+
 - name: Include the wireguard task
   ansible.builtin.include_tasks:
     file: "wireguard.yaml"

@@ -1,0 +1,53 @@
+---
+# OpenCode (terminal coding agent) on the local models through Open WebUI. Claude Code hands it
+# fully specified work with "opencode run --agent delegate"; see templates/opencode/opencode.jsonc.j2.
+- name: Create the opencode directories
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - path: "{{ nodes[target_host]['paths']['home'] }}/.local/bin"
+      mode: "0755"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/.local/lib/opencode/{{ releases['packages']['opencode']['version'] }}"
+      mode: "0755"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/.config/opencode"
+      mode: "0700"
+
+- name: Install the opencode binary
+  ansible.builtin.unarchive:
+    src: "https://github.com/anomalyco/opencode/releases/download/v{{ releases['packages']['opencode']['version'] }}/\
+      opencode-linux-{{ 'arm64' if packages_host_architecture == 'arm64' else 'x64' }}.tar.gz"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.local/lib/opencode/{{ releases['packages']['opencode']['version'] }}"
+    remote_src: true
+    creates: "{{ nodes[target_host]['paths']['home'] }}/.local/lib/opencode/{{ releases['packages']['opencode']['version'] }}/opencode"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+
+- name: Link the opencode command
+  ansible.builtin.file:
+    src: "{{ nodes[target_host]['paths']['home'] }}/.local/lib/opencode/{{ releases['packages']['opencode']['version'] }}/opencode"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.local/bin/opencode"
+    state: "link"
+    force: true
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+
+- name: Deploy the Open WebUI API key for opencode
+  ansible.builtin.copy:
+    content: "{{ secrets['openwebui']['api']['console'] }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/opencode/openwebui-api-key"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0600"
+  no_log: true
+
+- name: Deploy the opencode configuration
+  ansible.builtin.template:
+    src: "opencode/opencode.jsonc.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/opencode/opencode.jsonc"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"

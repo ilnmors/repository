@@ -106,6 +106,10 @@ releases:
       source: "github"
       name: "code-server"
       version: "4.145.2"
+    opencode:
+      source: "github"
+      name: "opencode"
+      version: "1.19.6"
     kopia:
       source: "github"
       name: "kopia"
