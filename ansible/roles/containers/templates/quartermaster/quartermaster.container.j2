@@ -17,16 +17,19 @@ AddDevice=/dev/dri:/dev/dri
 PodmanArgs=--group-add keep-groups
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data:/data:rw
-# Downloaded from the dashboard's model hub; they can be fetched again, so they stay out of DATA and its backups.
-Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config:/data/config:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:ro
 
 Environment="TZ={{ site['timezone'] }}"
-# The image entrypoint seeds the autogen control file on first start.
+# The container is recreated on every start; keeping the Mesa (RADV) shader cache in /data saves the
+# shader compilation that otherwise doubles the first model load after a restart.
+Environment="MESA_SHADER_CACHE_DIR=/data/cache/mesa"
+Environment="MESA_SHADER_CACHE_MAX_SIZE=4G"
+# The image entrypoint seeds its autogen file on first start; keep it out of the read-only config mount.
 Environment="QM_GENERATE_FILE=/data/quartermaster-generate.yaml"
 
-# Generate mode: models, settings and per-model commands are managed in the dashboard, which
-# regenerates and hot-reloads /data/config.yaml. Naming only -config would freeze it as written.
-Exec=-config /data/config.yaml -generate /data/quartermaster-generate.yaml -models-dir /data/models -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open
+# Models and their commands come from Ansible: without -generate the config is loaded as written.
+Exec=-config /data/config/config.yaml -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open
 
 [Service]
 Restart=always

@@ -3,6 +3,29 @@
   ansible.builtin.set_fact:
     target_container: "quartermaster"
 
+- name: Load the quartermaster model files
+  ansible.builtin.set_fact:
+    containers_quartermaster_models: "{{ lookup('ansible.builtin.file', role_path ~ '/templates/quartermaster/models.yaml') | from_yaml }}"
+
+# The container path of every model file by model and role, for config/config.yaml.j2.
+- name: Set the quartermaster model file paths
+  ansible.builtin.set_fact:
+    containers_quartermaster_files: >-
+      {%- set containers_files = {} -%}
+      {%- for containers_model, containers_entries in containers_quartermaster_models.items() -%}
+      {%-   set _ = containers_files.update({containers_model: dict(containers_entries | map(attribute='role') | zip(containers_entries | map(attribute='url') | map('basename') | map('regex_replace', '^', '/data/models/' ~ containers_model ~ '/')))}) -%}
+      {%- endfor -%}
+      {{ containers_files }}
+
+# Open WebUI calls these ids from services.yaml; a model renamed on only one side would fail at request time.
+- name: Check the Open WebUI model ids against the quartermaster models
+  ansible.builtin.assert:
+    that:
+      - item in containers_quartermaster_models
+    fail_msg: "services.containers.openwebui.units.main.ai names '{{ item }}', which templates/quartermaster/models.yaml does not define."
+    quiet: true
+  loop: "{{ services['containers']['openwebui']['units']['main']['ai'] | dict2items | map(attribute='value') | flatten | select | list }}"
+
 - name: Create the quartermaster directory
   ansible.builtin.file:
     path: "{{ item }}"
@@ -11,16 +34,114 @@
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0770"
   loop:
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models"
   become: true
 
+# Build first: a broken image shows up before the long model downloads.
 - name: Deploy the quartermaster image
   vars:
     containers_image_notifications: "notification_restart_quartermaster"
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
+
+- name: Create the quartermaster model directories
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item }}"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0770"
+  loop: "{{ containers_quartermaster_models | list }}"
+
+- name: Find the quartermaster model directories
+  ansible.builtin.find:
+    paths: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models"
+    file_type: "directory"
+  register: "containers_quartermaster_model_directories"
+
+# A model dropped from models.yaml leaves DATA too; the sync below removes it from HOME.
+- name: Delete the undeclared quartermaster model directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "absent"
+  loop: >-
+    {{
+      containers_quartermaster_model_directories['files'] | map(attribute='path')
+      | reject('in', containers_quartermaster_models | list | map('regex_replace', '^', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/'))
+      | list
+    }}
+
+- name: Find the quartermaster model files
+  ansible.builtin.find:
+    paths: "{{ containers_quartermaster_models | list | map('regex_replace', '^', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/') | list }}"
+    file_type: "file"
+    hidden: true
+  register: "containers_quartermaster_found_files"
+
+# A replaced file (another quant, another build) has another name; the old one is removed.
+- name: Delete the undeclared quartermaster model files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "absent"
+  loop: >-
+    {{
+      containers_quartermaster_found_files['files'] | map(attribute='path')
+      | reject('in', containers_quartermaster_files.values() | map('dict2items') | flatten | map(attribute='value')
+        | map('regex_replace', '^/data/models/', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/'))
+      | list
+    }}
+
+- name: Check the quartermaster model files
+  ansible.builtin.stat:
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item[0]['key'] }}/{{ item[1]['url'] | basename }}"
+    get_checksum: false
+  loop: "{{ containers_quartermaster_models | dict2items | subelements('value') }}"
+  loop_control:
+    label: "{{ item[0]['key'] }}/{{ item[1]['url'] | basename }}"
+  register: "containers_quartermaster_model_files"
+
+# DATA keeps the backed-up copy. Only missing files are fetched: get_url would otherwise download a whole
+# model again just to compare it, because Hugging Face answers its If-Modified-Since request with 200.
+- name: Download the missing quartermaster model files
+  ansible.builtin.get_url:
+    url: "{{ item['item'][1]['url'] }}"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item['item'][0]['key'] }}/{{ item['item'][1]['url'] | basename }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+    timeout: 60
+  loop: "{{ containers_quartermaster_model_files['results'] }}"
+  loop_control:
+    label: "{{ item['item'][0]['key'] }}/{{ item['item'][1]['url'] | basename }}"
+  when: not item['stat']['exists']
+  notify: "notification_restart_quartermaster"
+
+# HOME keeps the copy that runs, on the guest's NVMe disk.
+- name: Synchronize the quartermaster models
+  delegate_to: "{{ inventory_hostname }}"
+  ansible.posix.synchronize:
+    src: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models/"
+    owner: true
+    group: true
+    perms: true
+    delete: true
+  notify: "notification_restart_quartermaster"
+
+- name: Deploy the quartermaster configuration
+  ansible.builtin.template:
+    src: "quartermaster/config/config.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config/config.yaml"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_quartermaster"
 
 - name: Deploy the container file
   ansible.builtin.template:

@@ -860,7 +860,7 @@ services:
           dependency:
             web:
               status: true
-          # Models, backends and per-model commands are managed in the dashboard (generate mode).
+          # Models, backends and routing groups: templates/quartermaster/config/config.yaml.j2 and models.yaml.
     openwebui:
       units:
         main:
@@ -897,8 +897,10 @@ services:
               pkce: true
           # Quartermaster model ids. Empty values disable RAG embedding and image generation.
           ai:
-            embedding_model: "LFM2.5-Embedding-350M"
-            image_model: "zImage-moodyRealMix"
+            # Only these appear in the model picker; the first is the default (fast), the second for harder work.
+            chat_models: ["gemma-4-26b-a4b-heretic", "qwen3.8-27b-heretic"]
+            embedding_model: "bge-m3"
+            image_model: "qwen-image-2.1"
     sure:
       units:
         main:

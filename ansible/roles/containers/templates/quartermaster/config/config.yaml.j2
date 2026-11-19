@@ -1,0 +1,88 @@
+# Quartermaster (llama-swap style) config.
+# llama-server and sd-server are bundled in the image under /opt/quartermaster/backends;
+# their versions and paths follow releases.yaml (build.llama_server, build.sd_server).
+# The model files are listed in ../models.yaml, synced from DATA to HOME and mounted at /data/models/<model>/;
+# containers_quartermaster_files maps each model and role (model, mmproj, mtp, ...) to its path.
+{% set qm = containers_quartermaster_files %}
+# Open WebUI refers to these model ids through services.containers.openwebui.units.main.ai.
+#
+# Devices as llama-server lists them: Vulkan0 is the Iris Xe (shared memory), Vulkan1 the RX 7900 XT (20 GB).
+# The chat models and image generation take turns on the RX 7900 XT (any two need over 20 GB); the Iris Xe
+# keeps the embedding model loaded, but renders a 1024x1024 image in about ten minutes.
+startPort: 5800
+globalTTL: 0
+
+macros:
+  llama: >-
+    /opt/quartermaster/backends/bin/llama-server/{{ releases['containers']['quartermaster']['build']['llama_server']['tag'] }}-vulkan/llama-{{ releases['containers']['quartermaster']['build']['llama_server']['tag'] }}/llama-server
+    --host 127.0.0.1 --port ${PORT} --n-gpu-layers 999 --kv-unified
+    --cache-type-k q8_0 --cache-type-v q8_0 --flash-attn auto --jinja
+    --batch-size 2048 --ubatch-size 2048
+  sd: >-
+    /opt/quartermaster/backends/bin/sd-server/{{ releases['containers']['quartermaster']['build']['sd_server']['tag'] }}-vulkan/sd-server
+    --listen-ip 127.0.0.1 --listen-port ${PORT}
+
+models:
+  # Speculative decoding: the MTP head drafts up to three tokens that the model verifies in one pass.
+  gemma-4-26b-a4b-heretic:
+    cmd: >-
+      ${llama} --device Vulkan1
+      --model {{ qm['gemma-4-26b-a4b-heretic']['model'] }}
+      --mmproj {{ qm['gemma-4-26b-a4b-heretic']['mmproj'] }}
+      --spec-type draft-mtp --model-draft {{ qm['gemma-4-26b-a4b-heretic']['mtp'] }}
+      --device-draft Vulkan1 --gpu-layers-draft 999 --spec-draft-n-max 3
+      --ctx-size 65536 --parallel 2
+  # The dense model keeps the default 512 ubatch: with 2048 its compute buffers and the MTP state spill
+  # about 1.8 GB out of VRAM and decoding drops from 65 to 6 t/s (measured 2026-11-19).
+  qwen3.8-27b-heretic:
+    cmd: >-
+      ${llama} --device Vulkan1
+      --model {{ qm['qwen3.8-27b-heretic']['model'] }}
+      --mmproj {{ qm['qwen3.8-27b-heretic']['mmproj'] }}
+      --spec-type draft-mtp --spec-draft-n-max 3 --ubatch-size 512
+      --ctx-size 65536 --parallel 2
+  bge-m3:
+    cmd: >-
+      ${llama} --device Vulkan0
+      --model {{ qm['bge-m3']['model'] }}
+      --embedding --pooling cls --ctx-size 8192 --batch-size 8192 --ubatch-size 8192 --parallel 1
+  qwen-image-2.1:
+    # sd-server has no device option; this limits its Vulkan backend to the RX 7900 XT.
+    env:
+      - "GGML_VK_VISIBLE_DEVICES=1"
+    # Turbo: the fixed 8-step sigma schedule at CFG 1. Everything stays in VRAM (15.9 GB peak at 1024x1024);
+    # offloading to the CPU took 44.7 s instead of 26.3 s and pushed the chat models out of the page cache.
+    cmd: >-
+      ${sd} --diffusion-model {{ qm['qwen-image-2.1']['diffusion'] }}
+      --llm {{ qm['qwen-image-2.1']['llm'] }}
+      --vae {{ qm['qwen-image-2.1']['vae'] }}
+      --sigmas qwen-image-2.1-turbo --steps 8 --cfg-scale 1.0 --sampling-method euler
+    # sd-server has no /health; /v1/models answers once the weights are loaded.
+    checkEndpoint: "/v1/models"
+
+# The embedding model stays loaded on the Iris Xe; chat and image generation swap on the RX 7900 XT.
+routing:
+  router:
+    use: group
+    settings:
+      groups:
+        igpu:
+          swap: false
+          exclusive: false
+          persistent: true
+          members:
+            - "bge-m3"
+        dgpu:
+          swap: true
+          exclusive: false
+          persistent: false
+          members:
+            - "gemma-4-26b-a4b-heretic"
+            - "qwen3.8-27b-heretic"
+            - "qwen-image-2.1"
+
+hooks:
+  on_startup:
+    preload:
+      - "bge-m3"
+      - "gemma-4-26b-a4b-heretic"
