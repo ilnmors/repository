@@ -242,14 +242,16 @@ releases:
       name: "quartermaster"
       repository: "ghcr.io/quartermaster-labs/quartermaster"
       tag: "v1.9.1"
-      # Rebuilt on a newer Ubuntu with the Mesa Vulkan drivers (upstream ships the loader only) and a newer
-      # sd-server: the bundled master-841 renders noise on the Iris Xe Vulkan backend, and newer releases need glibc 2.43.
+      # Rebuilt on a newer Ubuntu with the Mesa Vulkan drivers (upstream ships the loader only). Both backends come
+      # from their own releases instead of the copies bundled upstream, so they follow llama.cpp and sd.cpp directly.
       build:
         status: true
         base:
           tag: "26.04"
+        llama_server:
+          tag: "b12521"
         sd_server:
-          tag: "master-1098-b521db4"
+          tag: "master-1106-532d2c1"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"

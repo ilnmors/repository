@@ -1,6 +1,27 @@
 {% set qm = releases['containers']['quartermaster'] %}
 {% set sd_tag = qm['build']['sd_server']['tag'] %}
+{% set llama_tag = qm['build']['llama_server']['tag'] %}
 FROM {{ qm['repository'] }}:{{ qm['tag'] }} AS upstream
+
+# llama-server release archive: llama-<tag>-bin-ubuntu-vulkan-x64.tar.gz holds llama-<tag>/.
+FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }} AS llama-server
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /out && \
+    curl -fsSL https://github.com/ggml-org/llama.cpp/releases/download/{{ llama_tag }}/llama-{{ llama_tag }}-bin-ubuntu-vulkan-x64.tar.gz \
+      | tar -xz -C /out
+# Quartermaster adopts a backend directory only when it holds this install record.
+RUN printf '%s\n' \
+      '{' \
+      '  "component": "llama-server",' \
+      '  "version": "{{ llama_tag }}",' \
+      '  "variant": "vulkan",' \
+      '  "exe": "llama-{{ llama_tag }}/llama-server",' \
+      '  "asset": "llama-{{ llama_tag }}-bin-ubuntu-vulkan-x64.tar.gz",' \
+      '  "installedAt": "1970-01-01T00:00:00Z",' \
+      '  "sizeBytes": 0' \
+      '}' > /out/.qm-install.json
 
 # sd-server release zip: sd-master-<commit>-bin-Linux-Ubuntu-<base>-x86_64-vulkan.zip, extracted flat.
 FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }} AS sd-server
@@ -11,7 +32,7 @@ RUN curl -fsSL -o /tmp/sd-server.zip \
       https://github.com/leejet/stable-diffusion.cpp/releases/download/{{ sd_tag }}/sd-master-{{ sd_tag.split('-') | last }}-bin-Linux-Ubuntu-{{ qm['build']['base']['tag'] }}-x86_64-vulkan.zip && \
     unzip -q /tmp/sd-server.zip -d /out && \
     chmod 0755 /out/sd-server /out/sd-cli
-# Quartermaster adopts a backend directory only when it holds this install record (as upstream's llama-server does).
+# Quartermaster adopts a backend directory only when it holds this install record.
 RUN printf '%s\n' \
       '{' \
       '  "component": "sd-server",' \
@@ -31,7 +52,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates libgomp1 libvulkan1 mesa-vulkan-drivers && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=upstream /usr/local/bin/quartermaster /usr/local/bin/entrypoint.sh /usr/local/bin/
-COPY --from=upstream /opt/quartermaster/backends/bin/llama-server /opt/quartermaster/backends/bin/llama-server
+COPY --from=llama-server /out /opt/quartermaster/backends/bin/llama-server/{{ llama_tag }}-vulkan
 # The binaries carry RUNPATH $ORIGIN, so the bundled ggml libraries next to them are found.
 COPY --from=sd-server /out /opt/quartermaster/backends/bin/sd-server/{{ sd_tag }}-vulkan
 RUN mkdir -p /data/config /data/models
