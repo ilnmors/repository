@@ -89,7 +89,10 @@ Environment="ENABLE_FOLLOW_UP_GENERATION=false"
 Environment="ENABLE_AUTOCOMPLETE_GENERATION=false"
 # Models must not create or save skills and memories on their own. Skills and memories added by the user
 # still apply: attached skills are inlined into the system prompt and memories into the system context.
-Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false,\"skills\":false,\"memory\":false}}"
+# Image generation is on by default in every chat and, with native function calling, the model calls
+# generate_image itself when asked for a picture (legacy mode would generate one for every message).
+Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false,\"skills\":false,\"memory\":false},\"defaultFeatureIds\":[\"image_generation\"]}"
+Environment="DEFAULT_MODEL_PARAMS={\"function_calling\":\"native\"}"
 Environment="ENABLE_MEMORY_BACKGROUND_REVIEW=false"
 
 # RAG Embedding
