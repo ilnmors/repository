@@ -34,11 +34,12 @@ models:
       --ctx-size 65536 --parallel 2
   # The dense model keeps the default 512 ubatch: with 2048 its compute buffers and the MTP state spill
   # about 1.8 GB out of VRAM and decoding drops from 65 to 6 t/s (measured 2026-11-19).
+  # Its vision encoder runs on the CPU: on the GPU it left about 1 GB in GTT and decoding at 39 t/s.
   qwen3.8-27b-heretic:
     cmd: >-
       ${llama} --device Vulkan1
       --model {{ qm['qwen3.8-27b-heretic']['model'] }}
-      --mmproj {{ qm['qwen3.8-27b-heretic']['mmproj'] }}
+      --mmproj {{ qm['qwen3.8-27b-heretic']['mmproj'] }} --no-mmproj-offload
       --spec-type draft-mtp --spec-draft-n-max 3 --ubatch-size 512
       --ctx-size 65536 --parallel 2
   bge-m3:
