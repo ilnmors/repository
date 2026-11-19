@@ -37,3 +37,14 @@ qwen-image-2.1:
     url: "https://huggingface.co/AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF/resolve/main/Qwen-Image-2.1-Turbo-Uncensored-Q8_0.gguf"
   - role: "vae"
     url: "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+
+# Image generation (trial, 2026-11-19): MiniMax H3-Image, the highest-rated open-weights image model on the
+# Artificial Analysis arena. The pruned DiT in Unsloth's UD-Q4_K_XL (close to Q8 in their LPIPS tests),
+# an uncensored (heretic) Qwen3-VL 32B text encoder and the release VAE.
+minimax-h3-image:
+  - role: "diffusion"
+    url: "https://huggingface.co/unsloth/MiniMax-H3-Image-GGUF/resolve/main/minimax_h3_image_pruned-UD-Q4_K_XL.gguf"
+  - role: "llm"
+    url: "https://huggingface.co/eraiko/Qwen3-VL-32B-Ultra-Heretic-Minimax-H3-GGUF/resolve/main/qwen3-vl-32b-ultra-heretic-minimax-h3-q5_k_m.gguf"
+  - role: "vae"
+    url: "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/resolve/main/vae/diffusion_pytorch_model.safetensors"

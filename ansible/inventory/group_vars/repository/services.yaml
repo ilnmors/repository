@@ -905,7 +905,7 @@ services:
             # Only these appear in the model picker; the first is the default (fast), the second for harder work.
             chat_models: ["gemma-4-26b-a4b-heretic", "qwen3.8-27b-heretic"]
             embedding_model: "bge-m3"
-            image_model: "qwen-image-2.1"
+            image_model: "minimax-h3-image"
     sure:
       units:
         main:
