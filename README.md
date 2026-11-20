@@ -38,8 +38,14 @@ Every container runs as a rootless Podman quadlet under a per-host service accou
 
 ## Getting started
 
+To run this on your own hardware, follow [docs/getting-started.md](docs/getting-started.md): what to change in the inventory, how to create your own secrets and CAs, and the playbook order. The steps for this site:
+
 1. Prepare the console: [docs/console.md](docs/console.md) (collections, secrets, CA hierarchy).
 2. Bring up the hypervisor and the virtual machines: [docs/vmm.md](docs/vmm.md).
 3. Apply each node: `ansible-playbook playbooks/nodes/<node>.yaml`, or everything with `playbooks/site.yaml`.
 
 Day-to-day notes for each running stack are in [docs/operating](docs/operating/README.md). Stacks that were retired, with the reason for each, are in [docs/archives](docs/archives/README.md). How the project got to its current shape is in [docs/history.md](docs/history.md).
+
+## License
+
+GPL-3.0-or-later (see [LICENSE](LICENSE)).
