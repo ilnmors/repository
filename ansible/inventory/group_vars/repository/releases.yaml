@@ -226,6 +226,10 @@ releases:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
       tag: "v4.7.5"
+    mastodon-streaming:
+      name: "mastodon-streaming"
+      repository: "ghcr.io/mastodon/mastodon-streaming"
+      tag: "{{ releases['containers']['mastodon']['tag'] }}"
     kaneo:
       name: "kaneo"
       repository: "ghcr.io/usekaneo/kaneo"
@@ -233,7 +237,11 @@ releases:
     immich:
       name: "immich"
       repository: "ghcr.io/immich-app/immich-server"
-      tag: "v3.4.1"
+      tag: "v3.4.2"
+    immich-ml:
+      name: "immich-ml"
+      repository: "ghcr.io/immich-app/immich-machine-learning"
+      tag: "{{ releases['containers']['immich']['tag'] }}-openvino"
     outline:
       name: "outline"
       repository: "docker.io/outlinewiki/outline"
@@ -276,11 +284,3 @@ releases:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"
       tag: "v2.8.0"
-    mastodon-streaming:
-      name: "mastodon-streaming"
-      repository: "ghcr.io/mastodon/mastodon-streaming"
-      tag: "v4.7.5"
-    immich-ml:
-      name: "immich-ml"
-      repository: "ghcr.io/immich-app/immich-machine-learning"
-      tag: "v3.4.1-openvino"
