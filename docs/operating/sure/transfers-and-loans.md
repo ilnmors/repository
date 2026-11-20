@@ -46,3 +46,21 @@
 - `set_current_balance` on a deposit account moves the opening anchor by (target − cached balance).
   - Calling it on a new account before the first sync uses a cached 0 and lands wrong.
   - Always wait for the sync first.
+
+## Installments (from 2026-11-20)
+
+Banksalad exports carry no installment flag. They book an installment purchase as one row of principal ÷ months on the
+same day of every month (on the Naver Pay account when Naver Pay charged the card). Use the card's monthly statement
+(이용대금명세서, which lists `할부(k/N)` per purchase) to find them, then book:
+
+- **Purchase date:** the full amount (principal per installment × months) on the card account, with the original
+  merchant and category.
+- **Each billed installment k/N:** `<merchant> installment k/N` on the card account, Finance > Interest, dated purchase
+  date + (k − 1) months. Amount = billed amount on the statement − principal ÷ months. Interest-free installments
+  (difference below 3 KRW or negative) get a 0 KRW transaction that only marks the installment.
+- **Split payments converted later** (분할납부: the purchase is already booked in full) get only the installment rows,
+  dated from the conversion date.
+- **Small-sum split payments** (소액합산 분할납부) bundle purchases that are already booked; leave them out. When a card
+  bill does not match the expected amount, book the gap as the small-sum split payment and its fee.
+- Drop the later monthly principal rows of known installments from each new export.
+- After restructuring, re-anchor the card (amount used = limit − remaining limit) and the Naver Pay account.
