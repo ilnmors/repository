@@ -1,0 +1,59 @@
+---
+# Register one PostgreSQL client (containers_postgresql_client) on the running server.
+# Service tasks include this instead of postgresql.yaml; the server itself is deployed by the postgresql tag.
+- name: Validate the PostgreSQL client name
+  ansible.builtin.assert:
+    that:
+      - containers_postgresql_client in containers_postgresql_services
+      - containers_postgresql_client is match('^[a-z][a-z0-9_-]{0,59}$')
+      - containers_postgresql_client not in ['postgres', 'postgresql', 'mariadb', 'mysql', 'root', 'cluster']
+    fail_msg: "Declare dependency.db (type postgresql) for {{ containers_postgresql_client }} with a name of up to 60 lowercase letters, digits, underscores or hyphens."
+    quiet: true
+
+- name: Register the missing PostgreSQL password on secrets.yaml
+  vars:
+    secrets_target: '["postgresql"]["password"][{{ containers_postgresql_client | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['postgresql']['password'][containers_postgresql_client] | default('', true) | length) == 0
+  no_log: true
+
+- name: Check the PostgreSQL server
+  ansible.builtin.shell: |
+    set -euo pipefail
+    /usr/bin/podman exec --user postgres postgresql pg_isready --host 127.0.0.1 --username postgres
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  failed_when: false
+  register: "containers_postgresql_register_ready"
+
+- name: Fail when the PostgreSQL server is not running
+  ansible.builtin.fail:
+    msg: "PostgreSQL is not running on {{ target_host }}. Deploy it first with --tags postgresql."
+  when: containers_postgresql_register_ready['rc'] != 0
+
+- name: Register the PostgreSQL database and account
+  ansible.builtin.shell: |
+    set -euo pipefail
+    /usr/bin/podman exec --interactive --user postgres postgresql \
+      psql --no-psqlrc --username postgres --dbname postgres --set ON_ERROR_STOP=1
+  args:
+    executable: "/bin/bash"
+    stdin: >-
+      {{
+        lookup('ansible.builtin.template', 'postgresql/init/accounts.sql.j2',
+               template_vars={'containers_postgresql_services': [containers_postgresql_client]})
+      }}
+  changed_when: false
+  no_log: true
+
+- name: Enable and start the PostgreSQL backup timer
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "postgresql-data-backup@{{ containers_postgresql_client }}.timer"
+    enabled: true
+    state: "started"
+    daemon_reload: true

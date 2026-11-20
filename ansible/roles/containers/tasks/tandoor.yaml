@@ -1,19 +1,21 @@
 ---
 - name: Register the tandoor database and account # noqa: var-naming[no-role-prefix]
   vars:
+    containers_postgresql_client: "tandoor"
     target_host: "{{ containers_postgresql_host }}"
     ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
   ansible.builtin.include_tasks:
-    file: "postgresql.yaml"
+    file: "postgresql-register.yaml"
     apply:
       delegate_to: "{{ containers_postgresql_host }}"
 
 - name: Register the tandoor authelia client # noqa: var-naming[no-role-prefix]
   vars:
+    containers_authelia_client: "tandoor"
     target_host: "{{ containers_authelia_host }}"
     ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
   ansible.builtin.include_tasks:
-    file: "authelia.yaml"
+    file: "authelia-register.yaml"
     apply:
       delegate_to: "{{ containers_authelia_host }}"
 

@@ -1,10 +1,11 @@
 ---
 - name: Register the vaultwarden database and account # noqa: var-naming[no-role-prefix]
   vars:
+    containers_postgresql_client: "vaultwarden"
     target_host: "{{ containers_postgresql_host }}"
     ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
   ansible.builtin.include_tasks:
-    file: "postgresql.yaml"
+    file: "postgresql-register.yaml"
     apply:
       delegate_to: "{{ containers_postgresql_host }}"
 
