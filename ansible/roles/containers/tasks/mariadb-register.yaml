@@ -1,0 +1,58 @@
+---
+# Register one MariaDB client (containers_mariadb_client) on the running server.
+# Service tasks include this instead of mariadb.yaml; the server itself is deployed by the mariadb tag.
+- name: Validate the MariaDB client name
+  ansible.builtin.assert:
+    that:
+      - containers_mariadb_client in containers_mariadb_services
+      - containers_mariadb_client is match('^[a-z][a-z0-9_-]{0,59}$')
+      - containers_mariadb_client not in ['postgres', 'postgresql', 'mariadb', 'mysql', 'root', 'cluster']
+    fail_msg: "Declare dependency.db (type mariadb) for {{ containers_mariadb_client }} with a name of up to 60 lowercase letters, digits, underscores or hyphens."
+    quiet: true
+
+- name: Register the missing MariaDB password on secrets.yaml
+  vars:
+    secrets_target: '["mariadb"]["password"][{{ containers_mariadb_client | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['mariadb']['password'][containers_mariadb_client] | default('', true) | length) == 0
+  no_log: true
+
+- name: Check the MariaDB server
+  ansible.builtin.shell: |
+    set -euo pipefail
+    /usr/bin/podman exec mariadb healthcheck.sh --connect --innodb_initialized
+  args:
+    executable: "/bin/bash"
+  changed_when: false
+  failed_when: false
+  register: "containers_mariadb_register_ready"
+
+- name: Fail when the MariaDB server is not running
+  ansible.builtin.fail:
+    msg: "MariaDB is not running on {{ target_host }}. Deploy it first with --tags mariadb."
+  when: containers_mariadb_register_ready['rc'] != 0
+
+- name: Register the MariaDB database and account
+  ansible.builtin.shell: |
+    set -euo pipefail
+    /usr/bin/podman exec --interactive mariadb mariadb --protocol=socket --user=root --batch --skip-column-names
+  args:
+    executable: "/bin/bash"
+    stdin: >-
+      {{
+        lookup('ansible.builtin.template', 'mariadb/init/accounts.sql.j2',
+               template_vars={'containers_mariadb_services': [containers_mariadb_client]})
+      }}
+  changed_when: false
+  no_log: true
+
+- name: Enable and start the MariaDB backup timer
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "mariadb-data-backup@{{ containers_mariadb_client }}.timer"
+    enabled: true
+    state: "started"
+    daemon_reload: true

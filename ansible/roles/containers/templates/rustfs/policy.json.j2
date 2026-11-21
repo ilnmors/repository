@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
 {% set separator = joiner(',') %}
-{% for bucket in item['s3']['buckets'] %}
+{% for bucket in containers_rustfs_register['s3']['buckets'] %}
 {% for scope in ['bucket', 'object'] if bucket['actions'][scope] | default([]) %}
     {{ separator() }}{
       "Effect": "Allow",

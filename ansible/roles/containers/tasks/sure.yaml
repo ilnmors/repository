@@ -11,10 +11,11 @@
 
 - name: Register the sure rustfs client # noqa: var-naming[no-role-prefix]
   vars:
+    containers_rustfs_client: "sure"
     target_host: "{{ containers_rustfs_host }}"
     ansible_become_pass: "{{ secrets['sudo'][containers_rustfs_host]['password'] }}"
   ansible.builtin.include_tasks:
-    file: "rustfs.yaml"
+    file: "rustfs-register.yaml"
     apply:
       delegate_to: "{{ containers_rustfs_host }}"
 

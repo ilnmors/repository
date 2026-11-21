@@ -1,0 +1,164 @@
+---
+# Register one RustFS client (containers_rustfs_client): its buckets, service account and policy on the running server.
+# Service tasks include this instead of rustfs.yaml; the server itself is deployed by the rustfs tag.
+- name: Set the rustfs client fact
+  ansible.builtin.set_fact:
+    containers_rustfs_register: "{{ containers_rustfs_clients | selectattr('name', 'equalto', containers_rustfs_client) | first | default({}) }}"
+
+- name: Validate the rustfs client settings
+  ansible.builtin.assert:
+    that:
+      - (containers_rustfs_register | length) > 0
+      - (containers_rustfs_register['definitions'] | length) == 1
+      - containers_rustfs_register['name'] != 'rustfs'
+      - containers_rustfs_register['access_key'] is string
+      - (containers_rustfs_register['access_key'] | length) > 0
+      - containers_rustfs_register['access_key'] != 'rustfs'
+      - containers_rustfs_register['s3']['buckets'] is sequence
+      - containers_rustfs_register['s3']['buckets'] is not string
+      - containers_rustfs_register['s3']['buckets'] is not mapping
+      - (containers_rustfs_register['s3']['buckets'] | length) > 0
+    fail_msg: "Declare dependency.s3 for {{ containers_rustfs_client }}, with matching settings on the units sharing its service account."
+    quiet: true
+
+- name: Validate the rustfs bucket settings
+  ansible.builtin.assert:
+    that:
+      - containers_rustfs_register_bucket is mapping
+      - containers_rustfs_register_bucket['name'] is string
+      - (containers_rustfs_register_bucket['name'] | length) > 0
+      - (containers_rustfs_register_bucket['public_read'] | default(false)) is boolean
+      - containers_rustfs_register_bucket['actions'] is mapping
+      - (containers_rustfs_register_bucket['actions']['bucket'] | default([])) is sequence
+      - (containers_rustfs_register_bucket['actions']['bucket'] | default([])) is not string
+      - (containers_rustfs_register_bucket['actions']['bucket'] | default([])) is not mapping
+      - (containers_rustfs_register_bucket['actions']['object'] | default([])) is sequence
+      - (containers_rustfs_register_bucket['actions']['object'] | default([])) is not string
+      - (containers_rustfs_register_bucket['actions']['object'] | default([])) is not mapping
+      - (((containers_rustfs_register_bucket['actions']['bucket'] | default([])) + (containers_rustfs_register_bucket['actions']['object'] | default([]))) | length) > 0
+      - >-
+        (
+          ((containers_rustfs_register_bucket['actions']['bucket'] | default([])) + (containers_rustfs_register_bucket['actions']['object'] | default([])))
+          | select('match', '^[A-Z*][A-Za-z0-9*]*$') | list | length
+        ) == (((containers_rustfs_register_bucket['actions']['bucket'] | default([])) + (containers_rustfs_register_bucket['actions']['object'] | default([]))) | length)
+    fail_msg: "Define each S3 bucket with a name and the required bucket/object actions without the s3: prefix."
+    quiet: true
+  loop: "{{ containers_rustfs_register['s3']['buckets'] }}"
+  loop_control:
+    loop_var: "containers_rustfs_register_bucket"
+    label: "{{ containers_rustfs_register_bucket['name'] }}"
+
+- name: Register the missing rustfs password on secrets.yaml
+  vars:
+    secrets_target: '["rustfs"]["password"][{{ containers_rustfs_client | to_json }}]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['rustfs']['password'][containers_rustfs_client] | default('', true) | length) == 0
+  no_log: true
+
+- name: Check the rustfs server
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ services['containers']['rustfs']['units']['main']['ports']['http']['int'] }}/health/ready"
+    status_code: 200
+    use_proxy: false
+  failed_when: false
+  register: "containers_rustfs_register_ready"
+
+- name: Fail when the rustfs server is not running
+  ansible.builtin.fail:
+    msg: "RustFS is not running on {{ target_host }}. Deploy it first with --tags rustfs."
+  when: containers_rustfs_register_ready['status'] | default(0) != 200
+
+- name: Register the rustfs buckets and service account
+  environment:
+    RUSTFS_ROOT_PASSWORD: "{{ secrets['rustfs']['password']['rustfs'] }}"
+    RUSTFS_ACCESS_KEY: "{{ containers_rustfs_register['access_key'] }}"
+    RUSTFS_SECRET_KEY: "{{ secrets['rustfs']['password'][containers_rustfs_client] }}"
+    RUSTFS_BUCKETS: "{{ containers_rustfs_register['s3']['buckets'] | map(attribute='name') | list | to_json }}"
+    RUSTFS_PUBLIC_READ_BUCKETS: "{{ containers_rustfs_register['s3']['buckets'] | selectattr('public_read', 'defined') | items2dict(key_name='name', value_name='public_read') | to_json }}"
+    RUSTFS_POLICY: "{{ lookup('ansible.builtin.template', 'rustfs/policy.json.j2') | from_json | to_json }}"
+    RUSTFS_POLICY_NAME: "{{ site['org'] }}-{{ containers_rustfs_client }}"
+  ansible.builtin.shell: |
+      set -euo pipefail
+      rustfs_url="http://127.0.0.1:{{ services['containers']['rustfs']['units']['main']['ports']['http']['int'] }}"
+      run_curl() {
+          /usr/bin/curl --fail --silent --show-error --noproxy '*' --max-time 30 \
+            --aws-sigv4 "aws:amz:us-east-1:s3" --user "rustfs:${RUSTFS_ROOT_PASSWORD}" \
+            "${rustfs_url}$1" "${@:2}"
+      }
+      rustfs_changed=0
+      while IFS= read -r rustfs_bucket; do
+          rustfs_bucket_status=$(run_curl "/${rustfs_bucket}" --head --no-fail --output /dev/null --write-out '%{http_code}')
+          if [[ "${rustfs_bucket_status}" == "404" ]]; then
+              run_curl "/${rustfs_bucket}" --request PUT > /dev/null
+              rustfs_changed=1
+          elif [[ "${rustfs_bucket_status}" != "200" ]]; then
+              echo "Unable to inspect the RustFS bucket: HTTP ${rustfs_bucket_status}" >&2
+              exit 1
+          fi
+
+          if /usr/bin/jq -e --arg bucket "${rustfs_bucket}" 'has($bucket)' <<< "${RUSTFS_PUBLIC_READ_BUCKETS}" > /dev/null; then
+              rustfs_bucket_response=$(run_curl "/${rustfs_bucket}?policy" --no-fail --write-out $'\n%{http_code}')
+              rustfs_bucket_status=${rustfs_bucket_response##*$'\n'}
+              case "${rustfs_bucket_status}" in
+                  200) rustfs_bucket_policy=$(/usr/bin/jq -Sc . <<< "${rustfs_bucket_response%$'\n'*}") ;;
+                  404) rustfs_bucket_policy='{"Statement":[],"Version":"2012-10-17"}' ;;
+                  *)
+                      echo "Unable to inspect the RustFS bucket policy: HTTP ${rustfs_bucket_status}" >&2
+                      exit 1
+                      ;;
+              esac
+              rustfs_public_read=$(/usr/bin/jq --arg bucket "${rustfs_bucket}" '.[$bucket]' <<< "${RUSTFS_PUBLIC_READ_BUCKETS}")
+              rustfs_bucket_desired_policy=$(/usr/bin/jq -Sc --arg bucket "${rustfs_bucket}" --argjson public_read "${rustfs_public_read}" '
+                  .Statement = ([.Statement[] | select(.Sid != "PublicReadObjects")] + (
+                      if $public_read then [{
+                          Sid: "PublicReadObjects", Effect: "Allow", Principal: "*",
+                          Action: ["s3:GetObject"], Resource: ["arn:aws:s3:::" + $bucket + "/*"]
+                      }] else [] end
+                  ))
+              ' <<< "${rustfs_bucket_policy}")
+              if [[ "${rustfs_bucket_policy}" != "${rustfs_bucket_desired_policy}" ]]; then
+                  run_curl "/${rustfs_bucket}?policy" --request PUT \
+                    --header 'Content-Type: application/json' --data-binary "${rustfs_bucket_desired_policy}" > /dev/null
+                  rustfs_changed=1
+              fi
+          fi
+      done < <(/usr/bin/jq -r '.[]' <<< "${RUSTFS_BUCKETS}")
+
+      rustfs_access_key=$(/usr/bin/jq -rn --arg key "${RUSTFS_ACCESS_KEY}" '$key | @uri')
+      rustfs_policy_name=$(/usr/bin/jq -rn --arg policy "${RUSTFS_POLICY_NAME}" '$policy | @uri')
+      rustfs_user=$(run_curl '/rustfs/admin/v3/list-users' | /usr/bin/jq -c --arg key "${RUSTFS_ACCESS_KEY}" '.[$key] // null')
+      run_curl "/rustfs/admin/v3/add-user?accessKey=${rustfs_access_key}" --request PUT \
+        --header 'Content-Type: application/json' \
+        --data-binary "$(/usr/bin/jq -cn --arg secretKey "${RUSTFS_SECRET_KEY}" '{secretKey: $secretKey, status: "enabled"}')" > /dev/null
+      if [[ "${rustfs_user}" == "null" ]] || [[ "$(/usr/bin/jq -r '.status' <<< "${rustfs_user}")" != "enabled" ]]; then
+          rustfs_changed=1
+      fi
+
+      rustfs_policies=$(run_curl '/rustfs/admin/v3/list-canned-policies' | /usr/bin/jq -c 'keys')
+      rustfs_current_policy="null"
+      if /usr/bin/jq -e --arg policy "${RUSTFS_POLICY_NAME}" 'index($policy) != null' <<< "${rustfs_policies}" > /dev/null; then
+          rustfs_current_policy=$(run_curl "/rustfs/admin/v3/info-canned-policy?name=${rustfs_policy_name}" | /usr/bin/jq -Sc '(.policy // .) | walk(if type == "array" then sort_by(tojson) else . end)')
+      fi
+      rustfs_desired_policy=$(/usr/bin/jq -Sc 'walk(if type == "array" then sort_by(tojson) else . end)' <<< "${RUSTFS_POLICY}")
+      if [[ "${rustfs_current_policy}" != "${rustfs_desired_policy}" ]]; then
+          run_curl "/rustfs/admin/v3/add-canned-policy?name=${rustfs_policy_name}" --request PUT \
+            --header 'Content-Type: application/json' --data-binary "${RUSTFS_POLICY}" > /dev/null
+          rustfs_changed=1
+      fi
+      if ! /usr/bin/jq -e --arg policy "${RUSTFS_POLICY_NAME}" '(.policyName // "" | split(",")) | index($policy) != null' <<< "${rustfs_user}" > /dev/null; then
+          run_curl '/rustfs/admin/v3/idp/builtin/policy/attach' --request POST \
+            --header 'Content-Type: application/json' \
+            --data-binary "$(/usr/bin/jq -cn --arg policy "${RUSTFS_POLICY_NAME}" --arg user "${RUSTFS_ACCESS_KEY}" '{policies: [$policy], user: $user}')" > /dev/null
+          rustfs_changed=1
+      fi
+      if [[ "${rustfs_changed}" == "1" ]]; then
+          echo "RustFS configuration updated"
+      fi
+  args:
+    executable: "/bin/bash"
+  changed_when: "'RustFS configuration updated' in containers_rustfs_register_result['stdout']"
+  register: "containers_rustfs_register_result"
+  no_log: true
