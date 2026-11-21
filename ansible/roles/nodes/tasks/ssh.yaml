@@ -299,6 +299,7 @@
       ansible.builtin.copy:
         content: |
           PermitRootLogin no
+          PasswordAuthentication no
           TrustedUserCAKeys /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
           HostKey /etc/ssh/ssh_host_ed25519_key
           HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub

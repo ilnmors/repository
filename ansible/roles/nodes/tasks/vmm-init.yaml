@@ -82,6 +82,7 @@
   ansible.builtin.copy:
     content: |
       PermitRootLogin no
+      PasswordAuthentication no
       TrustedUserCAKeys /etc/ssh/{{ site['ca']['ssh']['root']['public_key_file'] }}
       AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
       AllowGroups {{ nodes[target_host]['group'] }}
