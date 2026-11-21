@@ -12,13 +12,21 @@ HostName=quartermaster
 
 PublishPort={{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['quartermaster']['units']['main']['ports']['http']['protocol'] }}
 
-# GPU access for Vulkan
+# GPU access for Vulkan; Strata (HIP) also needs the ROCm compute device.
 AddDevice=/dev/dri:/dev/dri
+AddDevice=/dev/kfd:/dev/kfd
 PodmanArgs=--group-add keep-groups
+# Strata pins the resident experts in RAM (STRATA_RESIDENT_PIN) and its expert workers share memory.
+Ulimit=memlock=-1:-1
+ShmSize=2g
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data:/data:rw
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config:/data/config:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:ro
+# Strata: its settings, tuning and learned expert profiles are kept in DATA; the packs, the drafter and the
+# conversation spill are read and written while it serves, so they stay on the NVMe disk.
+Volume={{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/strata:/data/strata:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/strata-data:/data/strata/Strata-data:rw
 
 Environment="TZ={{ site['timezone'] }}"
 # The container is recreated on every start; keeping the Mesa (RADV) shader cache in /data saves the

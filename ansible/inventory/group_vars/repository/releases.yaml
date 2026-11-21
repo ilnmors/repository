@@ -264,6 +264,11 @@ releases:
           tag: "b12521"
         sd_server:
           tag: "master-1106-532d2c1"
+        # Strata serves Qwen3.8-Flash-Next with the experts streamed from RAM; its self-contained engine (HIP, bundled
+        # ROCm libraries) and launcher are copied from the release image, built for the RX 7900 XT (gfx110x).
+        strata:
+          repository: "ghcr.io/niko1221/strata"
+          tag: "0.2.16-rocm-gfx110x"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"

@@ -65,7 +65,7 @@ Environment="SECURITIES_PROVIDER=yahoo_finance"
 Environment="ASSISTANT_TYPE=builtin"
 Environment="LLM_PROVIDER=openai"
 Environment="OPENAI_URI_BASE=https://{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/api"
-Environment="OPENAI_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['chat_models'][1] }}"
+Environment="OPENAI_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['chat_models'] | last }}"
 Secret=SURE_OPENAI_ACCESS_TOKEN,type=env,target=OPENAI_ACCESS_TOKEN
 # quartermaster shares a 65536-token cache between two parallel requests.
 Environment="LLM_CONTEXT_WINDOW=32768"

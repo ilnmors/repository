@@ -2,26 +2,9 @@
 # Quartermaster model files: the containers role downloads each file into DATA (the backed-up copy),
 # syncs DATA to HOME (the copy that runs) and config/config.yaml.j2 loads it by role as
 # /data/models/<model>/<file name from the URL>. A new URL is a new file name, so changing a quant
-# downloads the new file and deletes the old one.
-# Language models are heretic (uncensored) builds; embeddings and the VAE have no such variant.
-
-# Fast chat and image understanding on the RX 7900 XT. The MTP head of the original Gemma 4 drafts
-# tokens for speculative decoding (the heretic weights only change the refusal direction).
-gemma-4-26b-a4b-heretic:
-  - role: "model"
-    url: "https://huggingface.co/mradermacher/gemma-4-26B-A4B-it-ultra-uncensored-heretic-i1-GGUF/resolve/main/gemma-4-26B-A4B-it-ultra-uncensored-heretic.i1-Q4_K_S.gguf"
-  - role: "mmproj"
-    url: "https://huggingface.co/llmfan46/gemma-4-26B-A4B-it-ultra-uncensored-heretic-GGUF/resolve/main/gemma-4-26B-A4B-it-mmproj-BF16.gguf"
-  - role: "mtp"
-    url: "https://huggingface.co/bartowski/google_gemma-4-26B-A4B-it-GGUF/resolve/main/mtp-google_gemma-4-26B-A4B-it-Q8_0.gguf"
-
-# Dense chat for harder work on the RX 7900 XT: the RVN multilingual build with its MTP head embedded.
-# Hybrid attention (one full-attention layer in four) keeps the KV cache small.
-qwen3.8-27b-heretic:
-  - role: "model"
-    url: "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF/resolve/main/RVN-Q4_K_S-multilingual-mtp.gguf"
-  - role: "mmproj"
-    url: "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF/resolve/main/mmproj-Qwen3.8-27B-Q8_0.gguf"
+# downloads the new file; the old one stays in DATA and leaves HOME.
+# Language models run uncensored (heretic weights or a refusal-direction projection); embeddings and the VAE
+# have no such variant.
 
 # RAG embeddings on the Iris Xe: multilingual (Korean included), CLS pooling, no query prefix.
 bge-m3:
@@ -37,6 +20,22 @@ qwen-image-2.1:
     url: "https://huggingface.co/AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF/resolve/main/Qwen-Image-2.1-Turbo-Uncensored-Q8_0.gguf"
   - role: "vae"
     url: "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+
+# Qwen3.8-Flash-Next, ISTA-DASLab GSQ-RCO IQ2_XS, served by Strata. Shard 1 holds the weights (39 GB: attention
+# and shared parts in VRAM, the experts in RAM); shard 2 is the 28.8 GB n-gram table, read from disk.
+# IQ2_XS was chosen on 2026-11-21 to try first: as accurate as IQ3_XXS on the evaluation sample, about 1.5x faster.
+qwen3.8-flash-next-ista:
+  - role: "model"
+    url: "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf"
+  - role: "ngram"
+    url: "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf"
+  - role: "mmproj"
+    url: "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/mmproj-Qwen3.8-Flash-Next-BF16.gguf"
+  # Refusal direction (480 KB control vector, from huihui-ai's abliterated weights) that Strata projects out of
+  # layers 4-44 while it runs: the uncensored model on the unchanged ISTA weights. Pinned to the revision whose
+  # SHA256SUMS lists 59f9ae8b...; a request with "experimental_speed_projection": false runs the original model.
+  - role: "cvec"
+    url: "https://huggingface.co/alesha-pro/Qwen3.8-Flash-Next-abliterated-GSQ-RCO-Strata-GGUF/resolve/d4af3be5701549435e0770d625f79dd2def1358f/Huihui-Qwen3.8-Flash-Next-refusal-direction-r.gguf"
 
 # Image generation (trial, 2026-11-19): MiniMax H3-Image, the highest-rated open-weights image model on the
 # Artificial Analysis arena. The pruned DiT in Unsloth's UD-Q4_K_XL (close to Q8 in their LPIPS tests),

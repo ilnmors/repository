@@ -36,10 +36,12 @@
   loop:
     - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster"
     - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models"
+    - "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/strata"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/strata-data"
   become: true
 
 # Build first: a broken image shows up before the long model downloads.
@@ -57,44 +59,6 @@
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0770"
   loop: "{{ containers_quartermaster_models | list }}"
-
-- name: Find the quartermaster model directories
-  ansible.builtin.find:
-    paths: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models"
-    file_type: "directory"
-  register: "containers_quartermaster_model_directories"
-
-# A model dropped from models.yaml leaves DATA too; the sync below removes it from HOME.
-- name: Delete the undeclared quartermaster model directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: "absent"
-  loop: >-
-    {{
-      containers_quartermaster_model_directories['files'] | map(attribute='path')
-      | reject('in', containers_quartermaster_models | list | map('regex_replace', '^', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/'))
-      | list
-    }}
-
-- name: Find the quartermaster model files
-  ansible.builtin.find:
-    paths: "{{ containers_quartermaster_models | list | map('regex_replace', '^', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/') | list }}"
-    file_type: "file"
-    hidden: true
-  register: "containers_quartermaster_found_files"
-
-# A replaced file (another quant, another build) has another name; the old one is removed.
-- name: Delete the undeclared quartermaster model files
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: "absent"
-  loop: >-
-    {{
-      containers_quartermaster_found_files['files'] | map(attribute='path')
-      | reject('in', containers_quartermaster_files.values() | map('dict2items') | flatten | map(attribute='value')
-        | map('regex_replace', '^/data/models/', nodes[target_host]['paths']['data'] ~ '/containers/quartermaster/models/'))
-      | list
-    }}
 
 - name: Check the quartermaster model files
   ansible.builtin.stat:
@@ -121,7 +85,9 @@
   when: not item['stat']['exists']
   notify: "notification_restart_quartermaster"
 
-# HOME keeps the copy that runs, on the guest's NVMe disk.
+# HOME keeps the copy that runs, on the guest's NVMe disk: only the files models.yaml declares. DATA keeps every
+# file it has (other quants, older models) and nothing removes them there; a runtime copy in HOME that is no longer
+# declared is removed (--delete-excluded), since its original stays in DATA.
 - name: Synchronize the quartermaster models
   delegate_to: "{{ inventory_hostname }}"
   ansible.posix.synchronize:
@@ -131,6 +97,13 @@
     group: true
     perms: true
     delete: true
+    rsync_opts: >-
+      {{
+        (containers_quartermaster_files | list | map('regex_replace', '^', '--include=/') | map('regex_replace', '$', '/') | list)
+        + (containers_quartermaster_files.values() | map('dict2items') | flatten | map(attribute='value')
+           | map('regex_replace', '^/data/models/', '--include=/') | list)
+        + ['--exclude=*', '--delete-excluded']
+      }}
   notify: "notification_restart_quartermaster"
 
 - name: Deploy the quartermaster configuration

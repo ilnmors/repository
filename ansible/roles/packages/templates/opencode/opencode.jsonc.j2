@@ -1,6 +1,6 @@
-{# Open WebUI lists the chat models in services.containers.openwebui.units.main.ai: [fast, careful]. #}
-{% set gemma = services['containers']['openwebui']['units']['main']['ai']['chat_models'][0] %}
-{% set qwen = services['containers']['openwebui']['units']['main']['ai']['chat_models'][1] %}
+{# Open WebUI lists the chat models in services.containers.openwebui.units.main.ai: the first is the fast one, the last
+   the careful one (the same model when only one is listed). Strata serves Qwen3.8-Flash-Next with a 64k context. #}
+{% set chat_models = services['containers']['openwebui']['units']['main']['ai']['chat_models'] %}
 {
   "$schema": "https://opencode.ai/config.json",
   // Local models only, through Open WebUI (its API keys reach only the chat, model and embedding endpoints).
@@ -15,22 +15,19 @@
         "chunkTimeout": 600000
       },
       "models": {
-        "{{ qwen }}": {
-          "name": "Qwen3.8 27B",
+{% for model in chat_models %}
+        "{{ model }}": {
+          "name": "{{ model }}",
           "tool_call": true, "reasoning": true, "attachment": true, "interleaved": { "field": "reasoning_content" },
           "limit": { "context": 65536, "output": 16384 }
-        },
-        "{{ gemma }}": {
-          "name": "Gemma 4 26B-A4B",
-          "tool_call": true, "reasoning": true, "attachment": true, "interleaved": { "field": "reasoning_content" },
-          "limit": { "context": 65536, "output": 16384 }
-        }
+        }{{ "," if not loop.last }}
+{% endfor %}
       }
     }
   },
   "enabled_providers": ["openwebui"],
-  "model": "openwebui/{{ qwen }}",
-  "small_model": "openwebui/{{ gemma }}",
+  "model": "openwebui/{{ chat_models | last }}",
+  "small_model": "openwebui/{{ chat_models | first }}",
   "share": "disabled",
   "autoupdate": false,
   // Headless agents for Claude Code ("opencode run --agent ..."): a run cannot answer "ask",

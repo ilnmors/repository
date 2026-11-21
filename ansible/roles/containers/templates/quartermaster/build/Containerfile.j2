@@ -1,7 +1,18 @@
 {% set qm = releases['containers']['quartermaster'] %}
 {% set sd_tag = qm['build']['sd_server']['tag'] %}
 {% set llama_tag = qm['build']['llama_server']['tag'] %}
+{% set strata = qm['build']['strata'] %}
 FROM {{ qm['repository'] }}:{{ qm['tag'] }} AS upstream
+
+# Strata: the launcher (/opt/strata/terminal, with its own Python) and the engine with its ROCm libraries need only
+# glibc and libstdc++ from the system. The entrypoint is kept for its settings, tuning and clean stop, with two
+# changes: it serves on loopback only (inside this container quartermaster is the only client, so no API key),
+# and its state lives in /data/strata (settings in DATA, packs and drafter on the NVMe disk; see the container file).
+FROM {{ strata['repository'] }}:{{ strata['tag'] }} AS strata
+RUN sed -i -e 's#--access lan#--access local#' -e 's#/data/#/data/strata/#g' -e 's# /data # /data/strata #g' \
+      /opt/strata/entrypoint.sh && \
+    grep -q -- '--access local' /opt/strata/entrypoint.sh && \
+    ! grep -q -- '--access lan' /opt/strata/entrypoint.sh
 
 # llama-server release archive: llama-<tag>-bin-ubuntu-vulkan-x64.tar.gz holds llama-<tag>/.
 FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }} AS llama-server
@@ -55,6 +66,8 @@ COPY --from=upstream /usr/local/bin/quartermaster /usr/local/bin/entrypoint.sh /
 COPY --from=llama-server /out /opt/quartermaster/backends/bin/llama-server/{{ llama_tag }}-vulkan
 # The binaries carry RUNPATH $ORIGIN, so the bundled ggml libraries next to them are found.
 COPY --from=sd-server /out /opt/quartermaster/backends/bin/sd-server/{{ sd_tag }}-vulkan
+# Same path as in the Strata image: its saved run settings name engine files under /opt/strata/components.
+COPY --from=strata /opt/strata /opt/strata
 RUN mkdir -p /data/config /data/models
 WORKDIR /data
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
