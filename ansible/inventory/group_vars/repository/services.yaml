@@ -250,9 +250,11 @@ services:
           hosts: ["console", "infra", "auth", "app"]
     ksm:
       units:
+        # Empty since 2026-11-21: on vmm KSM merged about 510 MiB at a net cost (general_profit -305 MB) and used a
+        # quarter of a core, the guests' memory being mostly model weights and caches that keep changing.
         tuned:
           release: "ksm"
-          hosts: ["vmm"]
+          hosts: []
         static:
           release: "ksm"
           hosts: ["app"]
