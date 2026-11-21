@@ -15,15 +15,23 @@ hardwares:
         id: "8086:46a8"
         address: "0000:00:02.0"
       gpu02:
-        # Checked 2026-11-18: the GPU (04:00.0) and its HDMI/DP audio function (04:00.1, 1002:ab30) are in
-        # separate IOMMU groups (24 and 25), so only the GPU is bound to vfio-pci and passed to the VM.
-        # If a later board or firmware puts both in one group, VFIO needs the audio function bound as well.
+        # The GPU (04:00.0) and its HDMI/DP audio function (04:00.1) sit in separate IOMMU groups (24 and 25), but
+        # the GPU resets only by a bus reset, which takes the audio function too: QEMU can reset the GPU only when
+        # it owns both, so the audio function below is bound to vfio-pci and passed to the same VM (2026-11-21).
         type: "egpu"
         model: "RX7900XT"
         vendor: "radeon"
         driver: "amdgpu"
         id: "1002:744c"
         address: "0000:04:00.0"
+    audio:
+      gpu02:
+        type: "egpu"
+        model: "RX7900XT"
+        vendor: "radeon"
+        driver: "snd_hda_intel"
+        id: "1002:ab30"
+        address: "0000:04:00.1"
     nic:
       nic01:
         type: "rj45"

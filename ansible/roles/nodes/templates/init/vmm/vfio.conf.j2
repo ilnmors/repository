@@ -1,4 +1,5 @@
-options vfio-pci ids={{ hardwares['vmm']['gpu'] | dict2items | map(attribute='value.id') | reject('equalto', none) | join(',') }}
-{% for gpu in hardwares['vmm']['gpu'] | dict2items %}
-softdep {{ gpu['value']['driver'] }} pre: vfio-pci
+{% set vfio_devices = (hardwares['vmm']['gpu'] | dict2items) + (hardwares['vmm']['audio'] | default({}) | dict2items) %}
+options vfio-pci ids={{ vfio_devices | map(attribute='value.id') | reject('equalto', none) | join(',') }}
+{% for driver in vfio_devices | map(attribute='value.driver') | select | unique %}
+softdep {{ driver }} pre: vfio-pci
 {% endfor %}

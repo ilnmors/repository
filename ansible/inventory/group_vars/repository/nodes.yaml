@@ -190,13 +190,13 @@ nodes:
         pin: []
         emulator: []
         shares: 1024
-      memory: "48G"
+      memory: "50G"
       gpu:
         type: "vfio"
+        # The GPUs and the audio functions that reset with them (hardwares.vmm.audio) go to this VM together.
         address: >-
           {{
-            hardwares['vmm']['gpu']
-            | dict2items
+            ((hardwares['vmm']['gpu'] | dict2items) + (hardwares['vmm']['audio'] | default({}) | dict2items))
             | selectattr('value.type', 'defined')
             | map(attribute='value.address')
             | list
