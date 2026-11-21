@@ -50,8 +50,13 @@ apt update && apt upgrade -y
 apt install -y \
 acl curl jq nftables conntrack crowdsec systemd-resolved cloud-image-utils \
 qemu-system-x86 ksmtuned libvirt-daemon-system openssh-server \
-python3 python3-apt python3-libvirt python3-lxml btrfs-progs rsync
+python3 python3-apt python3-libvirt python3-lxml btrfs-progs rsync unattended-upgrades
 log "info" "APT packages installed"
+
+# Security updates are applied automatically, as on the VMs (Debian cloud image default)
+printf '%s\n' 'APT::Periodic::Update-Package-Lists "1";' 'APT::Periodic::Unattended-Upgrade "1";' \
+    > /etc/apt/apt.conf.d/20auto-upgrades
+log "info" "Automatic security updates enabled"
 
 # Deploy SSH files
 mkdir -p /etc/ssh/auth_principals
