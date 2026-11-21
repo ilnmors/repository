@@ -50,7 +50,7 @@
       ansible.builtin.set_fact:
         handler_results: >-
           {{
-            vars
+            hostvars[inventory_hostname]
             | dict2items
             | selectattr('key', 'match', '^result_')
             | selectattr('value.failed', 'defined')
