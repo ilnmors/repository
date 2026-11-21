@@ -1,0 +1,6 @@
+[Unit]
+Description=Suricata Log Rotation Service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate /etc/logrotate.d/suricata

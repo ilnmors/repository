@@ -108,10 +108,7 @@ outputs:
         - http2
         - pgsql:
             enabled: no
-        - stats:
-            totals: yes
-            threads: no
-            deltas: no
+        # Stats go to stats.log only: in eve.json they were a third of the volume (2026-11-21).
         - flow
   - http-log:
       enabled: no
