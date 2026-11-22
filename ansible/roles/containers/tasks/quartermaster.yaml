@@ -13,7 +13,11 @@
     containers_quartermaster_files: >-
       {%- set containers_files = {} -%}
       {%- for containers_model, containers_entries in containers_quartermaster_models.items() -%}
-      {%-   set _ = containers_files.update({containers_model: dict(containers_entries | map(attribute='role') | zip(containers_entries | map(attribute='url') | map('basename') | map('regex_replace', '^', '/data/models/' ~ containers_model ~ '/')))}) -%}
+      {%-   set containers_roles = {} -%}
+      {%-   for containers_entry in containers_entries -%}
+      {%-     set _ = containers_roles.update({containers_entry['role']: '/data/models/' ~ containers_model ~ '/' ~ (containers_entry['file'] | default(containers_entry['url'] | basename))}) -%}
+      {%-   endfor -%}
+      {%-   set _ = containers_files.update({containers_model: containers_roles}) -%}
       {%- endfor -%}
       {{ containers_files }}
 
@@ -42,7 +46,18 @@
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/strata-data"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/video"
   become: true
+
+- name: Deploy the quartermaster video adapter
+  ansible.builtin.copy:
+    src: "quartermaster/video/adapter.py"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/video/adapter.py"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  become: true
+  notify: "notification_restart_quartermaster"
 
 # Build first: a broken image shows up before the long model downloads.
 - name: Deploy the quartermaster image
@@ -62,27 +77,39 @@
 
 - name: Check the quartermaster model files
   ansible.builtin.stat:
-    path: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item[0]['key'] }}/{{ item[1]['url'] | basename }}"
+    path: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item[0]['key'] }}/{{ item[1]['file'] | default(item[1]['url'] | basename) }}"
     get_checksum: false
   loop: "{{ containers_quartermaster_models | dict2items | subelements('value') }}"
   loop_control:
-    label: "{{ item[0]['key'] }}/{{ item[1]['url'] | basename }}"
+    label: "{{ item[0]['key'] }}/{{ item[1]['file'] | default(item[1]['url'] | basename) }}"
   register: "containers_quartermaster_model_files"
+
+- name: Check the manually placed quartermaster model files
+  ansible.builtin.assert:
+    that:
+      - item['stat']['exists']
+    fail_msg: "Place {{ item['item'][1]['url'] }} as {{ item['stat']['path'] | default('') }} in DATA by hand (manual: true in models.yaml)."
+    quiet: true
+  loop: "{{ containers_quartermaster_model_files['results'] | selectattr('item.1.manual', 'defined') | selectattr('item.1.manual') | list }}"
+  loop_control:
+    label: "{{ item['item'][0]['key'] }}/{{ item['item'][1]['file'] | default(item['item'][1]['url'] | basename) }}"
 
 # DATA keeps the backed-up copy. Only missing files are fetched: get_url would otherwise download a whole
 # model again just to compare it, because Hugging Face answers its If-Modified-Since request with 200.
 - name: Download the missing quartermaster model files
   ansible.builtin.get_url:
     url: "{{ item['item'][1]['url'] }}"
-    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item['item'][0]['key'] }}/{{ item['item'][1]['url'] | basename }}"
+    dest: "{{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/models/{{ item['item'][0]['key'] }}/{{ item['item'][1]['file'] | default(item['item'][1]['url'] | basename) }}"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0640"
     timeout: 60
   loop: "{{ containers_quartermaster_model_files['results'] }}"
   loop_control:
-    label: "{{ item['item'][0]['key'] }}/{{ item['item'][1]['url'] | basename }}"
-  when: not item['stat']['exists']
+    label: "{{ item['item'][0]['key'] }}/{{ item['item'][1]['file'] | default(item['item'][1]['url'] | basename) }}"
+  when:
+    - not item['stat']['exists']
+    - not (item['item'][1]['manual'] | default(false))
   notify: "notification_restart_quartermaster"
 
 # HOME keeps the copy that runs, on the guest's NVMe disk: only the files models.yaml declares. DATA keeps every

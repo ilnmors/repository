@@ -864,6 +864,11 @@ services:
               protocol: "tcp"
               int: 10000
               container: 8080
+            # OpenAI video API (/v1/videos) for Open WebUI; files/quartermaster/video/adapter.py inside the container.
+            video:
+              protocol: "tcp"
+              int: 8013
+              container: 8081
           dependency:
             web:
               status: true
@@ -927,7 +932,9 @@ services:
             # and the last for harder work, so one model serves both.
             chat_models: ["qwen3.8-flash-next"]
             embedding_model: "bge-m3"
-            image_model: "minimax-h3-image"
+            image_model: "moody-krea2-mix"
+            # Quartermaster video model behind its /v1/videos adapter; empty keeps video generation off in Open WebUI.
+            video_model: "wan2.2-enhanced-i2v"
     sure:
       units:
         main:

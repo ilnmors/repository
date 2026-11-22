@@ -19,7 +19,6 @@ macros:
     /opt/quartermaster/backends/bin/llama-server/{{ releases['containers']['quartermaster']['build']['llama_server']['tag'] }}-vulkan/llama-{{ releases['containers']['quartermaster']['build']['llama_server']['tag'] }}/llama-server
     --host 127.0.0.1 --port ${PORT} --n-gpu-layers 999 --kv-unified
     --cache-type-k q8_0 --cache-type-v q8_0 --flash-attn auto --jinja
-    --batch-size 2048 --ubatch-size 2048
   sd: >-
     /opt/quartermaster/backends/bin/sd-server/{{ releases['containers']['quartermaster']['build']['sd_server']['tag'] }}-vulkan/sd-server
     --listen-ip 127.0.0.1 --listen-port ${PORT}
@@ -70,28 +69,44 @@ models:
       ${llama} --device Vulkan0
       --model {{ qm['bge-m3']['model'] }}
       --embedding --pooling cls --ctx-size 8192 --batch-size 8192 --ubatch-size 8192 --parallel 1
-  qwen-image-2.1:
-    # sd-server has no device option; this limits its Vulkan backend to the RX 7900 XT.
-    env:
-      - "GGML_VK_VISIBLE_DEVICES=1"
-    # Turbo: the fixed 8-step sigma schedule at CFG 1. Everything stays in VRAM (15.9 GB peak at 1024x1024);
-    # offloading to the CPU took 44.7 s instead of 26.3 s and pushed the chat models out of the page cache.
+  # Z-Image Turbo finetune in Q8_0 on the RX 7900 XT (6.5 GB); the Qwen3 4B text encoder runs on the Iris Xe.
+  # Turbo sampling: 9 steps at CFG 1.
+  {% raw %}
+  # moody-pro-mix:
+  #   cmd: >-
+  #     ${sd} --diffusion-model {{ qm['moody-pro-mix']['diffusion'] }}
+  #     --llm {{ qm['moody-pro-mix']['llm'] }}
+  #     --vae {{ qm['moody-pro-mix']['vae'] }}
+  #     --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
+  #     --steps 9 --cfg-scale 1.0 --sampling-method euler -W 1024 -H 1024
+  #   checkEndpoint: "/v1/models"
+  {% endraw %}
+  # Krea 2 finetune in Q8_0 on the RX 7900 XT; the Qwen3-VL 4B text encoder runs on the Iris Xe. The author's
+  # settings: Euler A with the beta scheduler, 12steps (up to 12 for more detail), CFG 1.
+  moody-krea2-mix:
     cmd: >-
-      ${sd} --diffusion-model {{ qm['qwen-image-2.1']['diffusion'] }}
-      --llm {{ qm['qwen-image-2.1']['llm'] }}
-      --vae {{ qm['qwen-image-2.1']['vae'] }}
-      --sigmas qwen-image-2.1-turbo --steps 8 --cfg-scale 1.0 --sampling-method euler -W 1024 -H 1024
-    # sd-server has no /health; /v1/models answers once the weights are loaded.
-    checkEndpoint: "/v1/models"
-  # Distilled to 6 steps without CFG. The 32B text encoder runs on the Iris Xe (shared memory, faster than
-  # the CPU); the DiT and the VAE stay on the RX 7900 XT.
-  minimax-h3-image:
-    cmd: >-
-      ${sd} --diffusion-model {{ qm['minimax-h3-image']['diffusion'] }}
-      --llm {{ qm['minimax-h3-image']['llm'] }}
-      --vae {{ qm['minimax-h3-image']['vae'] }}
+      ${sd} --diffusion-model {{ qm['moody-krea2-mix']['diffusion'] }}
+      --llm {{ qm['moody-krea2-mix']['llm'] }}
+      --vae {{ qm['moody-krea2-mix']['vae'] }}
       --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
-      --sigmas minimax-h3-image --steps 6 --cfg-scale 1.0 --sampling-method euler --rng cpu -W 1024 -H 1024
+      --steps 12 --cfg-scale 1.0 --sampling-method euler_a --scheduler beta -W 1024 -H 1024 --guidance 2.5
+    checkEndpoint: "/v1/models"
+  # Image to video (the /v1/videos adapter returns animated WebP). WAN 2.2 Enhanced NSFW, Lightning Edition: Wan 2.2
+  # I2V A14B with the Lightning distillation baked in, a high-noise and a low-noise transformer (Q8_0, 15 GB each) that
+  # take turns on the RX 7900 XT; umT5-XXL runs on the Iris Xe. The author's settings: 2+3 steps (2 high-noise, 3
+  # low-noise), Euler/simple, CFG 1 in both stages (the high-noise stage defaults to 7). Measured 2026-11-23 on a 3 s
+  # clip (49 frames): 624x624 4+4 steps 353 s, 624x624 2+2 205 s, 512x512 2+3 140 s, so clips default to about 512x512
+  # worth of pixels (672x384, or the start image's shape at that area).
+  wan2.2-enhanced-i2v:
+    cmd: >-
+      ${sd} --diffusion-model {{ qm['wan2.2-enhanced-i2v']['diffusion'] }}
+      --high-noise-diffusion-model {{ qm['wan2.2-enhanced-i2v']['high_noise'] }}
+      --t5xxl {{ qm['wan2.2-enhanced-i2v']['t5xxl'] }}
+      --vae {{ qm['wan2.2-enhanced-i2v']['vae'] }}
+      --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
+      --steps 3 --high-noise-steps 2 --cfg-scale 1.0 --high-noise-cfg-scale 1.0
+      --sampling-method euler --high-noise-sampling-method euler --scheduler simple
+      --video-frames 49 --fps 16 -W 672 -H 384 --vae-tiling --temporal-tiling
     checkEndpoint: "/v1/models"
 
 # The embedding model stays loaded on the Iris Xe; chat and image generation swap on the RX 7900 XT.
@@ -112,8 +127,9 @@ routing:
           persistent: false
           members:
             - "qwen3.8-flash-next"
-            - "qwen-image-2.1"
-            - "minimax-h3-image"
+            - "moody-krea2-mix"
+            - "wan2.2-enhanced-i2v"
+#           - "moody-pro-mix"
 
 hooks:
   on_startup:

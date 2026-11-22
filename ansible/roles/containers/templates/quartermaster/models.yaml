@@ -2,7 +2,9 @@
 # Quartermaster model files: the containers role downloads each file into DATA (the backed-up copy),
 # syncs DATA to HOME (the copy that runs) and config/config.yaml.j2 loads it by role as
 # /data/models/<model>/<file name from the URL>. A new URL is a new file name, so changing a quant
-# downloads the new file; the old one stays in DATA and leaves HOME.
+# downloads the new file; the old one stays in DATA and leaves HOME. An entry with "file" uses that name instead,
+# and one with "manual: true" is never downloaded: it has to be placed in DATA by hand (e.g. a Civitai file that
+# needs an account key), and the task stops if it is missing.
 # Language models run uncensored (heretic weights or a refusal-direction projection); embeddings and the VAE
 # have no such variant.
 
@@ -10,16 +12,6 @@
 bge-m3:
   - role: "model"
     url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/main/bge-m3-Q8_0.gguf"
-
-# Image generation and editing on the RX 7900 XT (swapped with the chat models): Qwen Image 2.1 Turbo with an
-# abliterated (uncensored) Qwen3-VL-8B text encoder and the matching Qwen Image 2.1 VAE.
-qwen-image-2.1:
-  - role: "diffusion"
-    url: "https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q8_0.gguf"
-  - role: "llm"
-    url: "https://huggingface.co/AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF/resolve/main/Qwen-Image-2.1-Turbo-Uncensored-Q8_0.gguf"
-  - role: "vae"
-    url: "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
 
 # Qwen3.8-Flash-Next, ISTA-DASLab GSQ-RCO IQ2_XS, served by Strata. Shard 1 holds the weights (39 GB: attention
 # and shared parts in VRAM, the experts in RAM); shard 2 is the 28.8 GB n-gram table, read from disk.
@@ -38,13 +30,49 @@ qwen3.8-flash-next:
   - role: "cvec"
     url: "https://huggingface.co/alesha-pro/Qwen3.8-Flash-Next-abliterated-GSQ-RCO-Strata-GGUF/resolve/d4af3be5701549435e0770d625f79dd2def1358f/Huihui-Qwen3.8-Flash-Next-refusal-direction-r.gguf"
 
-# Image generation (trial, 2026-11-19): MiniMax H3-Image, the highest-rated open-weights image model on the
-# Artificial Analysis arena. The pruned DiT in Unsloth's UD-Q4_K_XL (close to Q8 in their LPIPS tests),
-# an uncensored (heretic) Qwen3-VL 32B text encoder and the release VAE.
-minimax-h3-image:
+# Image generation (2026-11-22): Moody Pro Mix Collector's Edition (catlover1937, Civitai model 620406, version
+# 3161628), an uncensored Z-Image Turbo finetune. Civitai needs an account key and the author forbids redistribution,
+# so the bf16 original (12.0 GB, SHA256 b94f1c20...353591) is placed in DATA by hand and stays there; Q8_0 (6.5 GB,
+# "sd-cli -M convert --type q8_0") runs: same picture as bf16 at a fixed seed, 9.0 GB instead of 14.5 GB VRAM peak.
+# Qwen3 4B text encoder on the Iris Xe and the FLUX VAE, as stable-diffusion.cpp's Z-Image docs list them.
+# moody-pro-mix:
+#   - role: "diffusion"
+#    url: "https://civitai.com/api/download/models/3161628?fileId=3042004"
+#     file: "moody-pro-signature-004_00001__clean-Q8_0.gguf"
+#     manual: true
+#   - role: "llm"
+#     url: "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q8_0.gguf"
+#   - role: "vae"
+#     url: "https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/vae/ae.safetensors"
+
+# Image generation, second model (2026-11-22): Moody Krea Mix V7 (catlover1937), a Krea 2 finetune, from the author's
+# own Hugging Face repository (apache-2.0; V1-V7 are free). The bf16 original (26.3 GB, SHA256 6ed09955...) stays in
+# DATA; Q8_0 (made with "sd-cli -M convert --type q8_0", see docs/operating/quartermaster) runs. Qwen3-VL 4B text
+# encoder on the Iris Xe and the Wan 2.1 VAE, as stable-diffusion.cpp's Krea2 docs list them.
+moody-krea2-mix:
   - role: "diffusion"
-    url: "https://huggingface.co/unsloth/MiniMax-H3-Image-GGUF/resolve/main/minimax_h3_image_pruned-UD-Q4_K_XL.gguf"
+    url: "https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v7_00002__clean.safetensors"
+    file: "Moody-Krea-Mix-v7_00002__clean-Q8_0.gguf"
+    manual: true
   - role: "llm"
-    url: "https://huggingface.co/eraiko/Qwen3-VL-32B-Ultra-Heretic-Minimax-H3-GGUF/resolve/main/qwen3-vl-32b-ultra-heretic-minimax-h3-q5_k_m.gguf"
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q8_0.gguf"
   - role: "vae"
-    url: "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/resolve/main/vae/diffusion_pytorch_model.safetensors"
+    url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+
+# Image to video (2026-11-22): DaSiWa WAN 2.2 I2V 14B SynthSeduction v9 Lightspeed (Darksidewalker, Civitai model
+# 2269796), an uncensored Wan 2.2 I2V A14B merge with the 4-step distillation baked in. Wan 2.2 A14B samples with a
+# high-noise and a low-noise transformer (Q8_0, 15 GB each). Civitai needs an account key, so both are placed in
+# DATA by hand (SHA256 4db65f7a...dd79c207 high, 99cded93...e4a8fbf102 low). umT5-XXL text encoder and the Wan 2.1 VAE.
+wan2.2-enhanced-i2v:
+  - role: "high_noise"
+    url: "https://civitai.red/api/download/models/2540892?fileId=2429064"
+    file: "Wan2_2-I2V-Enhanced-High_FP8.gguf"
+    manual: true
+  - role: "diffusion"
+    url: "https://civitai.red/api/download/models/2540896?fileId=2429066"
+    file: "Wan2_2-I2V-Enhanced-Low_FP8.gguf"
+    manual: true
+  - role: "t5xxl"
+    url: "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf"
+  - role: "vae"
+    url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"

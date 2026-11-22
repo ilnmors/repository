@@ -11,6 +11,8 @@ ContainerName=quartermaster
 HostName=quartermaster
 
 PublishPort={{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['quartermaster']['units']['main']['ports']['http']['protocol'] }}
+# OpenAI video API (/v1/videos) for Open WebUI, served by the adapter beside the server (qm-entrypoint.sh).
+PublishPort={{ services['containers']['quartermaster']['units']['main']['ports']['video']['int'] }}:{{ services['containers']['quartermaster']['units']['main']['ports']['video']['container'] }}/{{ services['containers']['quartermaster']['units']['main']['ports']['video']['protocol'] }}
 
 # GPU access for Vulkan; Strata (HIP) also needs the ROCm compute device.
 AddDevice=/dev/dri:/dev/dri
@@ -23,6 +25,7 @@ ShmSize=2g
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/data:/data:rw
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/config:/data/config:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/models:/data/models:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/video/adapter.py:/opt/quartermaster/video/adapter.py:ro
 # Strata: its settings, tuning and learned expert profiles are kept in DATA; the packs, the drafter and the
 # conversation spill are read and written while it serves, so they stay on the NVMe disk.
 Volume={{ nodes[target_host]['paths']['data'] }}/containers/quartermaster/strata:/data/strata:rw
@@ -35,6 +38,17 @@ Environment="MESA_SHADER_CACHE_DIR=/data/cache/mesa"
 Environment="MESA_SHADER_CACHE_MAX_SIZE=4G"
 # The image entrypoint seeds its autogen file on first start; keep it out of the read-only config mount.
 Environment="QM_GENERATE_FILE=/data/quartermaster-generate.yaml"
+# Video adapter: short clips as animated WebP, which loops like a GIF (webm, avi and gif are the alternatives).
+# Wan 2.x frame grid (4n+1) at 16 fps; 672x384 worth of pixels (about 512x512) unless the request asks otherwise, in
+# the start image's shape when there is one. 624x624 took 1.5 times as long per clip.
+Environment="QM_VIDEO_PORT={{ services['containers']['quartermaster']['units']['main']['ports']['video']['container'] }}"
+Environment="QM_VIDEO_UPSTREAM=http://127.0.0.1:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }}"
+Environment="QM_VIDEO_OUTPUT_FORMAT=webp"
+Environment="QM_VIDEO_FPS=16"
+Environment="QM_VIDEO_FRAME_STEP=4"
+Environment="QM_VIDEO_FRAME_OFFSET=1"
+Environment="QM_VIDEO_SIZE=672x384"
+Environment="QM_VIDEO_SECONDS=3"
 
 # Models and their commands come from Ansible: without -generate the config is loaded as written.
 Exec=-config /data/config/config.yaml -listen 0.0.0.0:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['container'] }} -admin-open

@@ -55,12 +55,14 @@ RUN printf '%s\n' \
       '  "sizeBytes": 0' \
       '}' > /out/.qm-install.json
 
-# Same runtime as upstream (Ubuntu, ca-certificates, libgomp1, libvulkan1) plus the Mesa Vulkan drivers.
+# Same runtime as upstream (Ubuntu, ca-certificates, libgomp1, libvulkan1) plus the Mesa Vulkan drivers, and Python
+# with Pillow for the video adapter (roles/containers/files/quartermaster/video/adapter.py, mounted at run time).
 FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV QM_BACKENDS_DIR=/opt/quartermaster/backends
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates libgomp1 libvulkan1 mesa-vulkan-drivers && \
+    apt-get install -y --no-install-recommends ca-certificates libgomp1 libvulkan1 mesa-vulkan-drivers \
+      python3 python3-pil && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=upstream /usr/local/bin/quartermaster /usr/local/bin/entrypoint.sh /usr/local/bin/
 COPY --from=llama-server /out /opt/quartermaster/backends/bin/llama-server/{{ llama_tag }}-vulkan
@@ -68,7 +70,8 @@ COPY --from=llama-server /out /opt/quartermaster/backends/bin/llama-server/{{ ll
 COPY --from=sd-server /out /opt/quartermaster/backends/bin/sd-server/{{ sd_tag }}-vulkan
 # Same path as in the Strata image: its saved run settings name engine files under /opt/strata/components.
 COPY --from=strata /opt/strata /opt/strata
-RUN mkdir -p /data/config /data/models
+COPY qm-entrypoint.sh /usr/local/bin/qm-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/qm-entrypoint.sh && mkdir -p /data/config /data/models
 WORKDIR /data
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/qm-entrypoint.sh"]
 CMD ["-generate", "/data/config/quartermaster-generate.yaml", "-config", "/data/config/config.yaml", "-listen", "0.0.0.0:8080", "-admin-open"]
