@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Library</title>
+<link rel="icon" href="/favicon.png">
+<!--
+  Open WebUI library: the signed-in user's files (generated images and videos, uploads) as a gallery.
+  Served by Open WebUI itself (/app/build/library, read-only mount), so it shares the login: the token Open WebUI
+  keeps in localStorage and the "token" cookie. Everything goes through Open WebUI's file API, so renames and
+  deletes keep its database and the S3 bucket in step. Without a valid login it sends the browser to /auth.
+  Layout: a left sidebar (search, folders, type filter, summary) and the files; clicking a file opens the viewer,
+  which carries its details and actions. The page opens on the folder list, not on the files.
+  Folders are the page's own idea: they live in the user's Open WebUI settings under the top-level key "library"
+  (GET/POST /api/v1/users/user/settings), as {"folders": [{"id", "name"}], "map": {"<file id>": "<folder id>"}};
+  Open WebUI itself never reads that key. New files land in "Unsorted" (no folder).
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1b1b1f; --muted: #6b6b76; --line: #e4e4ea; --card: #f4f4f7; --side: #f9f9fb; --accent: #2563eb;
+  --danger: #c62828; --shade: rgba(0, 0, 0, .82);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #171717; --fg: #ececf1; --muted: #9a9aa5; --line: #2c2c31; --card: #222226; --side: #1d1d1f; --accent: #6ea0ff; --danger: #ef6b6b; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+button { font: inherit; color: inherit; }
+.app { display: flex; min-height: 100vh; }
+
+/* left sidebar */
+#nav { width: 240px; flex: none; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--side); border-right: 1px solid var(--line); padding: 14px 12px 20px; display: flex; flex-direction: column; gap: 16px; }
+#nav .brand { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 6px; }
+#nav .brand h1 { font-size: 17px; margin: 0; }
+#nav .brand a { color: var(--muted); text-decoration: none; font-size: 12px; }
+#nav input[type=search] { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 6px 10px; border-radius: 8px; font: inherit; }
+#nav h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 6px 6px; font-weight: 600; }
+.nav-list { display: flex; flex-direction: column; gap: 1px; }
+.nav-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.nav-list button:hover { background: var(--card); }
+.nav-list button.active { background: var(--card); font-weight: 600; }
+.nav-list button svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.nav-list button .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-list button .n { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+.nav-list button.add { color: var(--accent); }
+.nav-list button:disabled { opacity: .45; cursor: default; }
+#nav .summary { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 6px 0; }
+dl.props { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 12px; }
+dl.props dt { color: var(--muted); }
+dl.props dd { margin: 0; text-align: right; }
+.side-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.side-actions button, .toolbar button { border: 1px solid var(--line); background: var(--card); padding: 4px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+button.danger { color: var(--danger); }
+button:disabled { opacity: .45; cursor: default; }
+
+/* files */
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.toolbar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 8px; min-height: 52px; }
+.toolbar h2 { font-size: 16px; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar .count { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.toolbar .spacer { flex: 1; }
+#nav-toggle { display: none; border: 0; background: none; font-size: 18px; padding: 2px 6px; }
+main { padding: 8px 16px 40px; }
+h4.day { font-size: 13px; color: var(--muted); font-weight: 600; margin: 18px 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.item { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--card); border: 2px solid transparent; cursor: pointer; }
+.item.selected { border-color: var(--accent); }
+.item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .doc { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 10px; text-align: center; gap: 6px; }
+.item .doc .ext { font-weight: 700; font-size: 18px; color: var(--muted); }
+.item .doc .name { font-size: 12px; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.item .badge { position: absolute; left: 6px; bottom: 6px; background: var(--shade); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 6px; }
+.item .check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); display: none; }
+.item:hover .check, body.selecting .item .check { display: block; }
+.item.selected .check { background: var(--accent); border-color: var(--accent); }
+.status { color: var(--muted); padding: 40px 0; text-align: center; }
+.folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+.folder { position: relative; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 14px; cursor: pointer; display: flex; gap: 12px; align-items: center; min-height: 72px; }
+.folder:hover { border-color: var(--muted); }
+.folder svg { width: 30px; height: 30px; flex: none; color: var(--muted); }
+.folder .fname { font-weight: 600; word-break: break-all; }
+.folder.special .fname { font-weight: 500; }
+.folder .fcount { color: var(--muted); font-size: 12px; }
+
+/* viewer and folder picker */
+dialog { border: 0; padding: 0; background: transparent; max-width: 100vw; max-height: 100vh; width: 100vw; height: 100vh; color: #fff; }
+dialog::backdrop { background: var(--shade); }
+.viewer { display: flex; flex-direction: column; height: 100%; }
+.viewer .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; }
+.viewer .bar .title { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer .bar .meta { color: #bbb; font-size: 12px; }
+.viewer .stage { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: center; padding: 0 16px 16px; }
+.viewer .stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer .stage iframe { width: min(1000px, 100%); height: 100%; border: 0; background: #fff; border-radius: 8px; }
+dialog button { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.12); color: #fff; padding: 5px 11px; border-radius: 8px; cursor: pointer; }
+dialog button.danger { color: #ff8a8a; }
+.nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 22px; padding: 8px 12px !important; }
+.nav.prev { left: 8px; } .nav.next { right: 8px; }
+#mover .box { background: var(--bg); color: var(--fg); border-radius: 12px; padding: 16px; width: min(360px, 92vw); margin: 20vh auto 0; display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
+#mover .box h3 { margin: 0 0 6px; font-size: 15px; }
+#mover .box button { text-align: left; background: var(--card); color: var(--fg); border-color: var(--line); }
+#mover .box button.current { opacity: .5; }
+#mover .box button.cancel { text-align: center; margin-top: 6px; }
+
+/* narrow screens: the sidebar becomes a drawer */
+#scrim { display: none; }
+@media (max-width: 760px) {
+  #nav-toggle { display: inline-block; }
+  #nav { position: fixed; left: 0; top: 0; z-index: 30; box-shadow: 8px 0 24px rgba(0,0,0,.25); transform: translateX(-100%); transition: transform .2s; }
+  body.nav-open #nav { transform: none; }
+  body.nav-open #scrim { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.35); }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
+  .toolbar { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside id="nav" aria-label="Library navigation">
+    <div class="brand"><h1>Library</h1><a href="/">← Open WebUI</a></div>
+    <input type="search" id="q" placeholder="Search file names">
+    <section><h3>Folders</h3><div class="nav-list" id="folder-list"></div></section>
+    <section><h3>Type</h3><div class="nav-list" id="type-list"></div></section>
+    <section class="summary" id="summary"></section>
+  </aside>
+  <div id="scrim"></div>
+  <div class="content">
+    <div class="toolbar">
+      <button id="nav-toggle" aria-label="Menu">☰</button>
+      <h2 id="heading">Folders</h2>
+      <span class="count" id="count"></span>
+      <span class="spacer"></span>
+      <button id="select" hidden>Select</button>
+      <button id="select-all" hidden>Select all</button>
+      <button id="move-selected" hidden disabled>Move</button>
+      <button id="delete-selected" class="danger" hidden disabled>Delete</button>
+    </div>
+    <main id="main"><div class="status">Loading…</div></main>
+  </div>
+</div>
+
+<dialog id="viewer">
+  <div class="viewer">
+    <div class="bar">
+      <span class="title" id="v-title"></span>
+      <span class="meta" id="v-meta"></span>
+      <button id="v-download">Download</button>
+      <button id="v-open">New tab</button>
+      <button id="v-move">Move</button>
+      <button id="v-rename">Rename</button>
+      <button id="v-delete" class="danger">Delete</button>
+      <button id="v-close">Close</button>
+    </div>
+    <div class="stage" id="v-stage"></div>
+  </div>
+  <button class="nav prev" id="v-prev" aria-label="Previous">‹</button>
+  <button class="nav next" id="v-next" aria-label="Next">›</button>
+</dialog>
+
+<dialog id="mover"><div class="box" id="mover-box"></div></dialog>
+
+<script>
+(() => {
+  'use strict';
+  const LOGIN = '/auth?redirect=' + encodeURIComponent('/library/');
+  const UNFILED = '', ALL = '*';
+  const KINDS = [['all', 'All'], ['image', 'Images'], ['video', 'Videos'], ['doc', 'Documents']];
+  let token = null;
+  try { token = localStorage.getItem('token'); } catch (error) { token = null; }
+
+  const state = {
+    files: [], library: { folders: [], map: {} }, folder: null,
+    kind: 'all', query: '', selecting: false, selected: new Set(), shown: [], current: -1,
+  };
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
+  const icon = (svg) => { const holder = el('span'); holder.innerHTML = svg; return holder.firstChild; };
+  const FOLDER_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>';
+  const STACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3"/></svg>';
+  const HOME_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>';
+
+  async function api(path, options = {}) {
+    const headers = Object.assign({ Accept: 'application/json' }, options.headers || {});
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const response = await fetch('/api/v1' + path, Object.assign({}, options, { headers, credentials: 'same-origin' }));
+    if (response.status === 401) { location.replace(LOGIN); throw new Error('login required'); }
+    if (!response.ok) throw new Error(response.status + ' ' + (await response.text()).slice(0, 200));
+    return response.status === 204 ? null : response.json();
+  }
+  const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  const contentUrl = (file, attachment) => '/api/v1/files/' + encodeURIComponent(file.id) + '/content' + (attachment ? '?attachment=true' : '');
+  const nameOf = (file) => (file.meta && file.meta.name) || file.filename || file.id;
+  const typeOf = (file) => (file.meta && file.meta.content_type) || '';
+  const sizeOf = (file) => (file.meta && file.meta.size) || 0;
+  function kindOf(file) {
+    const type = typeOf(file), name = nameOf(file).toLowerCase();
+    if (type.startsWith('video/') || /generated-video|\.(mp4|webm|mov)$/.test(name)) return 'video';
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/.test(name)) return 'image';
+    return 'doc';
+  }
+  const isVisual = (file) => kindOf(file) !== 'doc' && !/\.(mp4|webm|mov)$/i.test(nameOf(file)) && !typeOf(file).startsWith('video/');
+  function size(bytes) {
+    if (!bytes && bytes !== 0) return '';
+    const units = ['B', 'KB', 'MB', 'GB']; let i = 0; let n = bytes;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+    return (i ? n.toFixed(1) : n) + ' ' + units[i];
+  }
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+  const day = (ts) => new Date(ts * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+  const when = (ts) => new Date(ts * 1000).toLocaleString('en-US');
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches;
+
+  // ---- folders (stored in the user's Open WebUI settings, key "library")
+  const folderOf = (file) => {
+    const id = state.library.map[file.id];
+    return id && state.library.folders.some((folder) => folder.id === id) ? id : UNFILED;
+  };
+  const folderName = (id) => id === UNFILED ? 'Unsorted' : id === ALL ? 'All' : ((state.library.folders.find((folder) => folder.id === id) || {}).name || '?');
+  const sortedFolders = () => [...state.library.folders].sort((a, b) => a.name.localeCompare(b.name));
+  const inFolder = (folder) => state.files.filter((file) => folder === ALL || folderOf(file) === folder);
+  async function saveLibrary() {
+    await post('/users/user/settings/update', { library: state.library });
+  }
+  async function saveOrWarn() {
+    try { await saveLibrary(); } catch (error) { alert('Could not save the folders: ' + error.message); }
+  }
+  function cleanLibrary() {
+    const ids = new Set(state.files.map((file) => file.id));
+    const folders = new Set(state.library.folders.map((folder) => folder.id));
+    let changed = false;
+    for (const id of Object.keys(state.library.map)) {
+      if (!ids.has(id) || !folders.has(state.library.map[id])) { delete state.library.map[id]; changed = true; }
+    }
+    return changed;
+  }
+  async function moveFiles(ids, folder) {
+    ids.forEach((id) => { if (folder === UNFILED) delete state.library.map[id]; else state.library.map[id] = folder; });
+    await saveOrWarn();
+    render();
+  }
+  async function createFolder() {
+    const name = (prompt('New folder name') || '').trim();
+    if (!name) return null;
+    const folder = { id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };
+    state.library.folders.push(folder);
+    await saveOrWarn();
+    return folder.id;
+  }
+  async function renameFolder(id) {
+    const folder = state.library.folders.find((item) => item.id === id);
+    if (!folder) return;
+    const next = (prompt('Folder name', folder.name) || '').trim();
+    if (!next || next === folder.name) return;
+    folder.name = next;
+    await saveOrWarn();
+    render();
+  }
+  async function deleteFolder(id) {
+    if (!confirm('Delete the folder "' + folderName(id) + '"? The files in it are kept and go back to Unsorted.')) return;
+    state.library.folders = state.library.folders.filter((item) => item.id !== id);
+    cleanLibrary();
+    await saveOrWarn();
+    if (state.folder === id) go(null); else render();
+  }
+
+  async function load() {
+    const [settings] = await Promise.all([api('/users/user/settings'), (async () => {
+      const files = []; let page = 1;
+      for (;;) {
+        const result = await api('/files/?content=false&page=' + page);
+        files.push(...result.items);
+        if (!result.items.length || files.length >= result.total) break;
+        page += 1;
+      }
+      files.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+      state.files = files;
+    })()]);
+    const saved = (settings && settings.library) || {};
+    state.library = { folders: Array.isArray(saved.folders) ? saved.folders : [], map: (saved.map && typeof saved.map === 'object') ? saved.map : {} };
+    if (cleanLibrary()) saveLibrary().catch(() => {});
+    route();
+  }
+
+  // ---- navigation: #<folder id>, #unfiled, #all, or nothing for the folder overview
+  function route() {
+    const hash = decodeURIComponent(location.hash.slice(1));
+    state.folder = hash === '' ? null : hash === 'unfiled' ? UNFILED : hash === 'all' ? ALL
+      : (state.library.folders.some((folder) => folder.id === hash) ? hash : null);
+    state.selecting = false; state.selected.clear();
+    if (state.folder === null) { state.query = ''; $('q').value = ''; }
+    if ($('viewer').open) $('viewer').close();
+    document.body.classList.remove('nav-open');
+    render();
+  }
+  const go = (folder) => { location.hash = folder === null ? '' : folder === UNFILED ? 'unfiled' : folder === ALL ? 'all' : folder; };
+
+  function render() {
+    renderNav();
+    const home = state.folder === null;
+    $('heading').textContent = home ? 'Folders' : folderName(state.folder);
+    document.title = home ? 'Library' : folderName(state.folder) + ' · Library';
+    $('select').hidden = home;
+    if (home) renderFolders(); else renderFiles();
+  }
+
+  // ---- left sidebar: folders, type filter, summary of the open folder (or the library)
+  function renderNav() {
+    const counts = {};
+    state.files.forEach((file) => { const id = folderOf(file); counts[id] = (counts[id] || 0) + 1; });
+    const list = $('folder-list'); list.replaceChildren();
+    const entry = (target, label, count, svg) => {
+      const button = el('button', state.folder === target ? 'active' : '');
+      button.append(icon(svg), el('span', 'label', label));
+      if (count !== null) button.append(el('span', 'n', String(count)));
+      button.addEventListener('click', () => go(target));
+      list.append(button);
+    };
+    entry(null, 'Overview', null, HOME_ICON);
+    entry(UNFILED, 'Unsorted', counts[UNFILED] || 0, FOLDER_ICON);
+    sortedFolders().forEach((folder) => entry(folder.id, folder.name, counts[folder.id] || 0, FOLDER_ICON));
+    entry(ALL, 'All', state.files.length, STACK_ICON);
+    const add = el('button', 'add', '+ New folder');
+    add.addEventListener('click', async () => { if (await createFolder()) render(); });
+    list.append(add);
+
+    const types = $('type-list'); types.replaceChildren();
+    const pool = state.folder === null ? [] : inFolder(state.folder);
+    KINDS.forEach(([kind, label]) => {
+      const button = el('button', state.kind === kind && state.folder !== null ? 'active' : '');
+      button.append(el('span', 'label', label), el('span', 'n', String(kind === 'all' ? pool.length : pool.filter((file) => kindOf(file) === kind).length)));
+      button.disabled = state.folder === null;
+      button.addEventListener('click', () => { state.kind = kind; render(); });
+      types.append(button);
+    });
+
+    const summary = $('summary'); summary.replaceChildren();
+    const files = state.folder === null ? state.files : pool;
+    summary.append(el('h3', '', state.folder === null ? 'Library' : folderName(state.folder)));
+    const dl = el('dl', 'props');
+    [['Files', files.length], ['Images', files.filter((file) => kindOf(file) === 'image').length],
+     ['Videos', files.filter((file) => kindOf(file) === 'video').length], ['Documents', files.filter((file) => kindOf(file) === 'doc').length],
+     ['Size', size(files.reduce((sum, file) => sum + sizeOf(file), 0))]].forEach(([key, value]) => dl.append(el('dt', '', key), el('dd', '', String(value))));
+    summary.append(dl);
+    if (state.folder !== null && state.folder !== UNFILED && state.folder !== ALL) {
+      const box = el('div', 'side-actions');
+      const rename = el('button', '', 'Rename'); rename.addEventListener('click', () => renameFolder(state.folder));
+      const remove = el('button', 'danger', 'Delete'); remove.addEventListener('click', () => deleteFolder(state.folder));
+      box.append(rename, remove); summary.append(box);
+    }
+  }
+
+  // ---- overview: folder tiles only, no file previews
+  function renderFolders() {
+    $('count').textContent = plural(state.files.length, 'file');
+    $('move-selected').hidden = true; $('delete-selected').hidden = true; $('select-all').hidden = true;
+    document.body.classList.remove('selecting');
+    const main = $('main'); main.replaceChildren();
+    const counts = {};
+    state.files.forEach((file) => { const id = folderOf(file); counts[id] = (counts[id] || 0) + 1; });
+    const grid = el('div', 'folders');
+    const tile = (id, name, count, special) => {
+      const card = el('div', 'folder' + (special ? ' special' : '')); card.tabIndex = 0;
+      const text = el('div'); text.append(el('div', 'fname', name), el('div', 'fcount', plural(count, 'file')));
+      card.append(icon(id === ALL ? STACK_ICON : FOLDER_ICON), text);
+      card.addEventListener('click', () => go(id));
+      card.addEventListener('keydown', (event) => { if (event.key === 'Enter') go(id); });
+      grid.append(card);
+    };
+    tile(UNFILED, 'Unsorted', counts[UNFILED] || 0, true);
+    sortedFolders().forEach((folder) => tile(folder.id, folder.name, counts[folder.id] || 0, false));
+    tile(ALL, 'All', state.files.length, true);
+    main.append(grid);
+  }
+
+  function renderFiles() {
+    const query = state.query.trim().toLowerCase();
+    state.shown = inFolder(state.folder).filter((file) => (state.kind === 'all' || kindOf(file) === state.kind)
+      && (!query || nameOf(file).toLowerCase().includes(query)));
+    $('count').textContent = state.selecting ? state.selected.size + ' selected' : plural(state.shown.length, 'file');
+    $('move-selected').hidden = !state.selecting; $('move-selected').disabled = !state.selected.size;
+    $('delete-selected').hidden = !state.selecting; $('delete-selected').disabled = !state.selected.size;
+    $('select').textContent = state.selecting ? 'Cancel' : 'Select';
+    const allSelected = state.shown.length > 0 && state.shown.every((file) => state.selected.has(file.id));
+    $('select-all').hidden = !state.shown.length;
+    $('select-all').textContent = state.selecting && allSelected ? 'Deselect all' : 'Select all';
+    document.body.classList.toggle('selecting', state.selecting);
+    const main = $('main');
+    main.replaceChildren();
+    if (!state.shown.length) {
+      main.append(el('div', 'status', state.query || state.kind !== 'all' ? 'No files match.' : 'This folder is empty.'));
+      return;
+    }
+    let lastDay = null, grid = null;
+    state.shown.forEach((file, index) => {
+      const label = day(file.created_at || 0);
+      if (label !== lastDay) {
+        grid = el('div', 'grid');
+        main.append(el('h4', 'day', label), grid); lastDay = label;
+      }
+      const item = el('div', 'item' + (state.selected.has(file.id) ? ' selected' : ''));
+      item.tabIndex = 0; item.title = nameOf(file);
+      if (isVisual(file)) {
+        const img = el('img'); img.loading = 'lazy'; img.decoding = 'async'; img.alt = nameOf(file);
+        img.src = contentUrl(file, false); item.append(img);
+      } else {
+        const doc = el('div', 'doc');
+        doc.append(el('div', 'ext', (nameOf(file).split('.').pop() || 'file').slice(0, 5).toUpperCase()), el('div', 'name', nameOf(file)));
+        item.append(doc);
+      }
+      if (kindOf(file) === 'video') item.append(el('span', 'badge', 'Video'));
+      const check = el('span', 'check'); item.append(check);
+      item.addEventListener('click', (event) => {
+        if (state.selecting || event.target === check) { toggle(file.id); return; }
+        open(index);
+      });
+      item.addEventListener('keydown', (event) => { if (event.key === 'Enter') open(index); });
+      grid.append(item);
+    });
+  }
+
+  function toggle(id) {
+    state.selecting = true;
+    if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+    render();
+  }
+
+  // ---- viewer: the file with its details and actions
+  function open(index) {
+    state.current = index;
+    const file = state.shown[index];
+    $('v-title').textContent = nameOf(file);
+    $('v-meta').textContent = [folderName(folderOf(file)), when(file.created_at || 0), typeOf(file), size(file.meta && file.meta.size)].filter(Boolean).join(' · ');
+    const stage = $('v-stage'); stage.replaceChildren();
+    if (isVisual(file)) {
+      const img = el('img'); img.src = contentUrl(file, false); img.alt = nameOf(file); stage.append(img);
+    } else if (typeOf(file).startsWith('video/')) {
+      const video = el('video'); video.src = contentUrl(file, false); video.controls = true; video.autoplay = true; video.style.maxWidth = '100%'; video.style.maxHeight = '100%'; stage.append(video);
+    } else if (/^(application\/pdf|text\/)/.test(typeOf(file))) {
+      const frame = el('iframe'); frame.src = contentUrl(file, false); frame.setAttribute('sandbox', ''); stage.append(frame);
+    } else {
+      stage.append(el('div', '', 'No preview for this type. Download it to open.'));
+    }
+    $('v-prev').disabled = index <= 0; $('v-next').disabled = index >= state.shown.length - 1;
+    if (!$('viewer').open) $('viewer').showModal();
+  }
+
+  async function remove(ids) {
+    const failed = [];
+    for (const id of ids) {
+      try { await api('/files/' + encodeURIComponent(id), { method: 'DELETE' }); }
+      catch (error) { failed.push(id); }
+    }
+    state.files = state.files.filter((file) => !ids.includes(file.id) || failed.includes(file.id));
+    state.selected = new Set(failed);
+    if (cleanLibrary()) saveLibrary().catch(() => {});
+    if (failed.length) alert('Could not delete ' + plural(failed.length, 'file') + '.');
+    render();
+  }
+
+  // Folder picker for moving files: existing folders, Unsorted, or a new folder.
+  function pickFolder(ids) {
+    const box = $('mover-box'); box.replaceChildren(el('h3', '', 'Move ' + plural(ids.length, 'file') + ' to'));
+    const current = ids.length === 1 ? folderOf(state.files.find((file) => file.id === ids[0]) || {}) : null;
+    const option = (id, name) => {
+      const button = el('button', id === current ? 'current' : '', name);
+      button.addEventListener('click', async () => { $('mover').close(); await moveFiles(ids, id); after(); });
+      box.append(button);
+    };
+    sortedFolders().forEach((folder) => option(folder.id, folder.name));
+    option(UNFILED, 'Unsorted');
+    const create = el('button', '', '+ New folder…');
+    create.addEventListener('click', async () => {
+      $('mover').close();
+      const id = await createFolder();
+      if (id) { await moveFiles(ids, id); after(); }
+    });
+    const cancel = el('button', 'cancel', 'Cancel');
+    cancel.addEventListener('click', () => $('mover').close());
+    box.append(create, cancel);
+    $('mover').showModal();
+  }
+  function after() {
+    state.selecting = false; state.selected.clear();
+    if ($('viewer').open) $('viewer').close();
+    render();
+  }
+
+  window.addEventListener('hashchange', route);
+  $('nav-toggle').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+  $('scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
+  // Searching from the overview searches every file.
+  $('q').addEventListener('input', (event) => {
+    state.query = event.target.value;
+    if (state.folder === null && state.query.trim()) { go(ALL); return; }
+    render();
+  });
+  $('q').addEventListener('keydown', (event) => { if (event.key === 'Enter' && narrow()) document.body.classList.remove('nav-open'); });
+  $('select').addEventListener('click', () => { state.selecting = !state.selecting; state.selected.clear(); render(); });
+  // Select all: every file shown now (the open folder, after the type filter and the search).
+  function selectAll() {
+    const all = state.shown.length > 0 && state.shown.every((file) => state.selected.has(file.id));
+    state.selecting = true;
+    if (all) state.shown.forEach((file) => state.selected.delete(file.id));
+    else state.shown.forEach((file) => state.selected.add(file.id));
+    render();
+  }
+  $('select-all').addEventListener('click', selectAll);
+  document.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'a') return;
+    if (state.folder === null || $('viewer').open || $('mover').open || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    event.preventDefault(); selectAll();
+  });
+  $('move-selected').addEventListener('click', () => { if (state.selected.size) pickFolder([...state.selected]); });
+  $('delete-selected').addEventListener('click', async () => {
+    const ids = [...state.selected];
+    if (!ids.length || !confirm('Delete ' + plural(ids.length, 'file') + '? They will also disappear from the chats that show them.')) return;
+    await remove(ids); state.selecting = false; render();
+  });
+  $('mover').addEventListener('click', (event) => { if (event.target === $('mover')) $('mover').close(); });
+  $('v-close').addEventListener('click', () => $('viewer').close());
+  $('v-prev').addEventListener('click', () => { if (state.current > 0) open(state.current - 1); });
+  $('v-next').addEventListener('click', () => { if (state.current < state.shown.length - 1) open(state.current + 1); });
+  $('v-move').addEventListener('click', () => pickFolder([state.shown[state.current].id]));
+  $('v-download').addEventListener('click', () => { const a = el('a'); a.href = contentUrl(state.shown[state.current], true); a.download = nameOf(state.shown[state.current]); a.click(); });
+  $('v-open').addEventListener('click', () => window.open(contentUrl(state.shown[state.current], false), '_blank', 'noopener'));
+  $('v-rename').addEventListener('click', async () => {
+    const file = state.shown[state.current];
+    const name = prompt('New name', nameOf(file));
+    if (!name || name === nameOf(file)) return;
+    try {
+      const updated = await post('/files/' + encodeURIComponent(file.id) + '/rename', { filename: name });
+      Object.assign(file, { filename: updated.filename, meta: updated.meta || file.meta });
+      render(); open(state.shown.indexOf(file));
+    } catch (error) { alert('Could not rename: ' + error.message); }
+  });
+  $('v-delete').addEventListener('click', async () => {
+    const file = state.shown[state.current];
+    if (!confirm('Delete "' + nameOf(file) + '"? It will also disappear from the chats that show it.')) return;
+    $('viewer').close(); await remove([file.id]);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (!$('viewer').open || $('mover').open) return;
+    if (event.key === 'ArrowLeft') $('v-prev').click();
+    if (event.key === 'ArrowRight') $('v-next').click();
+  });
+
+  if (!token) { location.replace(LOGIN); return; }
+  api('/auths/').then(load).catch((error) => {
+    if (error.message !== 'login required') $('main').replaceChildren(el('div', 'status', 'Could not load the files.'));
+  });
+})();
+</script>
+</body>
+</html>

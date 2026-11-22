@@ -83,6 +83,28 @@
   notify: "notification_restart_openwebui"
   no_log: true
 
+- name: Create the openwebui library directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  become: true
+
+- name: Deploy the openwebui library page and its sidebar link
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/openwebui/library/{{ item }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library/{{ item }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - "index.html"
+    - "loader.js"
+  become: true
+  notify: "notification_restart_openwebui"
+
 - name: Deploy the openwebui video connection script
   ansible.builtin.copy:
     src: "{{ role_path }}/templates/openwebui/video-connection.py"

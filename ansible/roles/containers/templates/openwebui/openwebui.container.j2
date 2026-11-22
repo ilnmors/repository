@@ -11,6 +11,11 @@ HostName=openwebui
 PublishPort={{ services['containers']['openwebui']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['openwebui']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['openwebui']['units']['main']['ports']['http']['protocol'] }}
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/data:/app/backend/data:rw
+# /library/: the files gallery (templates/openwebui/library/index.html), served by Open WebUI's static files under its
+# login. loader.js is the empty hook every Open WebUI page loads (/static/loader.js, copied from the build at start);
+# ours adds a Library row below Workspace in the sidebar's user menu.
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library/index.html:/app/build/library/index.html:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library/loader.js:/app/build/static/loader.js:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/ssl:/etc/ssl/openwebui:ro
 
 # General
