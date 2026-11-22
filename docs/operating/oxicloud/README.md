@@ -10,7 +10,9 @@
 - Domain `oxicloud.ilnmors.com`; storage `~/data/containers/oxicloud/storage` (container UID 1001 → subuid 101000); database `oxicloud_db` with a daily backup timer.
 - The image listens on 127.0.0.1 by default, so `OXICLOUD_SERVER_HOST=0.0.0.0` is required (in the container template).
 - OIDC: client `oxicloud`, `client_secret_post`, PKCE S256, scopes `openid profile email groups`, redirect `/api/auth/oidc/callback`, `OXICLOUD_OIDC_AUTO_PROVISION=true`, `OXICLOUD_OIDC_ADMIN_GROUPS=admins`.
-- OIDC provisioning turns user names shorter than 3 characters into `user_<sub>`; after the first login rename `auth.users.username` to the LDAP id. Upstream PR #880.
+- OIDC provisioning in 0.10.x turns user names shorter than 3 characters into `user_<sub>`; after the first login rename `auth.users.username` to the LDAP id (renamed accounts keep working for login, app passwords and CardDAV).
+- Upstream fix: PR #880 (`fix(auth): accept two-character usernames in setup and OIDC JIT`, merge `8dfda52`, merged 2026-11-21). It lowers the minimum to 2 in first-admin setup and OIDC JIT provisioning, matching `validate_username` and the `users_username_shape_v2` check. It is not in a release yet (latest v0.10.1, 2026-11-18); once a release contains it, new 2-character LDAP ids such as `il` are provisioned as-is and the rename step is no longer needed.
+- Still open upstream: the admin "create user" form keeps a client-side 3-character check (`minlength="3"`), although the backend accepts 2.
 - DAV (WebDAV, CalDAV, CardDAV) uses app passwords from Profile > App Passwords (DAVx5, Console DAV). They are stored only as argon2id hashes in `auth.app_passwords` and cannot be shown again; the Console DAV password is in the console's GNOME Online Accounts keyring.
 - Nextcloud calendars and contacts were moved here on 2026-11-12.
 - Nextcloud and Group-Office user files were moved into il's drive on 2026-11-13 under `Nextcloud/<user>/` and `GroupOffice/`, without the Nextcloud sample files. Files were checked by reading them back and comparing SHA-256.

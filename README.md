@@ -44,7 +44,7 @@ To run this on your own hardware, follow [docs/getting-started.md](docs/getting-
 2. Bring up the hypervisor and the virtual machines: [docs/vmm.md](docs/vmm.md).
 3. Apply each node: `ansible-playbook playbooks/nodes/<node>.yaml`, or everything with `playbooks/site.yaml`.
 
-Day-to-day notes for each running stack are in [docs/operating](docs/operating/README.md). Stacks that were retired, with the reason for each, are in [docs/archives](docs/archives/README.md). How the project got to its current shape is in [docs/history.md](docs/history.md).
+Day-to-day notes for each running stack are in [docs/operating](docs/operating/README.md). Stacks that were retired, with the reason for each, are in [docs/archives](docs/archives/README.md). How the project got to its current shape is in [docs/history.md](docs/history.md). Issues and pull requests sent upstream for these stacks are in [docs/external-contributions.md](docs/external-contributions.md).
 
 ## License
 
