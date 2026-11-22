@@ -83,14 +83,16 @@ Environment="IMAGE_GENERATION_ENGINE=openai"
 Environment="IMAGES_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
 Environment="IMAGES_OPENAI_API_KEY=none"
 Environment="IMAGE_GENERATION_MODEL={{ services['containers']['openwebui']['units']['main']['ai']['image_model'] }}"
-# sd-server runs on the RX 7900 XT; on the Iris Xe 1024x1024 rendered noise and took about ten minutes.
-Environment="IMAGE_SIZE=1024x1024"
+# No size: an empty IMAGE_SIZE leaves it out of the request, so each model's own defaults in quartermaster
+# (size and steps on the sd-server command line) apply. Unset, Open WebUI would send 512x512.
+Environment="IMAGE_SIZE="
 {% else %}
 Environment="ENABLE_IMAGE_GENERATION=false"
 {% endif %}
 {% if target_host in services['containers']['searxng']['units']['main']['hosts'] %}
 # Web search through SearXNG on the same host. ENABLE_PERSISTENT_CONFIG=false, so it is set here or not at all.
 Environment="ENABLE_WEB_SEARCH=true"
+Environment="WEB_SEARCH_RESULT_COUNT=5"
 Environment="WEB_SEARCH_ENGINE=searxng"
 Environment="SEARXNG_QUERY_URL=http://host.containers.internal:{{ services['containers']['searxng']['units']['main']['ports']['http']['int'] }}/search?q=<query>"
 {% endif %}
@@ -102,11 +104,16 @@ Environment="ENABLE_FOLLOW_UP_GENERATION=false"
 Environment="ENABLE_AUTOCOMPLETE_GENERATION=false"
 # Models must not create or save skills and memories on their own. Skills and memories added by the user
 # still apply: attached skills are inlined into the system prompt and memories into the system context.
-# Image generation is on by default in every chat and, with native function calling, the model calls
-# generate_image itself when asked for a picture (legacy mode would generate one for every message).
-Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false,\"skills\":false,\"memory\":false},\"defaultFeatureIds\":[\"image_generation\"]}"
+# Image generation and web search are on by default in every chat and, with native function calling, the model calls
+# generate_image or the search itself when it needs them (legacy mode would generate one for every message).
+Environment="DEFAULT_MODEL_METADATA={\"builtinTools\":{\"user_input\":false,\"skills\":false,\"memory\":false},\"defaultFeatureIds\":[\"image_generation\",\"web_search\"]}"
 Environment="DEFAULT_MODEL_PARAMS={\"function_calling\":\"native\"}"
 Environment="ENABLE_MEMORY_BACKGROUND_REVIEW=false"
+# Long chats: summarize older turns before they reach the 64k context (the stock threshold is 80k).
+Environment="ENABLE_CONTEXT_COMPACTION=true"
+Environment="CONTEXT_COMPACTION_TOKEN_THRESHOLD=50000"
+# No sharing of chats to the public Open WebUI community.
+Environment="ENABLE_COMMUNITY_SHARING=false"
 
 # RAG Embedding
 {% if (services['containers']['openwebui']['units']['main']['ai']['embedding_model'] | length) > 0 %}
