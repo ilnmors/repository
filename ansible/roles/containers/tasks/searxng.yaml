@@ -1,0 +1,89 @@
+---
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "searxng"
+
+- name: Register the missing searxng secret key on secrets.yaml
+  vars:
+    secrets_target: '["searxng"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: (secrets['searxng']['secret_key'] | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the searxng fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "SEARXNG_SECRET"
+        value: "{{ secrets['searxng']['secret_key'] }}"
+  no_log: true
+
+# Owned by searxng (uid 977) in the container, so the entrypoint does not chown them.
+- name: Create the searxng directory
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: "directory"
+    owner: "{{ item['owner'] }}"
+    group: "{{ item['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/searxng"
+      owner: "{{ nodes[target_host]['user'] }}"
+      group: "{{ nodes[target_host]['group'] }}"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/searxng/etc"
+      owner: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+      group: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+      mode: "0750"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/searxng/cache"
+      owner: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+      group: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+      mode: "0750"
+  loop_control:
+    label: "{{ item['path'] | basename }}"
+  become: true
+
+- name: Deploy the searxng settings
+  ansible.builtin.template:
+    src: "searxng/etc/settings.yml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/searxng/etc/settings.yml"
+    owner: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+    group: "{{ services['containers']['searxng']['units']['main']['subuid'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_searxng"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_searxng"
+  no_log: true
+
+- name: Deploy the searxng image
+  vars:
+    containers_image_notifications: "notification_restart_searxng"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "searxng/searxng.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/searxng.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_searxng"
+
+- name: Start the searxng
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "searxng.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_searxng_started"
+
+- name: Apply the searxng configuration handlers
+  ansible.builtin.meta: "flush_handlers"

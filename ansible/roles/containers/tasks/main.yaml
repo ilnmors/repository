@@ -199,6 +199,14 @@
   when: target_host in services['containers']['quartermaster']['units']['main']['hosts']
   tags: ["quartermaster"]
 
+- name: Include the searxng task
+  ansible.builtin.include_tasks:
+    file: "searxng.yaml"
+    apply:
+      tags: ["searxng"]
+  when: target_host in services['containers']['searxng']['units']['main']['hosts']
+  tags: ["searxng"]
+
 - name: Include the openwebui task
   ansible.builtin.include_tasks:
     file: "openwebui.yaml"

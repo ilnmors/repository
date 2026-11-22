@@ -868,6 +868,25 @@ services:
             web:
               status: true
           # Models, backends and routing groups: templates/quartermaster/config/config.yaml.j2 and models.yaml.
+    searxng:
+      units:
+        main:
+          release: "searxng"
+          hosts: ["app"]
+          # Open WebUI's web search backend, internal only (no public route, no limiter). Containers on app reach it
+          # through host.containers.internal (pasta), not through the internal domain.
+          domain:
+            internal: "searxng.app"
+          # searxng (uid 977) in the image
+          subuid: 100976
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8012
+              container: 8080
+          dependency:
+            web:
+              status: true
     openwebui:
       units:
         main:

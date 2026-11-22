@@ -1,0 +1,28 @@
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=SearXNG
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=searxng
+HostName=searxng
+
+PublishPort={{ services['containers']['searxng']['units']['main']['ports']['http']['int'] }}:{{ services['containers']['searxng']['units']['main']['ports']['http']['container'] }}/{{ services['containers']['searxng']['units']['main']['ports']['http']['protocol'] }}
+
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/searxng/etc:/etc/searxng:rw
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/searxng/cache:/var/cache/searxng:rw
+
+Environment="TZ={{ site['timezone'] }}"
+# server.secret_key; settings.yml keeps the default placeholder, which this overrides.
+Secret=SEARXNG_SECRET,type=env,target=SEARXNG_SECRET
+
+[Service]
+MemoryKSM=yes
+Restart=always
+RestartSec=60s
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

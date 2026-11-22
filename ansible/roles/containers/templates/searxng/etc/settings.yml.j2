@@ -1,0 +1,24 @@
+# Only the differences from the defaults in the image (searx/settings.yml); engines keep their default set.
+use_default_settings: true
+
+general:
+  instance_name: "SearXNG"
+
+search:
+  # Open WebUI asks for format=json.
+  formats:
+    - html
+    - json
+  safe_search: 0
+  autocomplete: ""
+
+server:
+  base_url: "https://{{ services['containers']['searxng']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/"
+  # Internal only and used by one client, so no bot limiter (it would need Valkey).
+  limiter: false
+  public_instance: false
+  image_proxy: true
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 10.0

@@ -269,6 +269,10 @@ releases:
         strata:
           repository: "ghcr.io/niko1221/strata"
           tag: "0.2.16-rocm-gfx110x"
+    searxng:
+      name: "searxng"
+      repository: "docker.io/searxng/searxng"
+      tag: "2026.11.6-ac11e14c5"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"

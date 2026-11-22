@@ -88,6 +88,12 @@ Environment="IMAGE_SIZE=1024x1024"
 {% else %}
 Environment="ENABLE_IMAGE_GENERATION=false"
 {% endif %}
+{% if target_host in services['containers']['searxng']['units']['main']['hosts'] %}
+# Web search through SearXNG on the same host. ENABLE_PERSISTENT_CONFIG=false, so it is set here or not at all.
+Environment="ENABLE_WEB_SEARCH=true"
+Environment="WEB_SEARCH_ENGINE=searxng"
+Environment="SEARXNG_QUERY_URL=http://host.containers.internal:{{ services['containers']['searxng']['units']['main']['ports']['http']['int'] }}/search?q=<query>"
+{% endif %}
 Environment="AIOHTTP_CLIENT_TIMEOUT=3600"
 # Disable background LLM tasks
 Environment="ENABLE_TITLE_GENERATION=false"
