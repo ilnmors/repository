@@ -925,7 +925,7 @@ services:
           ai:
             # Only these appear in the model picker; the first is the default. Clients use the first as the fast model
             # and the last for harder work, so one model serves both.
-            chat_models: ["qwen3.8-flash-next-ista"]
+            chat_models: ["qwen3.8-flash-next"]
             embedding_model: "bge-m3"
             image_model: "minimax-h3-image"
     sure:

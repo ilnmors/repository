@@ -25,7 +25,7 @@ qwen-image-2.1:
 # and shared parts in VRAM, the experts in RAM); shard 2 is the 28.8 GB n-gram table, read from disk.
 # IQ2_XS since 2026-11-21: about a third faster than IQ3_XXS. Both put a few Chinese words into Korean answers
 # (7 and 5 of 30 in the language test, a Korean-only system prompt did not help); accepted as is.
-qwen3.8-flash-next-ista:
+qwen3.8-flash-next:
   - role: "model"
     url: "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf"
   - role: "ngram"

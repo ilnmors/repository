@@ -30,7 +30,7 @@ models:
   # a 64k context for the coding clients,
   # the DFlash2 drafter, ten expert workers and an expert profile it keeps learning. Presets and profiles live in
   # /data/strata (DATA), packs and the drafter in /data/strata/Strata-data (HOME); a new quant builds its pack first.
-  qwen3.8-flash-next-ista:
+  qwen3.8-flash-next:
     env:
       - "STRATA_ALLOWED_HOSTS=host.containers.internal,{{ services['containers']['quartermaster']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}"
       - "STRATA_COMPONENTS_DIR=/opt/strata/components"
@@ -41,7 +41,7 @@ models:
       - "STRATA_IN_DOCKER=1"
       - "PYTHONNOUSERSITE=1"
       - "LANG=C.UTF-8"
-      - "MODEL_PATH={{ qm['qwen3.8-flash-next-ista']['model'] | dirname }}"
+      - "MODEL_PATH={{ qm['qwen3.8-flash-next']['model'] | dirname }}"
       - "FAMILY=qwen"
       - "MODEL=IQ2_XS"
       - "PRESET=iq2xs"
@@ -50,7 +50,7 @@ models:
       - "DRAFTING=dflash2"
       # The refusal-direction projection (models.yaml, role cvec) goes straight to the engine: strata launch keeps
       # setup's own experimental-speed-projection switch off for this family, and --set options are added after it.
-      - "STRATA_SET=pool-workers=10 STRATA_RESIDENT_PIN=1 expert-profile=/data/strata/profile-iq2xs.bin expert-profile-save=/data/strata/profile-iq2xs.bin expert-profile-save-every=1 control-vector-scaled={{ qm['qwen3.8-flash-next-ista']['cvec'] }}:1.0 control-vector-layer-range=4-44 cvec-mode=project cvec-dir=per-layer"
+      - "STRATA_SET=pool-workers=10 STRATA_RESIDENT_PIN=1 expert-profile=/data/strata/profile-iq2xs.bin expert-profile-save=/data/strata/profile-iq2xs.bin expert-profile-save-every=1 control-vector-scaled={{ qm['qwen3.8-flash-next']['cvec'] }}:1.0 control-vector-layer-range=4-44 cvec-mode=project cvec-dir=per-layer"
     cmd: >-
       env PORT=${PORT} /opt/strata/entrypoint.sh
     proxy: "http://127.0.0.1:${PORT}"
@@ -111,7 +111,7 @@ routing:
           exclusive: false
           persistent: false
           members:
-            - "qwen3.8-flash-next-ista"
+            - "qwen3.8-flash-next"
             - "qwen-image-2.1"
             - "minimax-h3-image"
 
@@ -119,4 +119,4 @@ hooks:
   on_startup:
     preload:
       - "bge-m3"
-      - "qwen3.8-flash-next-ista"
+      - "qwen3.8-flash-next"
