@@ -62,24 +62,36 @@
     // Secret-looking files need an explicit approval each time (the models are local, but still).
     "read": { "*": "allow", "*secret*": "ask", "*vault*pass*": "ask", "*.env": "ask", "*.env.*": "ask",
               "*.key": "ask", "*.pem": "ask", "*/.ssh/*": "ask" },
-    "edit": { "*": "allow", "*secret*": "ask", "*.env": "ask", "*/.git/*": "deny" },
+    "edit": { "*": "allow", "*secret*": "ask", "*.env": "ask", "*/.git/*": "ask" },
     // grep is checked against the search pattern, not the path, so it would bypass the rules above.
     "glob": "allow",
-    "grep": "deny",
+    "grep": "allow",
     "list": "allow",
-    "lsp": "deny",
+    "lsp": "ask",
     "todowrite": "allow",
     "task": "allow",
     "skill": "allow",
     "bash": {
-      "*": "deny",
+      "*": "ask",
+      
+      // Git 및 린트(Lint) 명령어 (기존 유지)
       "git status *": "allow", "git diff *": "allow", "git log *": "allow", "git show *": "allow",
-      "ansible-lint *": "allow", "yamllint *": "allow", "shellcheck *": "allow", "python3 -m py_compile *": "allow"
+      "ansible-lint *": "allow", "yamllint *": "allow", "shellcheck *": "allow", "python3 -m py_compile *": "allow",
+      
+      "grep *": "allow",
+      "rg *": "allow",
+      "ls *": "allow",
+      "cat *": "allow",
+      "find *": "allow",
+      "fd *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "pwd": "allow"
     },
-    "external_directory": "deny",
-    "webfetch": "deny",
-    "websearch": "deny",
-    "question": "deny",
-    "doom_loop": "deny"
+    "external_directory": "ask",
+    "webfetch": "ask",
+    "websearch": "ask",
+    "question": "ask",
+    "doom_loop": "ask"
   }
 }
