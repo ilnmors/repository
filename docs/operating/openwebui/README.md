@@ -3,17 +3,19 @@
 | Item | Value |
 | --- | --- |
 | Host | app (8002) |
-| Version (2026-11-13) | v0.13.3 |
+| Version (2026-11-23) | v0.13.4 |
 
 ## Notes
 
-- Backend is [quartermaster](../quartermaster/README.md). Sure no longer uses Open WebUI as its AI gateway: its AI variables were removed on 2026-11-13, and API keys stay enabled for a later reconnection.
+- Backend is [quartermaster](../quartermaster/README.md): `qwen3.8-flash-next` (chat, default), `bge-m3` (embeddings), `moody-krea2-mix` (images), and `wan2.2-enhanced-i2v` (video). `OPENAI_API_CONFIGS` lists only chat models in the model picker.
+- API keys are enabled for service clients (Sure, OpenCode, Continue, etc.) with `ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS=true`. Every key (including admin keys) is limited to `/api/chat/completions`, `/api/v1/chat/completions`, `/api/models`, `/api/embeddings`, and `/api/v1/videos/config/update` (admin-only, used by `video-connection.py`); chats, files, users, and settings stay out of reach.
 - Reset on 2026-11-15: the database was dropped and recreated (with the `vector` extension), and the data directory and the `open-webui` bucket were emptied. Accounts are created again on the first Authelia login.
-- Models cannot create or save skills and memories on their own: `DEFAULT_MODEL_METADATA` sets `builtinTools.skills` and `builtinTools.memory` to `false`, and `ENABLE_MEMORY_BACKGROUND_REVIEW=false`. Skills and memories added by the user still apply (attached skills are inlined into the system prompt, memories into the system context). Model presets created later need the same `builtinTools` values.
-- Images are requested at 512×512 (`IMAGE_SIZE`), see [quartermaster](../quartermaster/README.md).
-- Files are stored in RustFS (`open-webui` bucket); vectors in PostgreSQL (pgvector).
+- Models cannot create or save skills and memories on their own: `DEFAULT_MODEL_METADATA` sets `builtinTools.user_input`, `builtinTools.skills`, and `builtinTools.memory` to `false`, and `ENABLE_MEMORY_BACKGROUND_REVIEW=false`. Skills and memories added by the user still apply (attached skills are inlined into the system prompt, memories into the system context). Model presets created later need the same `builtinTools` values.
+- Tool defaults and context: `image_generation` and `video_generation` are on by default in every chat with `function_calling: native`. Web search ([searxng](../searxng/README.md), 5 results, `WEB_FETCH_MAX_CONTENT_LENGTH=20000`) and the code interpreter stay available on demand. Context compaction (`CONTEXT_COMPACTION_TOKEN_THRESHOLD=40000`) keeps long chats inside the 64k context; background LLM tasks (title, tags, follow-up, autocomplete) and community sharing are disabled.
+- Images leave `IMAGE_SIZE` empty so each model's defaults in [quartermaster](../quartermaster/README.md) (1024×1024) apply. Video connects to Quartermaster's `/v1/videos` adapter (port 8013) via `templates/openwebui/video-connection.py` on start (`VIDEO_GENERATION_TIMEOUT=10800`).
+- Files are stored in RustFS (`open-webui` bucket); vectors in PostgreSQL (`pgvector`, max vector length 1024, token chunking 350/50).
 - Library (2026-11-23): `/library/` is a files gallery (`templates/openwebui/library/index.html`, mounted read-only into `/app/build/library`), so Open WebUI serves it under its own login; without a valid token it sends the browser to `/auth?redirect=/library/`. It has a left sidebar (search, folders, type filter, summary) and opens on the folder overview, not on the files; clicking a file opens a viewer with its details and actions. Folders are the page's own: they live in the user's settings under the top-level key `library` (`{"folders": [...], "map": {"<file id>": "<folder id>"}}`), which Open WebUI does not read; new files are in "Unsorted". Renames and deletes go through Open WebUI's file API, so the database and the bucket stay in step. `loader.js` replaces the empty `/static/loader.js` hook (mounted over `/app/build/static/loader.js`, copied to the static folder at start) and adds a Library row below Workspace in the sidebar's user menu; check both after an Open WebUI upgrade.
 
 ## Login
 
-`ENABLE_LOGIN_FORM=false`, `OAUTH_AUTO_REDIRECT=false`.
+`ENABLE_LOGIN_FORM=false`, `ENABLE_PASSWORD_AUTH=false`, `ENABLE_SIGNUP=false`, `OAUTH_AUTO_REDIRECT=false` (Authelia OIDC).

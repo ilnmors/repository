@@ -864,7 +864,7 @@ services:
               protocol: "tcp"
               int: 10000
               container: 8080
-            # OpenAI video API (/v1/videos) for Open WebUI; files/quartermaster/video/adapter.py inside the container.
+            # OpenAI video API (/v1/videos) for Open WebUI; templates/quartermaster/video/adapter.py inside the container.
             video:
               protocol: "tcp"
               int: 8013
