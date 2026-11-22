@@ -56,41 +56,63 @@
       }
     }
   },
-  // Within each object the last matching pattern wins. Headless runs cannot answer "ask",
-  // so everything a run can reach is allow or deny.
+  // Within each object the last matching pattern wins. Read/search/inspection tools are allowed freely
+  // (models are local), while edits and modifying/destructive shell commands require confirmation.
   "permission": {
-    // Secret-looking files need an explicit approval each time (the models are local, but still).
-    "read": { "*": "allow", "*secret*": "ask", "*vault*pass*": "ask", "*.env": "ask", "*.env.*": "ask",
-              "*.key": "ask", "*.pem": "ask", "*/.ssh/*": "ask" },
-    "edit": { "*": "allow", "*secret*": "ask", "*.env": "ask", "*/.git/*": "ask" },
-    // grep is checked against the search pattern, not the path, so it would bypass the rules above.
+    "read": "allow",
+    "edit": "ask",
     "glob": "allow",
     "grep": "allow",
     "list": "allow",
-    "lsp": "ask",
+    "lsp": "allow",
     "todowrite": "allow",
     "task": "allow",
     "skill": "allow",
+    "external_directory": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
     "bash": {
       "*": "ask",
-      
-      // Git 및 린트(Lint) 명령어 (기존 유지)
-      "git status *": "allow", "git diff *": "allow", "git log *": "allow", "git show *": "allow",
-      "ansible-lint *": "allow", "yamllint *": "allow", "shellcheck *": "allow", "python3 -m py_compile *": "allow",
-      
-      "grep *": "allow",
-      "rg *": "allow",
-      "ls *": "allow",
-      "cat *": "allow",
-      "find *": "allow",
-      "fd *": "allow",
-      "head *": "allow",
-      "tail *": "allow",
-      "pwd": "allow"
+      // Git (read-only)
+      "git status": "allow", "git status *": "allow",
+      "git diff": "allow", "git diff *": "allow",
+      "git log": "allow", "git log *": "allow",
+      "git show": "allow", "git show *": "allow",
+      "git branch": "allow", "git branch *": "allow",
+      "git remote": "allow", "git remote *": "allow",
+      "git rev-parse *": "allow",
+      "git ls-files": "allow", "git ls-files *": "allow",
+      "git grep *": "allow", "git blame *": "allow",
+      // Linters & dry-run checks
+      "ansible-lint *": "allow", "yamllint *": "allow", "shellcheck *": "allow",
+      "python3 -m py_compile *": "allow",
+      "ansible-playbook *--syntax-check*": "allow",
+      "ansible-playbook *--list-tasks*": "allow",
+      // Filesystem, search & text inspection (read-only)
+      "ls": "allow", "ls *": "allow",
+      "tree": "allow", "tree *": "allow",
+      "stat *": "allow", "file *": "allow", "wc *": "allow",
+      "du *": "allow", "df": "allow", "df *": "allow",
+      "pwd": "allow", "realpath *": "allow", "readlink *": "allow",
+      "which *": "allow", "id": "allow", "uname *": "allow", "uptime": "allow", "uptime *": "allow", "date": "allow", "date *": "allow",
+      "cat *": "allow", "head *": "allow", "tail *": "allow",
+      "grep *": "allow", "rg *": "allow", "find *": "allow", "fd *": "allow",
+      "jq *": "allow", "yq *": "allow", "diff *": "allow", "cmp *": "allow",
+      "sort *": "allow", "uniq *": "allow", "cut *": "allow", "tr *": "allow", "awk *": "allow", "sed -n *": "allow",
+      "sha256sum *": "allow", "md5sum *": "allow",
+      // System & container inspection (read-only)
+      "ps": "allow", "ps *": "allow", "pgrep *": "allow",
+      "ss *": "allow", "ip a": "allow", "ip addr*": "allow", "ip route*": "allow", "ip link*": "allow",
+      "journalctl *": "allow",
+      "systemctl status *": "allow", "systemctl list-*": "allow", "systemctl is-*": "allow", "systemctl show *": "allow", "systemctl cat *": "allow",
+      "systemctl --user status *": "allow", "systemctl --user list-*": "allow", "systemctl --user is-*": "allow", "systemctl --user show *": "allow", "systemctl --user cat *": "allow",
+      "podman ps": "allow", "podman ps *": "allow", "podman images": "allow", "podman images *": "allow",
+      "podman logs *": "allow", "podman inspect *": "allow",
+      // Safety guards (last match wins): always ask on writes, redirections, deletes, or privilege escalation
+      "* > *": "ask", "* >> *": "ask", "*tee *": "ask",
+      "*--delete*": "ask", "*-delete*": "ask", "*-exec*": "ask",
+      "*sudo *": "ask", "*pkexec *": "ask"
     },
-    "external_directory": "ask",
-    "webfetch": "ask",
-    "websearch": "ask",
     "question": "ask",
     "doom_loop": "ask"
   }
