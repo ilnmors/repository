@@ -51,7 +51,7 @@
 
 - name: Deploy the quartermaster video adapter
   ansible.builtin.copy:
-    src: "quartermaster/video/adapter.py"
+    src: "{{ role_path }}/templates/quartermaster/video/adapter.py"
     dest: "{{ nodes[target_host]['paths']['home'] }}/containers/quartermaster/video/adapter.py"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"

@@ -100,7 +100,7 @@
       - (item['upstream_sha256'] ~ '  ' ~ item['path']) in containers_mastodon_patch_upstream['stdout_lines']
     fail_msg: >-
       {{ item['path'] }} changed in {{ releases['containers']['mastodon']['tag'] }}; port
-      files/mastodon/{{ item['path'] | basename }} and update its upstream_sha256.
+      templates/mastodon/patches/{{ item['path'] | basename }} and update its upstream_sha256.
     quiet: true
   loop: "{{ releases['containers']['mastodon']['patches'] }}"
   loop_control:
@@ -184,7 +184,7 @@
 
 - name: Deploy the mastodon patches
   ansible.builtin.copy:
-    src: "mastodon/{{ item['path'] | basename }}"
+    src: "{{ role_path }}/templates/mastodon/patches/{{ item['path'] | basename }}"
     dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/patches/{{ item['path'] | basename }}"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"

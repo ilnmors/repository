@@ -32,7 +32,7 @@ Environment="ENABLE_API_KEYS=true"
 # Service keys belong to dedicated non-admin users granted features.api_keys through a group.
 Environment="ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS=true"
 {% if services['containers']['openwebui']['units']['main']['ai']['video_model'] | default('') | length > 0 %}
-# /api/v1/videos/config/update is for files/openwebui/video-connection.py; the route still requires an admin.
+# /api/v1/videos/config/update is for templates/openwebui/video-connection.py; the route still requires an admin.
 Environment="API_KEYS_ALLOWED_ENDPOINTS=/api/chat/completions,/api/v1/chat/completions,/api/models,/api/embeddings,/api/v1/videos/config/update"
 {% else %}
 Environment="API_KEYS_ALLOWED_ENDPOINTS=/api/chat/completions,/api/v1/chat/completions,/api/models,/api/embeddings"

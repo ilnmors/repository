@@ -85,7 +85,7 @@
 
 - name: Deploy the openwebui video connection script
   ansible.builtin.copy:
-    src: "openwebui/video-connection.py"
+    src: "{{ role_path }}/templates/openwebui/video-connection.py"
     dest: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/video-connection.py"
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"

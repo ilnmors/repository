@@ -56,7 +56,7 @@ RUN printf '%s\n' \
       '}' > /out/.qm-install.json
 
 # Same runtime as upstream (Ubuntu, ca-certificates, libgomp1, libvulkan1) plus the Mesa Vulkan drivers, and Python
-# with Pillow for the video adapter (roles/containers/files/quartermaster/video/adapter.py, mounted at run time).
+# with Pillow for the video adapter (roles/containers/templates/quartermaster/video/adapter.py, mounted at run time).
 FROM docker.io/library/ubuntu:{{ qm['build']['base']['tag'] }}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV QM_BACKENDS_DIR=/opt/quartermaster/backends

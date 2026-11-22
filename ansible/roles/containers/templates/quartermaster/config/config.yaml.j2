@@ -56,11 +56,11 @@ models:
     # Healthy once a model is loaded; loading takes minutes (hours when the packs are built the first time).
     checkEndpoint: "/v1/models"
     # Fewer Chinese words in Korean answers: every request gets logit_bias -3 on the tokens that contain a Han character
-    # or a UTF-8 lead byte E4-E9 (files/quartermaster/han-token-ids.json, built from this model's tokenizer; rebuild it
+    # or a UTF-8 lead byte E4-E9 (templates/quartermaster/han-token-ids.json, built from this model's tokenizer; rebuild it
     # for another model). Hangul is not touched. Tested 2026-11-22 on IQ2_XS: Korean answers with Han 9/30 -> 0/30,
     # prompts that ask for Han (hanja, Chinese, code strings) still get it (-5 starts to break that), speed unchanged.
     # A client's own logit_bias is replaced.
-{% set han_ids = lookup('ansible.builtin.file', 'quartermaster/han-token-ids.json') | from_json %}
+{% set han_ids = lookup('ansible.builtin.file', role_path ~ '/templates/quartermaster/han-token-ids.json') | from_json %}
     filters:
       setParams:
         logit_bias: {{ dict(han_ids | map('string') | zip([-3] * (han_ids | length))) | to_json }}
