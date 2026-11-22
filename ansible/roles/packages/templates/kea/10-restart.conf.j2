@@ -1,0 +1,8 @@
+# The client and user VLANs sit on br1, which has no carrier until eth1 is cabled or a VM attaches its vnet.
+# kea gives up after service-sockets-max-retries, so restart it until the VLANs are up.
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=on-failure
+RestartSec=10
