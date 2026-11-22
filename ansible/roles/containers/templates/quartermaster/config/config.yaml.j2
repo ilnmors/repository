@@ -80,7 +80,7 @@ models:
       ${sd} --diffusion-model {{ qm['qwen-image-2.1']['diffusion'] }}
       --llm {{ qm['qwen-image-2.1']['llm'] }}
       --vae {{ qm['qwen-image-2.1']['vae'] }}
-      --sigmas qwen-image-2.1-turbo --steps 8 --cfg-scale 1.0 --sampling-method euler
+      --sigmas qwen-image-2.1-turbo --steps 8 --cfg-scale 1.0 --sampling-method euler -W 1024 -H 1024
     # sd-server has no /health; /v1/models answers once the weights are loaded.
     checkEndpoint: "/v1/models"
   # Distilled to 6 steps without CFG. The 32B text encoder runs on the Iris Xe (shared memory, faster than
@@ -91,7 +91,7 @@ models:
       --llm {{ qm['minimax-h3-image']['llm'] }}
       --vae {{ qm['minimax-h3-image']['vae'] }}
       --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
-      --sigmas minimax-h3-image --steps 6 --cfg-scale 1.0 --sampling-method euler --rng cpu
+      --sigmas minimax-h3-image --steps 6 --cfg-scale 1.0 --sampling-method euler --rng cpu -W 1024 -H 1024
     checkEndpoint: "/v1/models"
 
 # The embedding model stays loaded on the Iris Xe; chat and image generation swap on the RX 7900 XT.
