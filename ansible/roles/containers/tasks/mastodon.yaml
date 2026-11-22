@@ -85,6 +85,27 @@
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
 
+# Each patched file replaces the image's copy, so it must match the version it was made from.
+- name: Read the upstream files under the mastodon patches
+  ansible.builtin.command: >-
+    podman run --rm --entrypoint sha256sum
+    {{ containers_container_repository }}:{{ releases['containers']['mastodon']['tag'] }}
+    {{ releases['containers']['mastodon']['patches'] | map(attribute='path') | join(' ') }}
+  changed_when: false
+  register: "containers_mastodon_patch_upstream"
+
+- name: Check the mastodon patch bases
+  ansible.builtin.assert:
+    that:
+      - (item['upstream_sha256'] ~ '  ' ~ item['path']) in containers_mastodon_patch_upstream['stdout_lines']
+    fail_msg: >-
+      {{ item['path'] }} changed in {{ releases['containers']['mastodon']['tag'] }}; port
+      files/mastodon/{{ item['path'] | basename }} and update its upstream_sha256.
+    quiet: true
+  loop: "{{ releases['containers']['mastodon']['patches'] }}"
+  loop_control:
+    label: "{{ item['path'] | basename }}"
+
 # The rake task has no :environment dependency, so it runs without the database or the Rails secrets.
 - name: Generate the missing mastodon VAPID keys
   ansible.builtin.shell: |
@@ -158,7 +179,21 @@
     - "{{ nodes[target_host]['paths']['data'] }}/containers/mastodon"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon"
     - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl"
+    - "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/patches"
   become: true
+
+- name: Deploy the mastodon patches
+  ansible.builtin.copy:
+    src: "mastodon/{{ item['path'] | basename }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mastodon/patches/{{ item['path'] | basename }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop: "{{ releases['containers']['mastodon']['patches'] }}"
+  loop_control:
+    label: "{{ item['path'] | basename }}"
+  become: true
+  notify: "notification_restart_mastodon"
 
 - name: Deploy the mastodon root certificate
   ansible.builtin.copy:

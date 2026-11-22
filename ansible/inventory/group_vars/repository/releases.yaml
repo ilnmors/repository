@@ -226,6 +226,14 @@ releases:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
       tag: "v4.7.5"
+      # Local patches mounted over the image (roles/containers/files/mastodon/<file name>): animated WebP stays animated
+      # WebP, and GIF uploads become WebP instead of an MP4 gifv. The playbook stops when the image's own copy no longer
+      # has the SHA256 a patch was made from, so a new tag forces a review.
+      patches:
+        - path: "/opt/mastodon/lib/paperclip/vips_lazy_thumbnail.rb"
+          upstream_sha256: "de7655d90db41a5da3a49c81e46c44eead1da5bf8c02c90ac69bd32ca8e88e96"
+        - path: "/opt/mastodon/app/models/media_attachment.rb"
+          upstream_sha256: "b300e5222b088a890a52330ae84745c0b534820262de3bc1578ccc3bc1ae9219"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"
