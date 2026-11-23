@@ -115,6 +115,6 @@ Afterwards run them without tags, or a single service with `--tags <service>` (f
 - Change a service: edit `services.yaml` or `releases.yaml` and run `ansible-playbook playbooks/nodes/<host>.yaml --tags <service>`.
 - Add a service: declare it in `services.yaml`, pin it in `releases.yaml`, add its task and templates under `roles/containers/`, and include it from `roles/containers/tasks/main.yaml`. Database accounts and OIDC clients are registered per service through `postgresql-register.yaml` and `authelia-register.yaml`.
 - Edit secrets with `tools/scripts/edit_secret.sh`.
-- Per-service notes are in [docs/operating](operating/README.md).
+- Per-service notes are in [docs/services](services/README.md).
 
 Playbooks create and grow resources but never format a disk that already holds another filesystem and never regenerate CA material unless you run the tagged PKI play. Destructive changes stay manual.

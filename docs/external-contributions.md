@@ -16,7 +16,7 @@ AGENT.md ("External contributions"). Surface Laptop 7 posts are recorded in the 
 - Review: rebase requested and done (2026-11-18); clippy asked about, answered after running `just check` unchanged
   (`--all-features`, clean on rustc 1.100.0).
 - Not in a release yet (latest v0.10.1, 2026-11-18). Until then keep the rename step in
-  [operating/oxicloud](operating/oxicloud/README.md).
+  [services/oxicloud](services/oxicloud/README.md).
 - Left upstream: the admin "create user" form still has a client-side 3-character check (`minlength="3"`).
 - The fork `ilnmors/OxiCloud` held only this branch (the others were copied from upstream when it was forked); it
   and the local clone were deleted 2026-11-22.

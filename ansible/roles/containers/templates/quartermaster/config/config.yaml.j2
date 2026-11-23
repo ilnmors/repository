@@ -25,7 +25,7 @@ macros:
 
 models:
   # Strata (HIP) on the RX 7900 XT: the hot experts stay in VRAM, the rest are pinned in RAM and the n-gram table
-  # is read from disk. Settings measured 2026-11-20/21 (docs/operating/quartermaster): the tuned preset (tuned at 32k),
+  # is read from disk. Settings measured 2026-11-20/21 (docs/services/quartermaster): the tuned preset (tuned at 32k),
   # a 64k context for the coding clients,
   # the DFlash2 drafter, ten expert workers and an expert profile it keeps learning. Presets and profiles live in
   # /data/strata (DATA), packs and the drafter in /data/strata/Strata-data (HOME); a new quant builds its pack first.

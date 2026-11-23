@@ -1,6 +1,6 @@
 # Meal Planning Agent
 
-Tandoor is the meal database; an agent outside Tandoor plans meals through the REST API. People decide only whether they like the plan, shop, cook and give feedback. Budget, household and taste details are kept outside Git in `.agent-workspace/operating/tandoor-private.md`.
+Tandoor is the meal database; an agent outside Tandoor plans meals through the REST API. People decide only whether they like the plan, shop, cook and give feedback. Budget, household and taste details are kept outside Git in [private/notes.md](../private/notes.md).
 
 ## Roles
 
@@ -60,7 +60,7 @@ The plan is only as good as the data:
 ## Example Instruction
 
 ```text
-Read docs/operating/tandoor and .agent-workspace/operating/tandoor-private.md in the repository.
+Read docs/services/tandoor (README.md, public/ and private/notes.md) in the repository.
 Draft next week's meal plan from Tandoor and this month's grocery spending in Sure.
 Show me the draft and the shopping list before writing anything to Tandoor.
 ```

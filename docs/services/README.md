@@ -1,6 +1,6 @@
-# Operating Notes
+# Services
 
-Facts and decisions for running the homelab stacks, one directory per stack (`<stack>/README.md`). The configuration itself lives in `ansible/`. These notes describe the running servers as of 2026-11-15. The servers are still deployed from the archived homelab repository, whose stacks now match this repository's versions and layouts.
+Facts and decisions for running the homelab stacks, one directory per stack: `<stack>/README.md`, further public documents in `<stack>/public/`, and private operating notes in `<stack>/private/` (not in Git). Retired stacks are in `docs/archives/services/`. The configuration itself lives in `ansible/`. These notes describe the running servers as of 2026-11-15. The servers are still deployed from the archived homelab repository, whose stacks now match this repository's versions and layouts.
 
 ## Stacks
 
@@ -10,9 +10,9 @@ Facts and decisions for running the homelab stacks, one directory per stack (`<s
 | auth | [authelia](authelia/README.md), [caddy](caddy/README.md) |
 | vmm | [crowdsec](crowdsec/README.md) (LAPI; agents on every host) |
 | app | [oxicloud](oxicloud/README.md), [collabora](collabora/README.md), [sure](sure/README.md), [immich](immich/README.md), [outline](outline/README.md), [bookstack](bookstack/README.md), [kaneo](kaneo/README.md), [linkding](linkding/README.md), [vaultwarden](vaultwarden/README.md), [forgejo](forgejo/README.md), [mastodon](mastodon/README.md), [openwebui](openwebui/README.md), [searxng](searxng/README.md), [quartermaster](quartermaster/README.md), [homepage](homepage/README.md), [readur](readur/README.md), [tandoor](tandoor/README.md), [snappymail](snappymail/README.md), [valkey](valkey/README.md), [caddy](caddy/README.md) |
-| app, not in this repository | [homebox](homebox/README.md), [tandoor](tandoor/README.md) |
-| retired 2026-11-14 | [gitea](gitea/README.md) (→ forgejo), [maddy](maddy/README.md) (→ mail), [llama](llama/README.md) and [stablediffusion](stablediffusion/README.md) (→ quartermaster) |
-| stopped 2026-11-13 | [papra](papra/README.md), [nextcloud](nextcloud/README.md), [groupoffice](groupoffice/README.md) |
+| app, not in this repository | [homebox](../archives/services/homebox/README.md), [tandoor](tandoor/README.md) |
+| retired 2026-11-14 | [gitea](../archives/services/gitea/README.md) (→ forgejo), [maddy](../archives/services/maddy/README.md) (→ mail), [llama](../archives/services/llama/README.md) and [stablediffusion](../archives/services/stablediffusion/README.md) (→ quartermaster) |
+| stopped 2026-11-13 | [papra](../archives/services/papra/README.md), [nextcloud](../archives/services/nextcloud/README.md), [groupoffice](../archives/services/groupoffice/README.md) |
 
 - `releases.yaml` was updated to the latest stable releases the same day.
 

@@ -7,5 +7,5 @@
 
 ## Notes
 
-- Retired on 2026-11-14, replaced by [quartermaster](../quartermaster/README.md).
+- Retired on 2026-11-14, replaced by [quartermaster](../../../services/quartermaster/README.md).
 - Kept pinned: newer builds misreport UMA memory under SYCL.

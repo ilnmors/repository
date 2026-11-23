@@ -47,7 +47,7 @@ qwen3.8-flash-next:
 
 # Image generation, second model (2026-11-22): Moody Krea Mix V7 (catlover1937), a Krea 2 finetune, from the author's
 # own Hugging Face repository (apache-2.0; V1-V7 are free). The bf16 original (26.3 GB, SHA256 6ed09955...) stays in
-# DATA; Q8_0 (made with "sd-cli -M convert --type q8_0", see docs/operating/quartermaster) runs. Qwen3-VL 4B text
+# DATA; Q8_0 (made with "sd-cli -M convert --type q8_0", see docs/services/quartermaster) runs. Qwen3-VL 4B text
 # encoder on the Iris Xe and the Wan 2.1 VAE, as stable-diffusion.cpp's Krea2 docs list them.
 moody-krea2-mix:
   - role: "diffusion"

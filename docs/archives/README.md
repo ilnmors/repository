@@ -8,6 +8,7 @@ Stacks that are not part of the active repository, kept in the current repositor
 | `roles/containers/{tasks,templates,handlers}` | Container tasks following the active role conventions (PostgreSQL/MariaDB/Authelia/valkey includes, podman secrets, `deploy.yaml`, `nodes[...]['paths']`). `tasks/main.yaml` and `handlers/main.yaml` hold only the entries to append. |
 | `roles/packages/{tasks,templates,handlers}` | Host packages and systemd services (blocky, wsl-alive, chromium). |
 | `tools/extract_secret.sh` | Archived homelab secret helper, kept verbatim. |
+| `services/<stack>/` | The operating notes of stacks retired from this repository (gitea, groupoffice, homebox, llama, maddy, nextcloud, papra, stablediffusion), moved from `docs/services/` on 2026-11-24. |
 
 All templates render against the current repository variables (with `secrets` stubbed), and the task files pass `ansible-lint` (production profile) when merged into a copy of `ansible/`.
 

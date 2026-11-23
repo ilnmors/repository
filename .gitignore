@@ -8,3 +8,5 @@ CLAUDE.md
 AGENT.md
 AGENTS.md
 GEMINI.md
+# Private operating notes per service (personal data, never published).
+docs/services/*/private/

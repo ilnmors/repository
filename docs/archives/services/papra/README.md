@@ -12,4 +12,4 @@
 
 ## Notes
 
-- Stopped on 2026-11-13 and replaced by [readur](../readur/README.md). The full data backup is on app in `~/backups-20261113-papra-to-readur/`.
+- Stopped on 2026-11-13 and replaced by [readur](../../../services/readur/README.md). The full data backup is on app in `~/backups-20261113-papra-to-readur/`.

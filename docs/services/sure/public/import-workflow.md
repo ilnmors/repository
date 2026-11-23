@@ -1,6 +1,6 @@
 # Banksalad → Sure Import
 
-Procedure for an import from a Banksalad export. Give this file, the other documents in this directory and the private notes (`.agent-workspace/operating/sure-private.md`) to the agent (Claude Code, Codex, OpenCode).
+Procedure for an import from a Banksalad export. Give this file, the other documents in this directory and the private notes ([private/notes.md](../private/notes.md), outside Git) to the agent (Claude Code, Codex, OpenCode).
 
 ## Input
 
@@ -61,7 +61,7 @@ Procedure for an import from a Banksalad export. Give this file, the other docum
 ## Example Instruction
 
 ```text
-Read docs/operating/sure and .agent-workspace/operating/sure-private.md in the repository,
+Read docs/services/sure (README.md, public/ and private/notes.md) in the repository,
 and import the new Banksalad export into Sure the same way as before.
 Import only rows after the last imported date, and show me new merchants or new categories for approval before applying.
 ```

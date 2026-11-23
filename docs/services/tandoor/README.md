@@ -6,7 +6,7 @@
 | Version (2026-11-13) | 2.7.2 |
 | Version (repository, 2026-11-17) | 2.7.3 |
 
-Household recipe and meal database. An external agent plans meals through the API: see [meal-planning.md](meal-planning.md). Budget and household details are kept outside Git in `.agent-workspace/operating/tandoor-private.md`.
+Household recipe and meal database. An external agent plans meals through the API: see [meal-planning.md](public/meal-planning.md). Budget and household details are kept outside Git in [private/notes.md](private/notes.md).
 
 ## Notes
 

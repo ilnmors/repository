@@ -39,4 +39,4 @@
 
 - All Papra documents were uploaded through the API with a temporary API key of the owner account, revoked afterwards. SHA-256 hashes match the Papra originals.
 - `created_at` and `original_created_at` were set to the document date (00:00 local time) so lists sort by document date.
-- File names were normalized (no spaces, one numbering style). Details and the naming rule are in the private notes under `.agent-workspace/operating/`.
+- File names were normalized (no spaces, one numbering style). Details and the naming rule are in the private notes, [private/notes.md](private/notes.md) (outside Git).
