@@ -6,3 +6,5 @@ tools/build/
 *.tmp
 CLAUDE.md
 AGENT.md
+AGENTS.md
+GEMINI.md
