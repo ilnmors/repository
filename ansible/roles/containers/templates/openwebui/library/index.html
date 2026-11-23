@@ -16,6 +16,13 @@
   Folders are the page's own idea: they live in the user's Open WebUI settings under the top-level key "library"
   (GET/POST /api/v1/users/user/settings), as {"folders": [{"id", "name"}], "map": {"<file id>": "<folder id>"}};
   Open WebUI itself never reads that key. New files land in "Unsorted" (no folder).
+  Thumbnails are ordinary Open WebUI files, so they sit in the same private bucket behind the same login: when an
+  image without one scrolls into view, the page draws its first frame at most 256 px on the long side and uploads it
+  through POST /api/v1/files/?process=false with metadata {"library_thumbnail_of": "<original id>"}. Nothing is kept
+  in the browser. Files carrying that key are hidden from the library and only used for the grid; the viewer always
+  shows the original. Deleting an original here deletes its thumbnail, and thumbnails whose original is gone are
+  deleted when the page loads. A thumbnail is named thumb-<original name>; renames made here or elsewhere in Open
+  WebUI are carried over (elsewhere: on the next load). The grid is drawn in pages of 60 tiles as you scroll.
 -->
 <style>
 :root {
@@ -172,10 +179,13 @@ dialog button.danger { color: #ff8a8a; }
   let token = null;
   try { token = localStorage.getItem('token'); } catch (error) { token = null; }
 
+  const THUMB_KEY = 'library_thumbnail_of', THUMB_EDGE = 256, THUMB_JOBS = 2, PAGE_TILES = 60;
   const state = {
     files: [], library: { folders: [], map: {} }, folder: null,
     kind: 'all', query: '', selecting: false, selected: new Set(), shown: [], current: -1,
+    thumbs: new Map(), // original id -> thumbnail file
   };
+  const tiles = new Map(); // file id -> grid tile of the files drawn now
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const icon = (svg) => { const holder = el('span'); holder.innerHTML = svg; return holder.firstChild; };
@@ -194,6 +204,7 @@ dialog button.danger { color: #ff8a8a; }
   const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
   const contentUrl = (file, attachment) => '/api/v1/files/' + encodeURIComponent(file.id) + '/content' + (attachment ? '?attachment=true' : '');
+  const thumbOf = (file) => (file.meta && file.meta.data && file.meta.data[THUMB_KEY]) || null;
   const nameOf = (file) => (file.meta && file.meta.name) || file.filename || file.id;
   const typeOf = (file) => (file.meta && file.meta.content_type) || '';
   const sizeOf = (file) => (file.meta && file.meta.size) || 0;
@@ -278,7 +289,21 @@ dialog button.danger { color: #ff8a8a; }
         page += 1;
       }
       files.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-      state.files = files;
+      const originals = [], thumbFiles = [];
+      files.forEach((file) => (thumbOf(file) ? thumbFiles : originals).push(file));
+      const ids = new Set(originals.map((file) => file.id));
+      const stale = [];
+      state.thumbs = new Map();
+      // Newest first, so a second thumbnail of the same original (two tabs at once) is the stale one.
+      thumbFiles.forEach((thumb) => {
+        const id = thumbOf(thumb);
+        if (!ids.has(id) || state.thumbs.has(id)) stale.push(thumb.id); else state.thumbs.set(id, thumb);
+      });
+      state.files = originals;
+      stale.forEach((id) => api('/files/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {}));
+      // Originals renamed elsewhere in Open WebUI: bring their thumbnails' names in line, one at a time.
+      const renames = originals.filter((file) => state.thumbs.has(file.id) && nameOf(state.thumbs.get(file.id)) !== thumbName(file, state.thumbs.get(file.id)));
+      (async () => { for (const file of renames) await renameThumb(file); })();
     })()]);
     const saved = (settings && settings.library) || {};
     state.library = { folders: Array.isArray(saved.folders) ? saved.folders : [], map: (saved.map && typeof saved.map === 'object') ? saved.map : {} };
@@ -377,10 +402,8 @@ dialog button.danger { color: #ff8a8a; }
     main.append(grid);
   }
 
-  function renderFiles() {
-    const query = state.query.trim().toLowerCase();
-    state.shown = inFolder(state.folder).filter((file) => (state.kind === 'all' || kindOf(file) === state.kind)
-      && (!query || nameOf(file).toLowerCase().includes(query)));
+  // Toolbar and tile marks for the current selection, without redrawing the grid.
+  function renderSelection() {
     $('count').textContent = state.selecting ? state.selected.size + ' selected' : plural(state.shown.length, 'file');
     $('move-selected').hidden = !state.selecting; $('move-selected').disabled = !state.selected.size;
     $('delete-selected').hidden = !state.selecting; $('delete-selected').disabled = !state.selected.size;
@@ -389,44 +412,136 @@ dialog button.danger { color: #ff8a8a; }
     $('select-all').hidden = !state.shown.length;
     $('select-all').textContent = state.selecting && allSelected ? 'Deselect all' : 'Select all';
     document.body.classList.toggle('selecting', state.selecting);
+    tiles.forEach((item, id) => item.classList.toggle('selected', state.selected.has(id)));
+  }
+
+  // ---- thumbnails: drawn from the original and stored as Open WebUI files (see the comment at the top)
+  const thumbQueue = [], thumbBusy = new Set();
+  let thumbRunning = 0;
+  const thumbWatch = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      thumbWatch.unobserve(entry.target);
+      const id = entry.target.dataset.id;
+      if (!state.thumbs.has(id) && !thumbBusy.has(id)) { thumbBusy.add(id); thumbQueue.push(id); }
+    });
+    pumpThumbs();
+  }, { rootMargin: '300px' });
+  function pumpThumbs() {
+    while (thumbRunning < THUMB_JOBS && thumbQueue.length) {
+      const id = thumbQueue.shift();
+      thumbRunning += 1;
+      makeThumb(id).catch(() => {}).finally(() => { thumbRunning -= 1; thumbBusy.delete(id); pumpThumbs(); });
+    }
+  }
+  async function makeThumb(id) {
+    const file = state.files.find((item) => item.id === id);
+    if (!file || state.thumbs.has(id)) return;
+    const response = await fetch(contentUrl(file, false), { credentials: 'same-origin', headers: token ? { Authorization: 'Bearer ' + token } : {} });
+    if (!response.ok) return;
+    const bitmap = await createImageBitmap(await response.blob()); // the first frame of an animation
+    const scale = Math.min(1, THUMB_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    // Browsers without a WebP encoder return PNG; the file name follows what came back.
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.8));
+    if (!blob || state.thumbs.has(id)) return;
+    const form = new FormData();
+    form.append('file', blob, 'thumb-' + nameOf(file).replace(/\.[^.]+$/, '') + (blob.type === 'image/webp' ? '.webp' : '.png'));
+    form.append('metadata', JSON.stringify({ [THUMB_KEY]: id }));
+    const thumb = await api('/files/?process=false&process_in_background=false', { method: 'POST', body: form });
+    if (!thumb || !thumb.id) return;
+    if (!state.files.some((item) => item.id === id)) { // deleted meanwhile
+      api('/files/' + encodeURIComponent(thumb.id), { method: 'DELETE' }).catch(() => {});
+      return;
+    }
+    state.thumbs.set(id, thumb);
+    const img = tiles.get(id) && tiles.get(id).querySelector('img');
+    if (img) img.src = contentUrl(thumb, false);
+  }
+
+  // A thumbnail is named after its original: thumb-<original name without extension><its own extension>.
+  const thumbName = (file, thumb) => 'thumb-' + nameOf(file).replace(/\.[^.]+$/, '') + ((nameOf(thumb).match(/\.[^.]+$/) || ['.webp'])[0]);
+  async function renameThumb(file) {
+    const thumb = state.thumbs.get(file.id);
+    if (!thumb || nameOf(thumb) === thumbName(file, thumb)) return;
+    try {
+      const renamed = await post('/files/' + encodeURIComponent(thumb.id) + '/rename', { filename: thumbName(file, thumb) });
+      if (renamed) Object.assign(thumb, { filename: renamed.filename, meta: renamed.meta || thumb.meta });
+    } catch (error) { /* the link is by id; a stale name does no harm and is retried on the next load */ }
+  }
+
+  function tileFor(file, index) {
+    const item = el('div', 'item' + (state.selected.has(file.id) ? ' selected' : ''));
+    item.tabIndex = 0; item.title = nameOf(file); item.dataset.id = file.id;
+    if (isVisual(file)) {
+      const img = el('img'); img.loading = 'lazy'; img.decoding = 'async'; img.alt = nameOf(file);
+      const thumb = state.thumbs.get(file.id);
+      img.src = contentUrl(thumb || file, false); item.append(img);
+      if (!thumb) thumbWatch.observe(item);
+    } else {
+      const doc = el('div', 'doc');
+      doc.append(el('div', 'ext', (nameOf(file).split('.').pop() || 'file').slice(0, 5).toUpperCase()), el('div', 'name', nameOf(file)));
+      item.append(doc);
+    }
+    if (kindOf(file) === 'video') item.append(el('span', 'badge', 'Video'));
+    const check = el('span', 'check'); item.append(check);
+    item.addEventListener('click', (event) => {
+      if (state.selecting || event.target === check) { toggle(file.id); return; }
+      open(index);
+    });
+    item.addEventListener('keydown', (event) => { if (event.key === 'Enter') open(index); });
+    tiles.set(file.id, item);
+    return item;
+  }
+
+  // The files are drawn PAGE_TILES at a time; the next page is added when the end of the grid comes into view.
+  let drawn = 0, lastDay = null, grid = null;
+  const more = el('div', 'status', '');
+  const moreWatch = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) drawPage(); }, { rootMargin: '600px' });
+  moreWatch.observe(more);
+  function drawPage() {
+    if (drawn >= state.shown.length) return;
+    const main = $('main');
+    const end = Math.min(drawn + PAGE_TILES, state.shown.length);
+    for (; drawn < end; drawn += 1) {
+      const file = state.shown[drawn];
+      const label = day(file.created_at || 0);
+      if (label !== lastDay) {
+        grid = el('div', 'grid');
+        main.insertBefore(el('h4', 'day', label), more); main.insertBefore(grid, more); lastDay = label;
+      }
+      grid.append(tileFor(file, drawn));
+    }
+    more.textContent = drawn < state.shown.length ? 'Loading more…' : '';
+    // The observer only reports changes; on a tall screen the end can still be in view after a page.
+    if (drawn < state.shown.length && more.getBoundingClientRect().top < window.innerHeight + 600) requestAnimationFrame(drawPage);
+  }
+
+  function renderFiles() {
+    const query = state.query.trim().toLowerCase();
+    state.shown = inFolder(state.folder).filter((file) => (state.kind === 'all' || kindOf(file) === state.kind)
+      && (!query || nameOf(file).toLowerCase().includes(query)));
+    tiles.forEach((item) => thumbWatch.unobserve(item));
+    tiles.clear();
     const main = $('main');
     main.replaceChildren();
+    drawn = 0; lastDay = null; grid = null;
+    renderSelection();
     if (!state.shown.length) {
       main.append(el('div', 'status', state.query || state.kind !== 'all' ? 'No files match.' : 'This folder is empty.'));
       return;
     }
-    let lastDay = null, grid = null;
-    state.shown.forEach((file, index) => {
-      const label = day(file.created_at || 0);
-      if (label !== lastDay) {
-        grid = el('div', 'grid');
-        main.append(el('h4', 'day', label), grid); lastDay = label;
-      }
-      const item = el('div', 'item' + (state.selected.has(file.id) ? ' selected' : ''));
-      item.tabIndex = 0; item.title = nameOf(file);
-      if (isVisual(file)) {
-        const img = el('img'); img.loading = 'lazy'; img.decoding = 'async'; img.alt = nameOf(file);
-        img.src = contentUrl(file, false); item.append(img);
-      } else {
-        const doc = el('div', 'doc');
-        doc.append(el('div', 'ext', (nameOf(file).split('.').pop() || 'file').slice(0, 5).toUpperCase()), el('div', 'name', nameOf(file)));
-        item.append(doc);
-      }
-      if (kindOf(file) === 'video') item.append(el('span', 'badge', 'Video'));
-      const check = el('span', 'check'); item.append(check);
-      item.addEventListener('click', (event) => {
-        if (state.selecting || event.target === check) { toggle(file.id); return; }
-        open(index);
-      });
-      item.addEventListener('keydown', (event) => { if (event.key === 'Enter') open(index); });
-      grid.append(item);
-    });
+    main.append(more);
+    drawPage();
   }
 
   function toggle(id) {
     state.selecting = true;
     if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
-    render();
+    renderSelection();
   }
 
   // ---- viewer: the file with its details and actions
@@ -453,7 +568,9 @@ dialog button.danger { color: #ff8a8a; }
     const failed = [];
     for (const id of ids) {
       try { await api('/files/' + encodeURIComponent(id), { method: 'DELETE' }); }
-      catch (error) { failed.push(id); }
+      catch (error) { failed.push(id); continue; }
+      const thumb = state.thumbs.get(id);
+      if (thumb) { state.thumbs.delete(id); api('/files/' + encodeURIComponent(thumb.id), { method: 'DELETE' }).catch(() => {}); }
     }
     state.files = state.files.filter((file) => !ids.includes(file.id) || failed.includes(file.id));
     state.selected = new Set(failed);
@@ -507,7 +624,7 @@ dialog button.danger { color: #ff8a8a; }
     state.selecting = true;
     if (all) state.shown.forEach((file) => state.selected.delete(file.id));
     else state.shown.forEach((file) => state.selected.add(file.id));
-    render();
+    renderSelection();
   }
   $('select-all').addEventListener('click', selectAll);
   document.addEventListener('keydown', (event) => {
@@ -535,6 +652,7 @@ dialog button.danger { color: #ff8a8a; }
     try {
       const updated = await post('/files/' + encodeURIComponent(file.id) + '/rename', { filename: name });
       Object.assign(file, { filename: updated.filename, meta: updated.meta || file.meta });
+      renameThumb(file);
       render(); open(state.shown.indexOf(file));
     } catch (error) { alert('Could not rename: ' + error.message); }
   });
