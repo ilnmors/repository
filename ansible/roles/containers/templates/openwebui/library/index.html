@@ -23,6 +23,12 @@
   shows the original. Deleting an original here deletes its thumbnail, and thumbnails whose original is gone are
   deleted when the page loads. A thumbnail is named thumb-<original name>; renames made here or elsewhere in Open
   WebUI are carried over (elsewhere: on the next load). The grid is drawn in pages of 60 tiles as you scroll.
+  Uploads: the Upload button opens a dialog that collects files first (Browse, Paste, or Ctrl+V / a long press and
+  the system Paste menu in its paste box) and sends them in one go through POST /api/v1/files/?process=false (stored
+  only, not indexed for RAG) into the open folder; from the overview or All they land in Unsorted. Ctrl+V on the
+  page opens the same dialog with what was pasted. A pasted image arrives as image.png and is renamed
+  pasted-<YYYYMMDD-HHMMSS>.<ext>. Paste reads the clipboard directly where the browser allows it, otherwise it points
+  to the paste box.
 -->
 <style>
 :root {
@@ -112,6 +118,23 @@ dialog button.danger { color: #ff8a8a; }
 #mover .box button { text-align: left; background: var(--card); color: var(--fg); border-color: var(--line); }
 #mover .box button.current { opacity: .5; }
 #mover .box button.cancel { text-align: center; margin-top: 6px; }
+#uploader .box { background: var(--bg); color: var(--fg); border-radius: 12px; padding: 16px; width: min(520px, 94vw); margin: 8vh auto 0; display: flex; flex-direction: column; gap: 10px; max-height: 84vh; }
+#uploader .box h3 { margin: 0; font-size: 15px; }
+#uploader .hint { color: var(--muted); font-size: 12px; margin: 0; }
+#uploader .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#uploader .target { min-height: 56px; border: 2px dashed var(--line); border-radius: 10px; padding: 10px; color: var(--muted); outline: none; overflow: hidden; -webkit-user-select: text; user-select: text; }
+#uploader .target:focus { border-color: var(--accent); }
+#uploader .queue { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+#uploader .queue .entry { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+#uploader .queue .entry img, #uploader .queue .entry .ext { width: 44px; height: 44px; flex: none; border-radius: 6px; object-fit: cover; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+#uploader .queue .entry .info { flex: 1; min-width: 0; }
+#uploader .queue .entry .info div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#uploader .queue .entry .info .meta { color: var(--muted); font-size: 12px; }
+#uploader .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 10px 0; }
+#uploader button { background: var(--card); color: var(--fg); border-color: var(--line); }
+#uploader button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+#uploader .foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+#uploader .foot .sum { margin-right: auto; color: var(--muted); font-size: 12px; }
 
 /* narrow screens: the sidebar becomes a drawer */
 #scrim { display: none; }
@@ -141,6 +164,7 @@ dialog button.danger { color: #ff8a8a; }
       <h2 id="heading">Folders</h2>
       <span class="count" id="count"></span>
       <span class="spacer"></span>
+      <button id="upload" title="Upload files (Ctrl+V on the page pastes)">Upload</button>
       <button id="select" hidden>Select</button>
       <button id="select-all" hidden>Select all</button>
       <button id="move-selected" hidden disabled>Move</button>
@@ -169,6 +193,25 @@ dialog button.danger { color: #ff8a8a; }
 </dialog>
 
 <dialog id="mover"><div class="box" id="mover-box"></div></dialog>
+
+<dialog id="uploader">
+  <div class="box">
+    <h3 id="u-title">Upload</h3>
+    <div class="row">
+      <button id="u-browse">Browse…</button>
+      <button id="u-paste">Paste</button>
+      <input type="file" id="u-input" multiple hidden>
+    </div>
+    <div class="target" id="u-target" contenteditable="true" role="textbox" aria-label="Paste here">Paste here: long-press and choose Paste, or press Ctrl+V</div>
+    <p class="hint" id="u-note"></p>
+    <div class="queue" id="u-queue"></div>
+    <div class="foot">
+      <span class="sum" id="u-sum"></span>
+      <button id="u-cancel">Cancel</button>
+      <button id="u-send" class="primary" disabled>Upload</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 (() => {
@@ -633,6 +676,157 @@ dialog button.danger { color: #ff8a8a; }
     event.preventDefault(); selectAll();
   });
   $('move-selected').addEventListener('click', () => { if (state.selected.size) pickFolder([...state.selected]); });
+
+  // ---- uploads: a dialog collects files (Browse, Paste, Ctrl+V or the paste box), then sends them in one go
+  const queue = []; // { file, name, url }
+  let uploading = false, pasteCount = 0;
+  const uploadTarget = () => state.folder === null || state.folder === ALL ? UNFILED : state.folder;
+  const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
+  // Clipboard images come without a real name (image.png); give them one that sorts and does not collide.
+  function pastedName(file) {
+    pasteCount += 1;
+    const ext = (file.type.split('/')[1] || 'bin').replace('jpeg', 'jpg').replace(/\+.*$/, '');
+    return 'pasted-' + stamp() + (pasteCount > 1 ? '-' + pasteCount : '') + '.' + ext;
+  }
+  function note(text) { $('u-note').textContent = text || ''; }
+  function addFiles(files, pasted) {
+    files.filter((file) => file && file.size !== undefined).forEach((file) => {
+      const name = pasted ? pastedName(file) : file.name;
+      queue.push({ file, name, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+    });
+    renderQueue();
+  }
+  function clearQueue() { queue.splice(0).forEach((entry) => { if (entry.url) URL.revokeObjectURL(entry.url); }); pasteCount = 0; }
+  function renderQueue() {
+    const list = $('u-queue'); list.replaceChildren();
+    if (!queue.length) list.append(el('div', 'empty', 'No files yet.'));
+    queue.forEach((entry, index) => {
+      const row = el('div', 'entry');
+      if (entry.url) { const img = el('img'); img.src = entry.url; img.alt = ''; row.append(img); }
+      else row.append(el('span', 'ext', (entry.name.split('.').pop() || 'file').slice(0, 4).toUpperCase()));
+      const info = el('div', 'info'); info.append(el('div', '', entry.name), el('div', 'meta', [entry.file.type, size(entry.file.size)].filter(Boolean).join(' · ')));
+      const drop = el('button', '', '×'); drop.title = 'Remove'; drop.disabled = uploading;
+      drop.addEventListener('click', () => { const [gone] = queue.splice(index, 1); if (gone.url) URL.revokeObjectURL(gone.url); renderQueue(); });
+      row.append(info, drop); list.append(row);
+    });
+    $('u-sum').textContent = queue.length ? plural(queue.length, 'file') + ' · ' + size(queue.reduce((sum, entry) => sum + entry.file.size, 0)) : '';
+    $('u-send').textContent = queue.length ? 'Upload ' + plural(queue.length, 'file') : 'Upload';
+    $('u-send').disabled = !queue.length || uploading;
+  }
+  function openUploader() {
+    $('u-title').textContent = 'Upload to ' + folderName(uploadTarget());
+    note(''); renderQueue();
+    if (!$('uploader').open) $('uploader').showModal();
+  }
+  async function send() {
+    if (!queue.length || uploading) return;
+    uploading = true; renderQueue();
+    const target = uploadTarget(), failed = [], added = [];
+    for (let i = 0; i < queue.length; i += 1) {
+      note('Uploading ' + (i + 1) + ' of ' + queue.length + '…');
+      const form = new FormData(); form.append('file', queue[i].file, queue[i].name);
+      try {
+        const file = await api('/files/?process=false&process_in_background=false', { method: 'POST', body: form });
+        if (file && file.id) { added.push(file); if (target !== UNFILED) state.library.map[file.id] = target; }
+        else failed.push(queue[i]);
+      } catch (error) { failed.push(Object.assign(queue[i], { error: error.message })); }
+    }
+    state.files = [...added.reverse(), ...state.files];
+    if (added.length && target !== UNFILED) await saveOrWarn();
+    uploading = false;
+    // Keep only what failed in the dialog so it can be retried or removed.
+    queue.filter((entry) => !failed.includes(entry)).forEach((entry) => { if (entry.url) URL.revokeObjectURL(entry.url); });
+    queue.splice(0, queue.length, ...failed);
+    if (failed.length) { note('Could not upload ' + plural(failed.length, 'file') + ': ' + failed.map((entry) => entry.name + (entry.error ? ' (' + entry.error + ')' : '')).join(', ')); renderQueue(); }
+    else { $('uploader').close(); pasteCount = 0; }
+    if (state.folder === null) go(target); else render();
+  }
+  async function readClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) { note('This browser does not let a button read the clipboard. Long-press the box above and choose Paste.'); $('u-target').focus(); return; }
+    try {
+      const files = [];
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((name) => !name.startsWith('text/'));
+        if (type) files.push(new File([await item.getType(type)], 'image', { type }));
+      }
+      if (files.length) { note(''); addFiles(files, true); }
+      else note('The clipboard holds no image or file.');
+    } catch (error) { note('Could not read the clipboard (' + error.message + '). Long-press the box above and choose Paste.'); $('u-target').focus(); }
+  }
+  // Files from a paste event: .files, then .items (some browsers fill only one), then images inside pasted HTML
+  // (data:, blob: or http(s): sources; content:// URIs from a phone keyboard cannot be read by a page).
+  async function clipboardFiles(data) {
+    if (!data) return { files: [], seen: 'no clipboard data' };
+    let files = [...(data.files || [])];
+    if (!files.length) files = [...(data.items || [])].filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter(Boolean);
+    const types = [...(data.types || [])];
+    let sources = [];
+    if (!files.length && types.includes('text/html')) {
+      const doc = new DOMParser().parseFromString(data.getData('text/html'), 'text/html');
+      sources = [...doc.images].map((img) => img.getAttribute('src') || '').filter(Boolean);
+      for (const src of sources) {
+        if (!/^(data:|blob:|https?:)/.test(src)) continue;
+        try {
+          const blob = await (await fetch(src)).blob();
+          if (blob.type.startsWith('image/')) files.push(new File([blob], 'image', { type: blob.type }));
+        } catch (error) { /* not readable from the page; reported below */ }
+      }
+    }
+    const items = [...(data.items || [])].map((item) => item.kind + ':' + (item.type || '?'));
+    const seen = 'types [' + types.join(', ') + '], items [' + items.join(', ') + ']' + (sources.length ? ', img src ' + sources.map((src) => src.slice(0, 40)).join(' | ') : '');
+    return { files, seen };
+  }
+  $('upload').addEventListener('click', openUploader);
+  $('u-browse').addEventListener('click', () => $('u-input').click());
+  $('u-input').addEventListener('change', (event) => { const files = [...event.target.files]; event.target.value = ''; addFiles(files, false); });
+  $('u-paste').addEventListener('click', readClipboard);
+  $('u-send').addEventListener('click', send);
+  $('u-cancel').addEventListener('click', () => { if (!uploading) $('uploader').close(); });
+  $('uploader').addEventListener('close', () => { if (!uploading) { clearQueue(); note(''); } });
+  $('uploader').addEventListener('cancel', (event) => { if (uploading) event.preventDefault(); });
+  // Images the browser put into the paste box on its own: read their source into files, then empty the box.
+  async function readInsertedImages() {
+    const box = $('u-target');
+    const imgs = [...box.querySelectorAll('img')], files = [], seen = [];
+    for (const img of imgs) {
+      const src = img.getAttribute('src') || ''; seen.push(src.slice(0, 40));
+      try {
+        const blob = await (await fetch(src)).blob();
+        if (blob.size) files.push(new File([blob], 'image', { type: blob.type || 'image/png' }));
+      } catch (error) { seen.push('(not readable: ' + error.message + ')'); }
+    }
+    const inserted = box.innerHTML.length;
+    box.textContent = 'Paste here: long-press and choose Paste, or press Ctrl+V';
+    if (files.length) { note(''); addFiles(files, true); return; }
+    note('Nothing usable was inserted (img: ' + imgs.length + (seen.length ? ' ' + seen.join(' | ') : '') + ', html length ' + inserted + ').');
+  }
+  // The paste box only ever receives pastes; typed text is refused and pasted content never stays in it.
+  $('u-target').addEventListener('beforeinput', (event) => {
+    if (event.inputType === 'insertFromPaste') return;
+    event.preventDefault();
+    // A phone keyboard may insert a clipboard image as input instead of a paste; show what came so it can be handled.
+    const types = event.dataTransfer ? [...event.dataTransfer.types].join(', ') : 'none';
+    note('Not a paste (input type ' + event.inputType + ', data types: ' + types + '). Use the Paste menu of the long press.');
+  });
+  // Any paste while the dialog is open (the box or elsewhere in it) adds to the list; Ctrl+V on the page opens it.
+  // The event is cancelled before the async part, because preventDefault no longer works after an await.
+  document.addEventListener('paste', async (event) => {
+    if ($('viewer').open || $('mover').open) return;
+    const inDialog = $('uploader').open;
+    if (!inDialog && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    const data = event.clipboardData;
+    const quick = data && ((data.files && data.files.length) || [...(data.items || [])].some((item) => item.kind === 'file') || [...(data.types || [])].includes('text/html'));
+    // Some phone pastes (seen 2026-11-24 on a Samsung Galaxy) reach the page with an empty event; the browser may
+    // still insert the image into the paste box itself, so let that happen and read it from there (readInsertedImages).
+    const emptyInBox = inDialog && document.activeElement === $('u-target') && !(data && [...(data.types || [])].length);
+    if (emptyInBox) { note('Paste event carried no data; checking what the browser inserts…'); setTimeout(readInsertedImages, 400); return; }
+    if (inDialog || quick) event.preventDefault();
+    if (!inDialog && !quick) return;
+    const { files, seen } = await clipboardFiles(data);
+    if (!files.length) { if (inDialog) note('No image or file reached the page (' + seen + ').'); return; }
+    if (!inDialog) openUploader();
+    note(''); addFiles(files, true);
+  });
   $('delete-selected').addEventListener('click', async () => {
     const ids = [...state.selected];
     if (!ids.length || !confirm('Delete ' + plural(ids.length, 'file') + '? They will also disappear from the chats that show them.')) return;
@@ -640,6 +834,11 @@ dialog button.danger { color: #ff8a8a; }
   });
   $('mover').addEventListener('click', (event) => { if (event.target === $('mover')) $('mover').close(); });
   $('v-close').addEventListener('click', () => $('viewer').close());
+  // A click on the empty area around the file (not on the file, the bar or the arrows) closes the viewer.
+  $('viewer').addEventListener('click', (event) => {
+    const t = event.target;
+    if (t === $('viewer') || t === $('v-stage') || t.classList.contains('viewer') || t.classList.contains('bar')) $('viewer').close();
+  });
   $('v-prev').addEventListener('click', () => { if (state.current > 0) open(state.current - 1); });
   $('v-next').addEventListener('click', () => { if (state.current < state.shown.length - 1) open(state.current + 1); });
   $('v-move').addEventListener('click', () => pickFolder([state.shown[state.current].id]));
