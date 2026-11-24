@@ -22,7 +22,8 @@
   in the browser. Files carrying that key are hidden from the library and only used for the grid; the viewer always
   shows the original. Deleting an original here deletes its thumbnail, and thumbnails whose original is gone are
   deleted when the page loads. A thumbnail is named thumb-<original name>; renames made here or elsewhere in Open
-  WebUI are carried over (elsewhere: on the next load). The grid is drawn in pages of 60 tiles as you scroll.
+  WebUI are carried over (elsewhere: on the next load). The files are shown in pages of 50, 100 or all (chosen in the
+  toolbar, remembered in localStorage "library.pageSize"); the metadata of every file is still loaded at start.
   Uploads: the Upload button opens a dialog that collects files first (Browse, Paste, or Ctrl+V / a long press and
   the system Paste menu in its paste box) and sends them in one go through POST /api/v1/files/?process=false (stored
   only, not indexed for RAG) into the open folder; from the overview or All they land in Unsorted. Ctrl+V on the
@@ -75,9 +76,14 @@ button:disabled { opacity: .45; cursor: default; }
 .toolbar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 8px; min-height: 52px; }
 .toolbar h2 { font-size: 16px; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toolbar .count { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.toolbar .spacer { flex: 1; }
+.toolbar .tools { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 #nav-toggle { display: none; border: 0; background: none; font-size: 18px; padding: 2px 6px; }
 main { padding: 8px 16px 40px; }
+.pager { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; margin: 20px 0 8px; }
+.pager button { border: 1px solid var(--line); background: var(--card); padding: 3px 10px; border-radius: 8px; cursor: pointer; min-width: 34px; }
+.pager button.current { background: var(--accent); border-color: var(--accent); color: #fff; cursor: default; }
+.pager .gap { color: var(--muted); padding: 0 4px; }
+#page-size { border: 1px solid var(--line); background: var(--card); color: var(--fg); padding: 3px 6px; border-radius: 8px; font: inherit; font-size: 13px; }
 h4.day { font-size: 13px; color: var(--muted); font-weight: 600; margin: 18px 0 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .item { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--card); border: 2px solid transparent; cursor: pointer; }
@@ -124,6 +130,7 @@ dialog button.danger { color: #ff8a8a; }
 #uploader .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 #uploader .target { min-height: 56px; border: 2px dashed var(--line); border-radius: 10px; padding: 10px; color: var(--muted); outline: none; overflow: hidden; -webkit-user-select: text; user-select: text; }
 #uploader .target:focus { border-color: var(--accent); }
+#uploader .target img { display: none; } /* an image the browser inserts is only read, never shown */
 #uploader .queue { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 #uploader .queue .entry { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
 #uploader .queue .entry img, #uploader .queue .entry .ext { width: 44px; height: 44px; flex: none; border-radius: 6px; object-fit: cover; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); }
@@ -145,6 +152,8 @@ dialog button.danger { color: #ff8a8a; }
   body.nav-open #scrim { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.35); }
   .grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
   .toolbar { flex-wrap: wrap; }
+  /* the buttons always take their own second row, so a longer or shorter count never moves them */
+  .toolbar .tools { flex-basis: 100%; }
 }
 </style>
 </head>
@@ -163,12 +172,14 @@ dialog button.danger { color: #ff8a8a; }
       <button id="nav-toggle" aria-label="Menu">☰</button>
       <h2 id="heading">Folders</h2>
       <span class="count" id="count"></span>
-      <span class="spacer"></span>
-      <button id="upload" title="Upload files (Ctrl+V on the page pastes)">Upload</button>
-      <button id="select" hidden>Select</button>
-      <button id="select-all" hidden>Select all</button>
-      <button id="move-selected" hidden disabled>Move</button>
-      <button id="delete-selected" class="danger" hidden disabled>Delete</button>
+      <div class="tools">
+        <button id="upload" title="Upload files (Ctrl+V on the page pastes)">Upload</button>
+        <select id="page-size" title="Files per page" hidden><option value="50">50</option><option value="100">100</option><option value="0">All</option></select>
+        <button id="select" hidden>Select</button>
+        <button id="select-all" hidden>Select all</button>
+        <button id="move-selected" hidden disabled>Move</button>
+        <button id="delete-selected" class="danger" hidden disabled>Delete</button>
+      </div>
     </div>
     <main id="main"><div class="status">Loading…</div></main>
   </div>
@@ -222,10 +233,13 @@ dialog button.danger { color: #ff8a8a; }
   let token = null;
   try { token = localStorage.getItem('token'); } catch (error) { token = null; }
 
-  const THUMB_KEY = 'library_thumbnail_of', THUMB_EDGE = 256, THUMB_JOBS = 2, PAGE_TILES = 60;
+  const THUMB_KEY = 'library_thumbnail_of', THUMB_EDGE = 256, THUMB_JOBS = 2, PAGE_SIZES = [50, 100, 0]; // 0 = all
+  let savedSize = 50;
+  try { savedSize = Number(localStorage.getItem('library.pageSize') || 50); } catch (error) { savedSize = 50; }
   const state = {
     files: [], library: { folders: [], map: {} }, folder: null,
     kind: 'all', query: '', selecting: false, selected: new Set(), shown: [], current: -1,
+    page: 0, pageSize: PAGE_SIZES.includes(savedSize) ? savedSize : 50,
     thumbs: new Map(), // original id -> thumbnail file
   };
   const tiles = new Map(); // file id -> grid tile of the files drawn now
@@ -359,7 +373,7 @@ dialog button.danger { color: #ff8a8a; }
     const hash = decodeURIComponent(location.hash.slice(1));
     state.folder = hash === '' ? null : hash === 'unfiled' ? UNFILED : hash === 'all' ? ALL
       : (state.library.folders.some((folder) => folder.id === hash) ? hash : null);
-    state.selecting = false; state.selected.clear();
+    state.selecting = false; state.selected.clear(); state.page = 0;
     if (state.folder === null) { state.query = ''; $('q').value = ''; }
     if ($('viewer').open) $('viewer').close();
     document.body.classList.remove('nav-open');
@@ -373,6 +387,7 @@ dialog button.danger { color: #ff8a8a; }
     $('heading').textContent = home ? 'Folders' : folderName(state.folder);
     document.title = home ? 'Library' : folderName(state.folder) + ' · Library';
     $('select').hidden = home;
+    $('page-size').hidden = home; $('page-size').value = String(state.pageSize);
     if (home) renderFolders(); else renderFiles();
   }
 
@@ -402,7 +417,7 @@ dialog button.danger { color: #ff8a8a; }
       const button = el('button', state.kind === kind && state.folder !== null ? 'active' : '');
       button.append(el('span', 'label', label), el('span', 'n', String(kind === 'all' ? pool.length : pool.filter((file) => kindOf(file) === kind).length)));
       button.disabled = state.folder === null;
-      button.addEventListener('click', () => { state.kind = kind; render(); });
+      button.addEventListener('click', () => { state.kind = kind; state.page = 0; render(); });
       types.append(button);
     });
 
@@ -447,7 +462,9 @@ dialog button.danger { color: #ff8a8a; }
 
   // Toolbar and tile marks for the current selection, without redrawing the grid.
   function renderSelection() {
-    $('count').textContent = state.selecting ? state.selected.size + ' selected' : plural(state.shown.length, 'file');
+    const [from, to] = pageRange();
+    $('count').textContent = state.selecting ? state.selected.size + ' selected'
+      : (to - from < state.shown.length ? (from + 1) + '–' + to + ' of ' : '') + plural(state.shown.length, 'file');
     $('move-selected').hidden = !state.selecting; $('move-selected').disabled = !state.selected.size;
     $('delete-selected').hidden = !state.selecting; $('delete-selected').disabled = !state.selected.size;
     $('select').textContent = state.selecting ? 'Cancel' : 'Select';
@@ -540,45 +557,61 @@ dialog button.danger { color: #ff8a8a; }
     return item;
   }
 
-  // The files are drawn PAGE_TILES at a time; the next page is added when the end of the grid comes into view.
-  let drawn = 0, lastDay = null, grid = null;
-  const more = el('div', 'status', '');
-  const moreWatch = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) drawPage(); }, { rootMargin: '600px' });
-  moreWatch.observe(more);
-  function drawPage() {
-    if (drawn >= state.shown.length) return;
-    const main = $('main');
-    const end = Math.min(drawn + PAGE_TILES, state.shown.length);
-    for (; drawn < end; drawn += 1) {
-      const file = state.shown[drawn];
-      const label = day(file.created_at || 0);
-      if (label !== lastDay) {
-        grid = el('div', 'grid');
-        main.insertBefore(el('h4', 'day', label), more); main.insertBefore(grid, more); lastDay = label;
-      }
-      grid.append(tileFor(file, drawn));
+  // ---- pages: state.pageSize files per page (0 = all); the pager sits under the grid
+  const pageCount = () => state.pageSize ? Math.max(1, Math.ceil(state.shown.length / state.pageSize)) : 1;
+  function pageRange() {
+    if (!state.pageSize) return [0, state.shown.length];
+    const from = Math.min(state.page, pageCount() - 1) * state.pageSize;
+    return [from, Math.min(from + state.pageSize, state.shown.length)];
+  }
+  function goPage(page) {
+    state.page = Math.max(0, Math.min(page, pageCount() - 1));
+    renderFiles();
+    window.scrollTo(0, 0);
+  }
+  function pager() {
+    const pages = pageCount(), current = Math.min(state.page, pages - 1);
+    const bar = el('nav', 'pager'); bar.setAttribute('aria-label', 'Pages');
+    const button = (label, page, cls) => {
+      const b = el('button', cls || '', label);
+      if (page === null) b.disabled = true; else if (page !== current) b.addEventListener('click', () => goPage(page));
+      bar.append(b);
+    };
+    button('‹ Prev', current > 0 ? current - 1 : null);
+    // First, last and two pages on each side of the current one; gaps shown as …
+    let last = -1;
+    for (let p = 0; p < pages; p += 1) {
+      if (p !== 0 && p !== pages - 1 && Math.abs(p - current) > 2) continue;
+      if (p - last > 1) bar.append(el('span', 'gap', '…'));
+      button(String(p + 1), p, p === current ? 'current' : ''); last = p;
     }
-    more.textContent = drawn < state.shown.length ? 'Loading more…' : '';
-    // The observer only reports changes; on a tall screen the end can still be in view after a page.
-    if (drawn < state.shown.length && more.getBoundingClientRect().top < window.innerHeight + 600) requestAnimationFrame(drawPage);
+    button('Next ›', current < pages - 1 ? current + 1 : null);
+    return bar;
   }
 
   function renderFiles() {
     const query = state.query.trim().toLowerCase();
     state.shown = inFolder(state.folder).filter((file) => (state.kind === 'all' || kindOf(file) === state.kind)
       && (!query || nameOf(file).toLowerCase().includes(query)));
+    state.page = Math.min(state.page, pageCount() - 1);
     tiles.forEach((item) => thumbWatch.unobserve(item));
     tiles.clear();
     const main = $('main');
     main.replaceChildren();
-    drawn = 0; lastDay = null; grid = null;
     renderSelection();
     if (!state.shown.length) {
       main.append(el('div', 'status', state.query || state.kind !== 'all' ? 'No files match.' : 'This folder is empty.'));
       return;
     }
-    main.append(more);
-    drawPage();
+    const [from, to] = pageRange();
+    let lastDay = null, grid = null;
+    for (let index = from; index < to; index += 1) {
+      const file = state.shown[index];
+      const label = day(file.created_at || 0);
+      if (label !== lastDay) { grid = el('div', 'grid'); main.append(el('h4', 'day', label), grid); lastDay = label; }
+      grid.append(tileFor(file, index));
+    }
+    if (pageCount() > 1) main.append(pager());
   }
 
   function toggle(id) {
@@ -655,11 +688,16 @@ dialog button.danger { color: #ff8a8a; }
   $('scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
   // Searching from the overview searches every file.
   $('q').addEventListener('input', (event) => {
-    state.query = event.target.value;
+    state.query = event.target.value; state.page = 0;
     if (state.folder === null && state.query.trim()) { go(ALL); return; }
     render();
   });
   $('q').addEventListener('keydown', (event) => { if (event.key === 'Enter' && narrow()) document.body.classList.remove('nav-open'); });
+  $('page-size').addEventListener('change', (event) => {
+    state.pageSize = Number(event.target.value); state.page = 0;
+    try { localStorage.setItem('library.pageSize', String(state.pageSize)); } catch (error) { /* not remembered */ }
+    renderFiles(); window.scrollTo(0, 0);
+  });
   $('select').addEventListener('click', () => { state.selecting = !state.selecting; state.selected.clear(); render(); });
   // Select all: every file shown now (the open folder, after the type filter and the search).
   function selectAll() {
@@ -739,6 +777,7 @@ dialog button.danger { color: #ff8a8a; }
     queue.splice(0, queue.length, ...failed);
     if (failed.length) { note('Could not upload ' + plural(failed.length, 'file') + ': ' + failed.map((entry) => entry.name + (entry.error ? ' (' + entry.error + ')' : '')).join(', ')); renderQueue(); }
     else { $('uploader').close(); pasteCount = 0; }
+    state.page = 0; // new files come first
     if (state.folder === null) go(target); else render();
   }
   async function readClipboard() {
@@ -784,6 +823,15 @@ dialog button.danger { color: #ff8a8a; }
   $('u-cancel').addEventListener('click', () => { if (!uploading) $('uploader').close(); });
   $('uploader').addEventListener('close', () => { if (!uploading) { clearQueue(); note(''); } });
   $('uploader').addEventListener('cancel', (event) => { if (uploading) event.preventDefault(); });
+  // Read as soon as an image appears in the box; the timer is only a fallback when no mutation is seen.
+  let insertWatch = null, insertTimer = null;
+  function waitForInserted() {
+    if (insertWatch) return;
+    const done = () => { if (insertWatch) insertWatch.disconnect(); insertWatch = null; clearTimeout(insertTimer); readInsertedImages(); };
+    insertWatch = new MutationObserver(() => { if ($('u-target').querySelector('img')) done(); });
+    insertWatch.observe($('u-target'), { childList: true, subtree: true });
+    insertTimer = setTimeout(done, 1000);
+  }
   // Images the browser put into the paste box on its own: read their source into files, then empty the box.
   async function readInsertedImages() {
     const box = $('u-target');
@@ -819,7 +867,7 @@ dialog button.danger { color: #ff8a8a; }
     // Some phone pastes (seen 2026-11-24 on a Samsung Galaxy) reach the page with an empty event; the browser may
     // still insert the image into the paste box itself, so let that happen and read it from there (readInsertedImages).
     const emptyInBox = inDialog && document.activeElement === $('u-target') && !(data && [...(data.types || [])].length);
-    if (emptyInBox) { note('Paste event carried no data; checking what the browser inserts…'); setTimeout(readInsertedImages, 400); return; }
+    if (emptyInBox) { note('Paste event carried no data; checking what the browser inserts…'); waitForInserted(); return; }
     if (inDialog || quick) event.preventDefault();
     if (!inDialog && !quick) return;
     const { files, seen } = await clipboardFiles(data);
