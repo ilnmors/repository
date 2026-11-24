@@ -42,14 +42,14 @@ models:
       - "LANG=C.UTF-8"
       - "MODEL_PATH={{ qm['qwen3.8-flash-next']['model'] | dirname }}"
       - "FAMILY=qwen"
-      - "MODEL=IQ2_XS"
-      - "PRESET=iq2xs"
+      - "MODEL=IQ3_XXS"
+      - "PRESET=iq3"
       - "CONTEXT=64k"
       - "VISION=cpu"
       - "DRAFTING=dflash2"
       # The refusal-direction projection (models.yaml, role cvec) goes straight to the engine: strata launch keeps
       # setup's own experimental-speed-projection switch off for this family, and --set options are added after it.
-      - "STRATA_SET=pool-workers=10 STRATA_RESIDENT_PIN=1 expert-profile=/data/strata/profile-iq2xs.bin expert-profile-save=/data/strata/profile-iq2xs.bin expert-profile-save-every=1 control-vector-scaled={{ qm['qwen3.8-flash-next']['cvec'] }}:1.0 control-vector-layer-range=4-44 cvec-mode=project cvec-dir=per-layer"
+      - "STRATA_SET=pool-workers=10 STRATA_RESIDENT_PIN=1 expert-profile=/data/strata/profile-iq3.bin expert-profile-save=/data/strata/profile-iq3.bin expert-profile-save-every=1 control-vector-scaled={{ qm['qwen3.8-flash-next']['cvec'] }}:1.0 control-vector-layer-range=4-44 cvec-mode=project cvec-dir=per-layer"
     cmd: >-
       env PORT=${PORT} /opt/strata/entrypoint.sh
     proxy: "http://127.0.0.1:${PORT}"

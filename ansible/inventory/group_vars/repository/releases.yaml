@@ -276,7 +276,7 @@ releases:
         # ROCm libraries) and launcher are copied from the release image, built for the RX 7900 XT (gfx110x).
         strata:
           repository: "ghcr.io/niko1221/strata"
-          tag: "0.2.19-rocm-gfx110x"
+          tag: "0.2.20-rocm-gfx110x"
     searxng:
       name: "searxng"
       repository: "docker.io/searxng/searxng"
