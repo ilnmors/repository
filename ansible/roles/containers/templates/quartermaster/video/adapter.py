@@ -20,6 +20,11 @@ Settings (environment; the QM_VIDEO_ prefix keeps them apart from Quartermaster'
   QM_VIDEO_FPS      frames per second (default 16)
   QM_VIDEO_SECONDS  clip length when the request gives none (default 3)
   QM_VIDEO_SIZE     WxH when the request gives none (default 672x384)
+  QM_VIDEO_MAX_PIXELS
+                    upper bound on width x height (default: QM_VIDEO_SIZE's pixel count). A larger requested size
+                    (a chat model may ask for 768x1024) is scaled down to it with its aspect ratio kept, sides on
+                    multiples of 16: render time and graphics memory grow faster than the pixel count, and an
+                    8 s clip at 3x the pixels did not fit the 20 GB card
   QM_VIDEO_FRAME_STEP, QM_VIDEO_FRAME_OFFSET
                     the model's frame grid, frames = FRAME_STEP * n + FRAME_OFFSET
                     (Wan: 4n+1, LTX: 8n+1, MiniMax-H3: 17n+5; default 4 and 1)
@@ -49,6 +54,8 @@ FRAME_STEP = int(os.environ.get("QM_VIDEO_FRAME_STEP", "4"))
 FRAME_OFFSET = int(os.environ.get("QM_VIDEO_FRAME_OFFSET", "1"))
 PORT = int(os.environ.get("QM_VIDEO_PORT", "8081"))
 STEPS = int(os.environ.get("QM_VIDEO_STEPS", "8"))
+_DEFAULT_W, _DEFAULT_H = (int(n) for n in re.fullmatch(r"(\d+)x(\d+)", SIZE).groups())
+MAX_PIXELS = int(os.environ.get("QM_VIDEO_MAX_PIXELS", str(_DEFAULT_W * _DEFAULT_H)))
 
 # Quartermaster/sd-server job states -> the states Open WebUI waits for (completed or failed end the wait).
 STATUS = {"queued": "queued", "generating": "in_progress", "completed": "completed",
@@ -94,6 +101,14 @@ def parse_size(value, image=None):
         width = max(16, round((area * ratio) ** 0.5 / 16) * 16)
         height = max(16, round((area / ratio) ** 0.5 / 16) * 16)
     return width, height
+
+
+def cap_pixels(width, height):
+    """Scale WxH down to at most MAX_PIXELS, aspect ratio kept, sides floored to multiples of 16."""
+    if width * height <= MAX_PIXELS:
+        return width, height
+    scale = (MAX_PIXELS / (width * height)) ** 0.5
+    return max(16, int(width * scale) // 16 * 16), max(16, int(height * scale) // 16 * 16)
 
 
 def parse_form(content_type, body):
@@ -192,8 +207,13 @@ class Handler(BaseHTTPRequestHandler):
         if not fields.get("model") or not fields.get("prompt"):
             return self.send(400, {"error": {"message": "model and prompt are required"}})
         image = files.get("input_reference")
-        width, height = parse_size(fields.get("size"), image[1] if image else None)
+        asked = parse_size(fields.get("size"), image[1] if image else None)
+        width, height = cap_pixels(*asked)
         seconds = float(fields.get("seconds") or fields.get("duration") or SECONDS)
+        # The job's shape only (never the prompt): what was asked, what is rendered.
+        sys.stderr.write("video job: size %s -> %dx%d%s, %.1f s -> %d frames\n" % (
+            fields.get("size") or "default", width, height,
+            " (capped from %dx%d)" % asked if asked != (width, height) else "", seconds, frames_for(seconds)))
         payload = {
             "model": fields["model"],
             "prompt": fields["prompt"],
