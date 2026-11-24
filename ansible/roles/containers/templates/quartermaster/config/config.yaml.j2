@@ -69,6 +69,12 @@ models:
       ${llama} --device Vulkan0
       --model {{ qm['bge-m3']['model'] }}
       --embedding --pooling cls --ctx-size 8192 --batch-size 8192 --ubatch-size 8192 --parallel 1
+  # Code tab-autocomplete (FIM) on the Iris Xe beside bge-m3; Continue on console calls /v1/completions directly.
+  qwen2.5-coder-1.5b:
+    cmd: >-
+      ${llama} --device Vulkan0
+      --model {{ qm['qwen2.5-coder-1.5b']['model'] }}
+      --ctx-size 4096 --batch-size 1024 --ubatch-size 512 --parallel 1 --cache-reuse 256
   # Z-Image Turbo finetune in Q8_0 on the RX 7900 XT (6.5 GB); the Qwen3 4B text encoder runs on the Iris Xe.
   # Turbo sampling: 9 steps at CFG 1.
   {% raw %}
@@ -113,7 +119,7 @@ models:
       --video-frames 49 --fps 16 -W 672 -H 384 --vae-tiling --temporal-tiling
     checkEndpoint: "/v1/models"
 
-# The embedding model stays loaded on the Iris Xe; chat and image generation swap on the RX 7900 XT.
+# The embedding and autocomplete models stay loaded on the Iris Xe; chat and image/video swap on the RX 7900 XT.
 routing:
   router:
     use: group
@@ -125,6 +131,7 @@ routing:
           persistent: true
           members:
             - "bge-m3"
+            - "qwen2.5-coder-1.5b"
         dgpu:
           swap: true
           exclusive: false
@@ -139,4 +146,5 @@ hooks:
   on_startup:
     preload:
       - "bge-m3"
+      - "qwen2.5-coder-1.5b"
       - "qwen3.8-flash-next"

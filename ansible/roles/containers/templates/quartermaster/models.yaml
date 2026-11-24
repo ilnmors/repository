@@ -13,6 +13,12 @@ bge-m3:
   - role: "model"
     url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/main/bge-m3-Q8_0.gguf"
 
+# Code tab-autocomplete (FIM) on the Iris Xe beside bge-m3: Qwen2.5-Coder-1.5B Base (Apache 2.0, imatrix Q5_K_M,
+# 1.05 GiB / 1,125,051,040 B, SHA256 44154cdf...). Base weights rather than Instruct for native FIM tokens.
+qwen2.5-coder-1.5b:
+  - role: "model"
+    url: "https://huggingface.co/mradermacher/Qwen2.5-Coder-1.5B-i1-GGUF/resolve/main/Qwen2.5-Coder-1.5B.i1-Q5_K_M.gguf"
+
 # Qwen3.8-Flash-Next, ISTA-DASLab GSQ-RCO IQ3_XXS, served by Strata. Shard 1 holds the weights (47 GB: attention
 # and shared parts in VRAM, the experts in RAM); shard 2 is the 28.8 GB n-gram table, read from disk. Strata copies
 # the experts into a 43 GB pack in HOME (built in about two minutes).
