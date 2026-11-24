@@ -1,6 +1,6 @@
 # Services
 
-Facts and decisions for running the homelab stacks, one directory per stack: `<stack>/README.md`, further public documents in `<stack>/public/`, and private operating notes in `<stack>/private/` (not in Git). Retired stacks are in `docs/archives/services/`. The configuration itself lives in `ansible/`. These notes describe the running servers as of 2026-11-15. The servers are still deployed from the archived homelab repository, whose stacks now match this repository's versions and layouts.
+Facts and decisions for running the homelab stacks, one directory per stack: `docs/services/<stack>/README.md`, further public documents in `docs/services/<stack>/public/`, and private operating notes in `docs/services/<stack>/private/` (not in Git). Retired stacks are in `docs/archives/services/`. The configuration itself lives in `ansible/`. These notes describe the running servers as of 2026-11-15. The servers are still deployed from the archived homelab repository, whose stacks now match this repository's versions and layouts.
 
 ## Stacks
 

@@ -8,7 +8,7 @@ Infrastructure as code for a single-node homelab: one physical hypervisor, three
 | --- | --- |
 | `ansible/inventory/group_vars/repository/` | The whole system as data: `site`, `hardwares`, `nodes`, `networks`, `services`, `releases`. |
 | `ansible/roles/` | Five roles split by concern: `secrets`, `nodes`, `packages`, `libvirt`, `containers`. |
-| `ansible/playbooks/` | `site.yaml`, `pki.yaml` and one playbook per node under `nodes/`. |
+| `ansible/playbooks/` | `site.yaml`, `pki.yaml` and one playbook per node under `ansible/playbooks/nodes/`. |
 | `docs/` | Bring-up guides, operating notes, archived stacks and the project history. |
 | `tools/` | Helper scripts (secrets editing) and generated bootstrap files (`tools/build/`, not tracked). |
 

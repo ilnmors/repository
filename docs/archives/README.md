@@ -4,11 +4,11 @@ Stacks that are not part of the active repository, kept in the current repositor
 
 | Path | Contents |
 | --- | --- |
-| `services.yaml`, `releases.yaml` | Entries in the same schema as `ansible/inventory/group_vars/repository/{services,releases}.yaml`. |
-| `roles/containers/{tasks,templates,handlers}` | Container tasks following the active role conventions (PostgreSQL/MariaDB/Authelia/valkey includes, podman secrets, `deploy.yaml`, `nodes[...]['paths']`). `tasks/main.yaml` and `handlers/main.yaml` hold only the entries to append. |
-| `roles/packages/{tasks,templates,handlers}` | Host packages and systemd services (blocky, wsl-alive, chromium). |
-| `tools/extract_secret.sh` | Archived homelab secret helper, kept verbatim. |
-| `services/<stack>/` | The operating notes of stacks retired from this repository (gitea, groupoffice, homebox, llama, maddy, nextcloud, papra, stablediffusion), moved from `docs/services/` on 2026-11-24. |
+| `docs/archives/services.yaml`, `docs/archives/releases.yaml` | Entries in the same schema as `ansible/inventory/group_vars/repository/{services,releases}.yaml`. |
+| `docs/archives/roles/containers/{tasks,templates,handlers}` | Container tasks following the active role conventions (PostgreSQL/MariaDB/Authelia/valkey includes, podman secrets, `deploy.yaml`, `nodes[...]['paths']`). `docs/archives/roles/containers/tasks/main.yaml` and `docs/archives/roles/containers/handlers/main.yaml` hold only the entries to append. |
+| `docs/archives/roles/packages/{tasks,templates,handlers}` | Host packages and systemd services (blocky, wsl-alive, chromium). |
+| `docs/archives/tools/extract_secret.sh` | Archived homelab secret helper, kept verbatim. |
+| `docs/archives/services/<stack>/` | The operating notes of stacks retired from this repository (gitea, groupoffice, homebox, llama, maddy, nextcloud, papra, stablediffusion), moved from `docs/services/` on 2026-11-24. |
 
 All templates render against the current repository variables (with `secrets` stubbed), and the task files pass `ansible-lint` (production profile) when merged into a copy of `ansible/`.
 
@@ -38,19 +38,19 @@ Reasons come from the homelab notes, commit messages and the owner (2026-11-12).
 | chromium (console) | 2026-05-11 (`0afc841`) | Not used. | - |
 | extract_secret.sh | 2026-05-15 (`a7e2320`) | Not used. | `ansible/roles/secrets/files/scripts/edit_secret.sh` |
 
-Readur, archived on 2026-07-09 with the Papra release, was moved back to `ansible/` on 2026-11-13 to replace Papra (see `docs/operating/readur/README.md`).
+Readur, archived on 2026-07-09 with the Papra release, was moved back to `ansible/` on 2026-11-13 to replace Papra (see `docs/services/readur/README.md`).
 
 ### Stopped on 2026-11-13
 
 | Stack | Reason | Similar active service |
 | --- | --- | --- |
-| papra | Replaced by Readur; all documents were moved (see `docs/operating/readur/README.md`). Moved here from `ansible/`. | readur |
+| papra | Replaced by Readur; all documents were moved (see `docs/services/readur/README.md`). Moved here from `ansible/`. | readur |
 | nextcloud | Groupware no longer used. Calendars and contacts went to OxiCloud on 2026-11-12, user files on 2026-11-13 (sample files left out). | oxicloud |
 | groupoffice | Groupware no longer used. Its user files were moved to OxiCloud on 2026-11-13. | oxicloud |
 
 ### Still running in homelab, not yet moved to the repository
 
-homebox, llama and stablediffusion ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud had been introduced as the groupware stack (`278dd3c`). tandoor was promoted into `ansible/` on 2026-11-17 (see `docs/operating/tandoor/README.md`).
+homebox, llama and stablediffusion ran on the homelab `app` host when this archive was made. They are written in the repository schema here so they can be promoted into `ansible/` when needed. Nextcloud had been introduced as the groupware stack (`278dd3c`). tandoor was promoted into `ansible/` on 2026-11-17 (see `docs/services/tandoor/README.md`).
 
 ### Superseded by an active repository service
 
@@ -59,7 +59,7 @@ homebox, llama and stablediffusion ran on the homelab `app` host when this archi
 | gitea | forgejo | Same port (3001) as forgejo; run only one. |
 | maddy | postfix + dovecot | Same SMTP/IMAPS ports (2587/2993). |
 | ca | step-ca | Same port (9000); uses the repository intermediate CA secrets. |
-| redis | valkey | Archived stacks use the active `valkey.yaml` sidecar; `templates/redis` is the old shared template in the current form. |
+| redis | valkey | Archived stacks use the active `valkey.yaml` sidecar; `docs/archives/roles/containers/templates/redis` is the old shared template in the current form. |
 | blocky | bind RPZ blocklist | The same blocklist URLs are in `services.packages.bind.units.main.blocklist`. fw no longer exists, so the entry targets vmm and needs `networks.segments.server.hosts.blocky`. |
 | wsl-alive | - | Only for a WSL console. |
 
@@ -75,7 +75,7 @@ homebox, llama and stablediffusion ran on the homelab `app` host when this archi
 ## Bringing a stack back
 
 1. Copy its `services.yaml` and `releases.yaml` entries into `ansible/inventory/group_vars/repository/`.
-2. Copy `roles/<role>/tasks/<stack>.yaml` and `roles/<role>/templates/<stack>/`, then append its block from `tasks/main.yaml` and `handlers/main.yaml`.
+2. Copy `docs/archives/roles/<role>/tasks/<stack>.yaml` and `docs/archives/roles/<role>/templates/<stack>/` into `ansible/roles/<role>/`, then append its block from `docs/archives/roles/<role>/tasks/main.yaml` and `docs/archives/roles/<role>/handlers/main.yaml`.
 3. Add the secrets below (OIDC stacks also need `<stack>.oidc.hash` for the Authelia client).
 4. Authelia: the active template does not yet render `claims_policy`, CORS or public clients. linkwarden, romm and trilium need an ID-token claims policy (`dependency.oidc.claims`), booklogr and opencloud need CORS, and opencloud needs public PKCE clients (plus the desktop/mobile clients in the old homelab config).
 5. Model-backed stacks (llama, stablediffusion, ovms) sync models from `<data>/containers/<stack>/models/`; place the models there first.

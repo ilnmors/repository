@@ -1,8 +1,7 @@
 # External contributions
 
 Issues, pull requests and comments posted upstream for the stacks this repository runs. Rules for new posts are in
-AGENT.md ("External contributions"). Surface Laptop 7 posts are recorded in the `surface-laptop7-debian` bundle
-(`docs/EXTERNAL-CONTRIBUTIONS.md`).
+AGENTS.md ("External contributions"). Surface Laptop 7 posts are recorded outside this repository.
 
 | Date (UTC) | Stack | Where | Kind | Subject | State |
 | --- | --- | --- | --- | --- | --- |

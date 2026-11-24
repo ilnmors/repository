@@ -21,12 +21,12 @@ The inventory is the single source of truth:
 
 | File | What you change |
 | --- | --- |
-| `group_vars/repository/site.yaml` | Organization name, public and internal domains, LDAP base DN, timezone, CA file names. |
-| `group_vars/repository/hardwares.yaml` | Your physical machine: CPU, NIC names, disks by serial, passthrough GPUs. |
-| `group_vars/repository/networks.yaml` | VLAN IDs, subnets, gateways, DHCP pools and the fixed address of every host. |
-| `group_vars/repository/nodes.yaml` | Accounts and UIDs per host, VM sizes (vCPU, memory, root and data disks), data paths and mount options. |
-| `group_vars/repository/services.yaml` | Which services run where, their ports, domains and dependencies. |
-| `group_vars/repository/releases.yaml` | Pinned versions of every package and container image. |
+| `ansible/inventory/group_vars/repository/site.yaml` | Organization name, public and internal domains, LDAP base DN, timezone, CA file names. |
+| `ansible/inventory/group_vars/repository/hardwares.yaml` | Your physical machine: CPU, NIC names, disks by serial, passthrough GPUs. |
+| `ansible/inventory/group_vars/repository/networks.yaml` | VLAN IDs, subnets, gateways, DHCP pools and the fixed address of every host. |
+| `ansible/inventory/group_vars/repository/nodes.yaml` | Accounts and UIDs per host, VM sizes (vCPU, memory, root and data disks), data paths and mount options. |
+| `ansible/inventory/group_vars/repository/services.yaml` | Which services run where, their ports, domains and dependencies. |
+| `ansible/inventory/group_vars/repository/releases.yaml` | Pinned versions of every package and container image. |
 | `hosts.ini` | Host names Ansible connects to (`<host>.<internal domain>`). |
 
 After editing, search for leftovers of the original site and replace them:
@@ -51,9 +51,9 @@ Work through the files in this order, because later files refer to earlier ones.
 Never reuse the encrypted files in this repository: they are bound to the original age key. Create new ones on the console (details in [console.md](console.md#managing-secretsyaml)):
 
 1. Install the tools listed in console.md (`ansible-core`, `sops`, `step-cli`, `age`, `gnupg`) and run `ansible-galaxy install -r requirements.yaml`.
-2. Generate an age key in a private directory under `$XDG_RUNTIME_DIR` and put its public recipient into `roles/secrets/files/.sops.yaml`.
-3. Write a new `roles/secrets/files/secrets.yaml`. SOPS keeps the key names in plain text, so the existing encrypted file shows the expected structure. At minimum fill in `sudo.<host>.password` for every host and the external values you need (`ddns` Cloudflare token and zone, mail relay, API keys). Most service passwords and OIDC client secrets that are missing are generated and written back by the playbooks on first use.
-4. Encrypt it with `sops --encrypt --in-place`, encrypt the age key with `gpg --symmetric --cipher-algo AES256` into `roles/secrets/files/age-key.gpg`, and store the same key with `ansible-vault encrypt_string --stdin-name secrets_age_key` into `roles/secrets/vars/main.yaml`. Remove the plaintext copies afterwards.
+2. Generate an age key in a private directory under `$XDG_RUNTIME_DIR` and put its public recipient into `ansible/roles/secrets/files/.sops.yaml`.
+3. Write a new `ansible/roles/secrets/files/secrets.yaml`. SOPS keeps the key names in plain text, so the existing encrypted file shows the expected structure. At minimum fill in `sudo.<host>.password` for every host and the external values you need (`ddns` Cloudflare token and zone, mail relay, API keys). Most service passwords and OIDC client secrets that are missing are generated and written back by the playbooks on first use.
+4. Encrypt it with `sops --encrypt --in-place`, encrypt the age key with `gpg --symmetric --cipher-algo AES256` into `ansible/roles/secrets/files/age-key.gpg`, and store the same key with `ansible-vault encrypt_string --stdin-name secrets_age_key` into `ansible/roles/secrets/vars/main.yaml`. Remove the plaintext copies afterwards.
 5. Create the certificate authorities: `ansible-playbook playbooks/pki.yaml --tags root,ssh`. This makes an offline root CA, an intermediate for step-ca and an SSH CA. Keep the root key off the servers.
 
 Every playbook run asks for the Vault password; the GPG passphrase is asked when the age key is decrypted. Use a long passphrase: the encrypted files are meant to be safe in a public fork.
@@ -102,7 +102,7 @@ ansible-playbook playbooks/nodes/auth.yaml --tags init    # public Caddy, CrowdS
 ansible-playbook playbooks/nodes/app.yaml --tags init     # applications
 ```
 
-Afterwards run them without tags, or a single service with `--tags <service>` (for example `--tags immich`). `playbooks/site.yaml` applies everything.
+Afterwards run them without tags, or a single service with `--tags <service>` (for example `--tags immich`). `ansible/playbooks/site.yaml` applies everything.
 
 ## 7. Open it to the internet
 
@@ -113,7 +113,7 @@ Afterwards run them without tags, or a single service with `--tags <service>` (f
 ## 8. Day to day
 
 - Change a service: edit `services.yaml` or `releases.yaml` and run `ansible-playbook playbooks/nodes/<host>.yaml --tags <service>`.
-- Add a service: declare it in `services.yaml`, pin it in `releases.yaml`, add its task and templates under `roles/containers/`, and include it from `roles/containers/tasks/main.yaml`. Database accounts and OIDC clients are registered per service through `postgresql-register.yaml` and `authelia-register.yaml`.
+- Add a service: declare it in `services.yaml`, pin it in `releases.yaml`, add its task and templates under `ansible/roles/containers/`, and include it from `ansible/roles/containers/tasks/main.yaml`. Database accounts and OIDC clients are registered per service through `postgresql-register.yaml` and `authelia-register.yaml`.
 - Edit secrets with `tools/scripts/edit_secret.sh`.
 - Per-service notes are in [docs/services](services/README.md).
 
