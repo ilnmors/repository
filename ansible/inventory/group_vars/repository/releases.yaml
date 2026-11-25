@@ -284,7 +284,7 @@ releases:
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
-      tag: "v0.13.4"
+      tag: "v0.13.5"
     sure:
       name: "sure"
       repository: "ghcr.io/we-promise/sure"
