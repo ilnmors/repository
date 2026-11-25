@@ -22,10 +22,20 @@ whitelist:
         - "{{ networks['segments'][host]['hosts']['console']['ipv6'] }}"
 {% endif %}
 {% endfor %}
-{% if target_host in services['packages']['crowdsec']['units']['http-bouncer']['hosts'] and 'immich' in services['containers'] and 'outline' in services['containers'] %}
+{% if target_host in
+    services['packages']['crowdsec']['units']['http-bouncer']['hosts'] + services['packages']['crowdsec']['units']['fw-bouncer']['hosts']
+%}
+{% if target_host in services['packages']['crowdsec']['units']['fw-bouncer']['hosts'] %}
+    # expression:
+        # following whitelists
+{% endif %}
+{% if target_host in services['packages']['crowdsec']['units']['http-bouncer']['hosts'] %}
     expression:
         # immich thumbnail request 404 error false positive
         - "evt.Meta.target_fqdn == '{{ services['containers']['immich']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '404' && evt.Meta.http_verb == 'GET' && evt.Meta.http_path contains '/api/assets/' && evt.Meta.http_path contains '/thumbnail'"
         # outline POST 401 errors false positive
         - "evt.Meta.target_fqdn == '{{ services['containers']['outline']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '401' && evt.Meta.http_verb == 'POST' && evt.Meta.http_path startsWith '/api/'"
+        # openwebui images request 404 error false positive
+        - "evt.Meta.target_fqdn == '{{ services['containers']['openwebui']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}' && evt.Meta.http_status == '404' && evt.Meta.http_verb == 'GET' && evt.Meta.http_path startsWith '/api/v1/files'"
+{% endif %}
 {% endif %}
