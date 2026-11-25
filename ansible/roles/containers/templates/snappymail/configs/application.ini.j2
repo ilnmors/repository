@@ -171,4 +171,4 @@ dev_email = ""
 dev_password = ""
 
 [version]
-current = "{{ releases['containers']['snappymail']['tag'] | regex_replace('^v', '') }}"
+current = "{{ releases['containers']['snappymail']['tag'] | regex_replace('^v', '') | regex_replace('-.*$', '') }}"
