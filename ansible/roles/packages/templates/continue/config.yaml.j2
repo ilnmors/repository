@@ -30,11 +30,19 @@ models:
       caBundlePath: /usr/local/share/ca-certificates/{{ site['ca']['x509']['root']['certificate_file'] }}
     defaultCompletionOptions:
       contextLength: 4096
-      maxTokens: 256
+      maxTokens: 64
       temperature: 0.0
       stop:
         - "<|endoftext|>"
         - "<|fim_pad|>"
         - "<|file_sep|>"
+    autocompleteOptions:
+      maxPromptTokens: 512
+      debounceDelay: 450
+      useRecentlyOpened: false
+      experimental_includeClipboard: false
+      experimental_includeRecentlyVisitedRanges: false
+      experimental_includeRecentlyEditedRanges: false
+      experimental_includeDiff: false
     promptTemplates:
       autocomplete: {% raw %}"<|fim_prefix|>{{{prefix}}}<|fim_suffix|>{{{suffix}}}<|fim_middle|>"{% endraw %}

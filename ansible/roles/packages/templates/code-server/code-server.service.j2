@@ -4,6 +4,8 @@ Description=code-server user service
 [Service]
 Type=simple
 ExecStartPre=-/usr/bin/python3 %h/.local/share/code-server/repair-python-tools.py
+# Continue calls getClipboardSnippets() before checking experimental_includeClipboard, causing clipboard prompts in Firefox.
+ExecStartPre=-/usr/bin/python3 -c "import pathlib; a='getClipboardSnippets(ide),'; b='helper.options.experimental_includeClipboard ? getClipboardSnippets(ide) : [],'; [p.write_text(''.join(l.replace(a, b, 1) if l.strip() == a else l for l in lines)) for p in pathlib.Path.home().glob('.local/share/code-server/extensions/continue.continue-*/out/extension.js') for lines in [p.read_text().splitlines(True)] if any(l.strip() == a for l in lines)]"
 ExecStart=/usr/bin/code-server \
         --auth none \
         --bind-addr 127.0.0.1:{{ services['packages']['code-server']['units']['main']['ports']['http']['int'] }} \
