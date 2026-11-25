@@ -109,7 +109,7 @@ releases:
     opencode:
       source: "github"
       name: "opencode"
-      version: "2.3.2"
+      version: "2.4.1"
     kopia:
       source: "github"
       name: "kopia"
@@ -170,7 +170,7 @@ releases:
     grafana:
       name: "grafana"
       repository: "docker.io/grafana/grafana"
-      tag: "13.3.1"
+      tag: "13.3.2"
     x509-exporter:
       name: "x509-exporter"
       repository: "docker.io/enix/x509-certificate-exporter"
@@ -221,7 +221,7 @@ releases:
     snappymail:
       name: "snappymail"
       repository: "ghcr.io/the-djmaze/snappymail"
-      tag: "v3.0.1.2"
+      tag: "v3.1.4-1"
     mastodon:
       name: "mastodon"
       repository: "ghcr.io/mastodon/mastodon"
@@ -269,18 +269,18 @@ releases:
         base:
           tag: "26.04"
         llama_server:
-          tag: "b12633"
+          tag: "b12721"
         sd_server:
-          tag: "master-1117-0d71f96"
+          tag: "master-1127-79dc7ca"
         # Strata serves Qwen3.8-Flash-Next with the experts streamed from RAM; its self-contained engine (HIP, bundled
         # ROCm libraries) and launcher are copied from the release image, built for the RX 7900 XT (gfx110x).
         strata:
           repository: "ghcr.io/niko1221/strata"
-          tag: "0.2.20-rocm-gfx110x"
+          tag: "0.2.21-rocm-gfx110x"
     searxng:
       name: "searxng"
       repository: "docker.io/searxng/searxng"
-      tag: "2026.11.21-c6ee3e9fd"
+      tag: "2026.11.23-a7163d091"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
@@ -296,7 +296,7 @@ releases:
     tandoor:
       name: "tandoor"
       repository: "docker.io/vabene1111/recipes"
-      tag: "2.7.6"
+      tag: "2.7.8"
     homepage:
       name: "homepage"
       repository: "docker.io/gethomepage/homepage"
