@@ -53,18 +53,36 @@ qwen3.8-flash-next:
 #     url: "https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/vae/ae.safetensors"
 
 # Image generation, second model (2026-11-22): Moody Krea Mix V7 (catlover1937), a Krea 2 finetune, from the author's
-# own Hugging Face repository (apache-2.0; V1-V7 are free). The bf16 original (26.3 GB, SHA256 6ed09955...) stays in
-# DATA; Q8_0 (made with "sd-cli -M convert --type q8_0", see docs/services/quartermaster) runs. Qwen3-VL 4B text
-# encoder on the Iris Xe and the Wan 2.1 VAE, as stable-diffusion.cpp's Krea2 docs list them.
-moody-krea2-mix:
+# own Hugging Face repository (apache-2.0; V1-V7 are free). The bf16 original (26.3 GB, SHA256 6ed09955...) and Q8_0
+# (13.6 GB) stay in DATA; disabled while Qwen-Image-2.1 runs.
+# moody-krea2-mix:
+#   - role: "diffusion"
+#     url: "https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v7_00002__clean.safetensors"
+#     file: "Moody-Krea-Mix-v7_00002__clean-Q8_0.gguf"
+#     manual: true
+#   - role: "llm"
+#     url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q8_0.gguf"
+#   - role: "vae"
+#     url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+
+# Image generation and editing (2026-11-26): Qwen-Image-2.1 Uncensored Omni in Q8_0 (ChatR Labs step 90,000, 7.16 GiB,
+# SHA256 58ab4d7b...e5ca) on the RX 7900 XT for all-in-one T2I (photoreal + 2D/NSFW) and native multi-reference I2I.
+# Abliterated Qwen3-VL-8B-Instruct Q6_K text encoder (AtomicChat, 6.98 GiB, SHA256 f30f66b0...334d) and its F16 vision
+# projector mmproj (1.08 GiB, SHA256 d9870a1f...1ac6) run on the Iris Xe; official Qwen-Image-2.1 BF16 VAE (0.63 GiB,
+# SHA256 bb21f747...b7c9) runs on the RX 7900 XT. ChatR Labs 8-step Turbo LoRA (0.63 GiB, SHA256 77e8863b...94b43) is
+# applied automatically by sd-server for 8-step CFG 1.0 generation (~22-36 s T2I, ~64 s I2I).
+qwen-image-2.1:
   - role: "diffusion"
-    url: "https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v7_00002__clean.safetensors"
-    file: "Moody-Krea-Mix-v7_00002__clean-Q8_0.gguf"
-    manual: true
+    url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-Quantized/resolve/main/qwen-image-2.1-step90000-Q8_0.gguf"
   - role: "llm"
-    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q8_0.gguf"
+    url: "https://huggingface.co/AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF/resolve/main/Qwen-Image-2.1-Turbo-Uncensored-AD-Q6_K.gguf"
+  - role: "llm_vision"
+    url: "https://huggingface.co/AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF/resolve/main/mmproj-Qwen-Image-2.1-Turbo-Uncensored-F16.gguf"
   - role: "vae"
-    url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+    url: "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+  - role: "lora"
+    url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-LoRA-v0.1/resolve/main/chatrlabs-omni-turbo-8step-fp32.safetensors"
+    file: "loras/chatrlabs-omni-turbo-8step-fp32.safetensors"
 
 # Image to video (2026-11-22): DaSiWa WAN 2.2 I2V 14B SynthSeduction v9 Lightspeed (Darksidewalker, Civitai model
 # 2269796), an uncensored Wan 2.2 I2V A14B merge with the 4-step distillation baked in. Wan 2.2 A14B samples with a

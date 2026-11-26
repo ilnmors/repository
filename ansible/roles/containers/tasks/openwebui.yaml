@@ -115,6 +115,36 @@
   become: true
   notify: "notification_restart_openwebui"
 
+- name: Create the openwebui functions directory
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/functions"
+    state: "directory"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0755"
+  become: true
+
+- name: Remove retired openwebui filter files
+  ansible.builtin.file:
+    path: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/functions/flux2-lora-filter.py"
+    state: "absent"
+  become: true
+
+- name: Deploy the openwebui managed filter and sync script
+  ansible.builtin.copy:
+    src: "{{ role_path }}/templates/openwebui/{{ item.src }}"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/openwebui/{{ item.dest }}"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  loop:
+    - src: "qwen-image-filter.py"
+      dest: "functions/qwen-image-filter.py"
+    - src: "sync-functions.py"
+      dest: "sync-functions.py"
+  become: true
+  notify: "notification_restart_openwebui"
+
 - name: Register the podman secrets
   ansible.builtin.include_tasks:
     file: "secret.yaml"

@@ -16,6 +16,8 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/data:/app/
 # ours adds a Library row below Workspace in the sidebar's user menu.
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library/index.html:/app/build/library/index.html:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/library/loader.js:/app/build/static/loader.js:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/functions:/app/functions:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/sync-functions.py:/app/sync-functions.py:ro
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/openwebui/ssl:/etc/ssl/openwebui:ro
 
 # General
@@ -99,6 +101,17 @@ Environment="IMAGE_SIZE="
 {% else %}
 Environment="ENABLE_IMAGE_GENERATION=false"
 {% endif %}
+{% set image_edit_model = services['containers']['openwebui']['units']['main']['ai']['image_edit_model'] | default('') %}
+{% if image_edit_model | length > 0 %}
+Environment="ENABLE_IMAGE_EDIT=true"
+Environment="IMAGE_EDIT_ENGINE=openai"
+Environment="IMAGES_EDIT_OPENAI_API_BASE_URL=http://host.containers.internal:{{ services['containers']['quartermaster']['units']['main']['ports']['http']['int'] }}/v1"
+Environment="IMAGES_EDIT_OPENAI_API_KEY=none"
+Environment="IMAGE_EDIT_MODEL={{ image_edit_model }}"
+Environment="IMAGE_EDIT_SIZE="
+{% else %}
+Environment="ENABLE_IMAGE_EDIT=false"
+{% endif %}
 {% if target_host in services['containers']['searxng']['units']['main']['hosts'] %}
 # Web search through SearXNG on the same host. ENABLE_PERSISTENT_CONFIG=false, so it is set here or not at all.
 Environment="ENABLE_WEB_SEARCH=true"
@@ -171,6 +184,9 @@ MemoryKSM=yes
 ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
 {% if services['containers']['openwebui']['units']['main']['ai']['video_model'] | default('') | length > 0 %}
 ExecStartPost=/usr/bin/podman exec -d openwebui python3 -I /app/video-connection.py
+{% endif %}
+{% if (services['containers']['openwebui']['units']['main']['ai']['image_model'] | default('')) == 'qwen-image-2.1' %}
+ExecStartPost=/usr/bin/podman exec -d openwebui env PYTHONPATH=/app/backend python3 /app/sync-functions.py
 {% endif %}
 Restart=always
 RestartSec=60s

@@ -932,7 +932,8 @@ services:
             # and the last for harder work, so one model serves both.
             chat_models: ["qwen3.8-flash-next"]
             embedding_model: "bge-m3"
-            image_model: "moody-krea2-mix"
+            image_model: "qwen-image-2.1"
+            image_edit_model: "qwen-image-2.1"
             # Quartermaster video model behind its /v1/videos adapter; empty keeps video generation off in Open WebUI.
             video_model: "wan2.2-enhanced-i2v"
     sure:

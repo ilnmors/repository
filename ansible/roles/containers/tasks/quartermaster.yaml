@@ -20,6 +20,29 @@
       {%-   set _ = containers_files.update({containers_model: containers_roles}) -%}
       {%- endfor -%}
       {{ containers_files }}
+    containers_quartermaster_sync_files: >-
+      {%- set containers_sync = [] -%}
+      {%- for containers_model, containers_entries in containers_quartermaster_models.items() -%}
+      {%-   for containers_entry in containers_entries -%}
+      {%-     set _ = containers_sync.append(containers_model ~ '/' ~ (containers_entry['file'] | default(containers_entry['url'] | basename))) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ containers_sync }}
+    containers_quartermaster_sync_dirs: >-
+      {%- set containers_dirs = [] -%}
+      {%- for containers_model, containers_entries in containers_quartermaster_models.items() -%}
+      {%-   if containers_model not in containers_dirs -%}
+      {%-     set _ = containers_dirs.append(containers_model) -%}
+      {%-   endif -%}
+      {%-   for containers_entry in containers_entries -%}
+      {%-     set containers_rel = containers_model ~ '/' ~ (containers_entry['file'] | default(containers_entry['url'] | basename)) -%}
+      {%-     set containers_dir = containers_rel | dirname -%}
+      {%-     if containers_dir not in containers_dirs -%}
+      {%-       set _ = containers_dirs.append(containers_dir) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ containers_dirs }}
 
 # Open WebUI calls these ids from services.yaml; a model renamed on only one side would fail at request time.
 - name: Check the Open WebUI model ids against the quartermaster models
@@ -73,7 +96,7 @@
     owner: "{{ nodes[target_host]['user'] }}"
     group: "{{ nodes[target_host]['group'] }}"
     mode: "0770"
-  loop: "{{ containers_quartermaster_models | list }}"
+  loop: "{{ containers_quartermaster_sync_dirs }}"
 
 - name: Check the quartermaster model files
   ansible.builtin.stat:
@@ -126,9 +149,8 @@
     delete: true
     rsync_opts: >-
       {{
-        (containers_quartermaster_files | list | map('regex_replace', '^', '--include=/') | map('regex_replace', '$', '/') | list)
-        + (containers_quartermaster_files.values() | map('dict2items') | flatten | map(attribute='value')
-           | map('regex_replace', '^/data/models/', '--include=/') | list)
+        (containers_quartermaster_sync_dirs | map('regex_replace', '^', '--include=/') | map('regex_replace', '$', '/') | list)
+        + (containers_quartermaster_sync_files | map('regex_replace', '^', '--include=/') | list)
         + ['--exclude=*', '--delete-excluded']
       }}
   notify: "notification_restart_quartermaster"
