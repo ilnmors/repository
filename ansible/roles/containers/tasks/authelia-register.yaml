@@ -56,7 +56,7 @@
 - name: Generate the missing authelia OIDC client secret
   ansible.builtin.shell: |
     /usr/bin/podman run --rm \
-      {{ (containers_container_repository ~ ':' ~ releases['containers'][target_container]['tag']) | quote }} \
+      {{ (releases['containers'][target_container]['repository'] ~ ':' ~ releases['containers'][target_container]['tag']) | quote }} \
       authelia crypto hash generate pbkdf2 --variant sha512 \
         --random --random.length 72 --random.charset rfc3986
   args:
