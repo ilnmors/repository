@@ -29,7 +29,7 @@ Settings (environment; the QM_VIDEO_ prefix keeps them apart from Quartermaster'
                     the model's frame grid, frames = FRAME_STEP * n + FRAME_OFFSET
                     (Wan: 4n+1, LTX: 8n+1, MiniMax-H3: 17n+5; default 4 and 1)
   QM_VIDEO_PORT     listen port (default 8081)
-  QM_VIDEO_STEPS    sampling steps (default 8)
+  QM_VIDEO_STEPS    sampling steps (default: unset, so the model's --steps/--high-noise-steps apply)
 """
 import base64
 import email.parser
@@ -41,6 +41,7 @@ import re
 import socket
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -53,7 +54,7 @@ SIZE = os.environ.get("QM_VIDEO_SIZE", "672x384")
 FRAME_STEP = int(os.environ.get("QM_VIDEO_FRAME_STEP", "4"))
 FRAME_OFFSET = int(os.environ.get("QM_VIDEO_FRAME_OFFSET", "1"))
 PORT = int(os.environ.get("QM_VIDEO_PORT", "8081"))
-STEPS = int(os.environ.get("QM_VIDEO_STEPS", "8"))
+STEPS = int(os.environ["QM_VIDEO_STEPS"]) if os.environ.get("QM_VIDEO_STEPS") else None
 _DEFAULT_W, _DEFAULT_H = (int(n) for n in re.fullmatch(r"(\d+)x(\d+)", SIZE).groups())
 MAX_PIXELS = int(os.environ.get("QM_VIDEO_MAX_PIXELS", str(_DEFAULT_W * _DEFAULT_H)))
 
@@ -130,6 +131,17 @@ def parse_form(content_type, body):
     return fields, files
 
 
+# sd-server 79dc7ca reads a "model" field on /sdcpp/v1/vid_gen as a model-catalog selection object and answers the
+# model name with 400 "expected an object". Quartermaster's /upstream/<model>/ passthrough routes by path instead, so
+# the body carries no model, and the video id the client sees is "<model>--<job id>" so status calls find the model.
+ID_SEP = "--"
+
+
+def job_path(video_id):
+    model, _, job = video_id.partition(ID_SEP)
+    return "/upstream/%s/sdcpp/v1/jobs/%s" % (urllib.parse.quote(model, safe=""), urllib.parse.quote(job, safe=""))
+
+
 def quartermaster(method, path, payload=None):
     data = json.dumps(payload).encode() if payload is not None else None
     request = urllib.request.Request(QM_URL + path, data=data, method=method,
@@ -183,9 +195,12 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["health"]:
             return self.send(200, {"status": "ok"})
         if len(parts) in (2, 3) and parts[0] == "videos" and (len(parts) == 2 or parts[2] == "content"):
-            code, job = quartermaster("GET", "/sdcpp/v1/jobs/" + parts[1])
+            if ID_SEP not in parts[1]:
+                return self.send(404, {"error": {"message": "unknown video id"}})
+            code, job = quartermaster("GET", job_path(parts[1]))
             if code != 200:
                 return self.send(code, job)
+            job["id"] = parts[1]
             if len(parts) == 2:
                 return self.send(200, video_object(job))
             result = job.get("result") or {}
@@ -215,23 +230,25 @@ class Handler(BaseHTTPRequestHandler):
             fields.get("size") or "default", width, height,
             " (capped from %dx%d)" % asked if asked != (width, height) else "", seconds, frames_for(seconds)))
         payload = {
-            "model": fields["model"],
             "prompt": fields["prompt"],
             "negative_prompt": fields.get("negative_prompt", ""),
             "width": width,
             "height": height,
             "seed": int(fields.get("seed", -1)),
             "video_frames": frames_for(seconds),
-            "steps": STEPS,
             "fps": FPS,
             "output_format": "webp" if OUTPUT_FORMAT == "gif" else OUTPUT_FORMAT,
         }
+        if STEPS is not None:
+            payload["steps"] = STEPS
         if image:
             mime, data = image
             payload["init_image"] = "data:%s;base64,%s" % (mime or "image/png", base64.b64encode(data).decode())
-        code, job = quartermaster("POST", "/sdcpp/v1/vid_gen", payload)
+        model = fields["model"]
+        code, job = quartermaster("POST", "/upstream/%s/sdcpp/v1/vid_gen" % urllib.parse.quote(model, safe=""), payload)
         if code not in (200, 202):
             return self.send(code, job)
+        job["id"] = model + ID_SEP + str(job.get("id"))
         return self.send(200, video_object(job))
 
     def log_message(self, fmt, *args):

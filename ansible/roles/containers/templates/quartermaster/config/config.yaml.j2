@@ -123,11 +123,15 @@ models:
   # take turns on the RX 7900 XT; umT5-XXL runs on the Iris Xe. The author's settings: 2+3 steps (2 high-noise, 3
   # low-noise), Euler/simple, CFG 1 in both stages (the high-noise stage defaults to 7). Measured 2026-11-23 on a 3 s
   # clip (49 frames): 624x624 4+4 steps 353 s, 624x624 2+2 205 s, 512x512 2+3 140 s, so clips default to about 512x512
-  # worth of pixels (672x384, or the start image's shape at that area).
+  # worth of pixels (672x384, or the start image's shape at that area). Since 2026-11-27 it runs 3+3 steps
+  # (since 79dc7ca, --high-noise-steps adds to --steps).
   # <! NOTICE !>
   # When sd-server is upgraded, check the deprecated parameters
   # 532d2c1 to 0d71f96
   # --high-noise-sampling-method euler --high-noise-cfg-scale 1.0 are deprecated.
+  # 0d71f96 to 79dc7ca
+  # /sdcpp/v1/vid_gen reads "model" as a model-catalog selection object ({"recipe", "models"}) and answers a string
+  # with 400 "expected an object"; video/adapter.py sends jobs through /upstream/<model>/ without it.
   wan2.2-enhanced-i2v:
     cmd: >-
       ${sd} --diffusion-model {{ qm['wan2.2-enhanced-i2v']['diffusion'] }}
@@ -135,7 +139,7 @@ models:
       --t5xxl {{ qm['wan2.2-enhanced-i2v']['t5xxl'] }}
       --vae {{ qm['wan2.2-enhanced-i2v']['vae'] }}
       --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
-      --steps 3 --high-noise-steps 2 --cfg-scale 1.0
+      --steps 3 --high-noise-steps 3 --cfg-scale 1.0
       --sampling-method euler --scheduler simple --params-backend disk
       --video-frames 49 --fps 16 -W 672 -H 384 --vae-tiling --temporal-tiling
     checkEndpoint: "/v1/models"
