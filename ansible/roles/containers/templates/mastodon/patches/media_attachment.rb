@@ -43,12 +43,14 @@ class MediaAttachment < ApplicationRecord
   MAX_DESCRIPTION_LENGTH = 10_000
   MAX_DESCRIPTION_HARD_LENGTH_LIMIT = 10_000
 
-  IMAGE_LIMIT = 16.megabytes
-  VIDEO_LIMIT = 99.megabytes
+  # Local patch: larger uploads for this single-user instance (upstream 16 MB images, 99 MB videos).
+  IMAGE_LIMIT = 50.megabytes
+  VIDEO_LIMIT = 1.gigabyte
 
   MAX_VIDEO_MATRIX_LIMIT = 8_294_400 # 3840x2160px
   MAX_VIDEO_FRAME_RATE   = 120
-  MAX_VIDEO_FRAMES       = 36_000 # Approx. 5 minutes at 120 fps
+  # Local patch: an hour at 60 fps (upstream 36_000, 5 minutes at 120 fps); longer videos are cut here.
+  MAX_VIDEO_FRAMES       = 216_000
 
   IMAGE_FILE_EXTENSIONS = %w(.jpg .jpeg .png .gif .webp .heic .heif .avif).freeze
   VIDEO_FILE_EXTENSIONS = %w(.webm .mp4 .m4v .mov).freeze
@@ -74,7 +76,8 @@ class MediaAttachment < ApplicationRecord
 
   IMAGE_STYLES = {
     original: {
-      pixels: 8_294_400, # 3840x2160px
+      # Local patch: keep originals up to 7680x4320px (upstream 8_294_400, 3840x2160px).
+      pixels: 33_177_600,
       file_geometry_parser: FastGeometryParser,
     }.freeze,
 
