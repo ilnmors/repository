@@ -159,6 +159,11 @@ releases:
       name: "ldap"
       repository: "docker.io/lldap/lldap"
       tag: "v0.6.3"
+      # Local patch mounted over the image (roles/containers/templates/ldap/style/style.css): the web UI theme. The
+      # playbook stops when the image's own copy no longer has the SHA256 the theme was made from (check-patches.yaml).
+      patches:
+        - path: "/app/app/static/style.css"
+          upstream_sha256: "01865c7423d81188b198bb3147343e1ee4c906be23dc57ca8b65d8b0a1962dbf"
     prometheus:
       name: "prometheus"
       repository: "docker.io/prom/prometheus"
@@ -285,6 +290,11 @@ releases:
         strata:
           repository: "ghcr.io/niko1221/strata"
           tag: "0.2.21-rocm-gfx110x"
+          # Local patch applied while the image is built (templates/quartermaster/build/Containerfile.j2), not mounted:
+          # sed makes the launcher serve on loopback (--access local) and keep its state in /data/strata. The build
+          # checks the result with grep and stops when the text it replaces is gone, so no upstream_sha256 here.
+          patches:
+            - path: "/opt/strata/entrypoint.sh"
     searxng:
       name: "searxng"
       repository: "docker.io/searxng/searxng"
@@ -293,6 +303,12 @@ releases:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"
       tag: "v0.13.5"
+      # Local patch mounted over the image (roles/containers/templates/openwebui/library/loader.js): the empty hook every
+      # page loads gets the Library row of the user menu. The playbook stops when the image's copy is no longer the
+      # empty file (check-patches.yaml).
+      patches:
+        - path: "/app/build/static/loader.js"
+          upstream_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     sure:
       name: "sure"
       repository: "ghcr.io/we-promise/sure"

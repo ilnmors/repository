@@ -1,0 +1,23 @@
+---
+# Local patches replace files of an image (releases.yaml containers.<name>.patches: path, upstream_sha256). Each patch
+# is made from one version of the file, so the deploy stops when the image's copy is no longer that version.
+# Include it after deploy.yaml, which sets containers_container_repository for target_container.
+- name: Read the upstream files under the {{ target_container }} patches
+  ansible.builtin.command: >-
+    podman run --rm --entrypoint sha256sum
+    {{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+    {{ releases['containers'][target_container]['patches'] | map(attribute='path') | join(' ') }}
+  changed_when: false
+  register: "containers_patch_upstream"
+
+- name: Check the {{ target_container }} patch bases
+  ansible.builtin.assert:
+    that:
+      - (item['upstream_sha256'] ~ '  ' ~ item['path']) in containers_patch_upstream['stdout_lines']
+    fail_msg: >-
+      {{ item['path'] }} changed in {{ releases['containers'][target_container]['tag'] }}; port the local patch of
+      this file and update its upstream_sha256 in releases.yaml.
+    quiet: true
+  loop: "{{ releases['containers'][target_container]['patches'] }}"
+  loop_control:
+    label: "{{ item['path'] | basename }}"

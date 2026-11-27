@@ -85,26 +85,9 @@
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
 
-# Each patched file replaces the image's copy, so it must match the version it was made from.
-- name: Read the upstream files under the mastodon patches
-  ansible.builtin.command: >-
-    podman run --rm --entrypoint sha256sum
-    {{ containers_container_repository }}:{{ releases['containers']['mastodon']['tag'] }}
-    {{ releases['containers']['mastodon']['patches'] | map(attribute='path') | join(' ') }}
-  changed_when: false
-  register: "containers_mastodon_patch_upstream"
-
 - name: Check the mastodon patch bases
-  ansible.builtin.assert:
-    that:
-      - (item['upstream_sha256'] ~ '  ' ~ item['path']) in containers_mastodon_patch_upstream['stdout_lines']
-    fail_msg: >-
-      {{ item['path'] }} changed in {{ releases['containers']['mastodon']['tag'] }}; port
-      templates/mastodon/patches/{{ item['path'] | basename }} and update its upstream_sha256.
-    quiet: true
-  loop: "{{ releases['containers']['mastodon']['patches'] }}"
-  loop_control:
-    label: "{{ item['path'] | basename }}"
+  ansible.builtin.include_tasks:
+    file: "check-patches.yaml"
 
 # The rake task has no :environment dependency, so it runs without the database or the Rails secrets.
 - name: Generate the missing mastodon VAPID keys

@@ -158,6 +158,10 @@
   ansible.builtin.include_tasks:
     file: "deploy.yaml"
 
+- name: Check the openwebui patch bases
+  ansible.builtin.include_tasks:
+    file: "check-patches.yaml"
+
 - name: Deploy the container file
   ansible.builtin.template:
     src: "openwebui/openwebui.container.j2"
