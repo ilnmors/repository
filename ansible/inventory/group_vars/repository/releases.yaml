@@ -227,13 +227,21 @@ releases:
       repository: "ghcr.io/mastodon/mastodon"
       tag: "v4.7.6"
       # Local patches mounted over the image (roles/containers/templates/mastodon/patches/<file name>): animated WebP stays animated
-      # WebP, and GIF uploads become WebP instead of an MP4 gifv. The playbook stops when the image's own copy no longer
-      # has the SHA256 a patch was made from, so a new tag forces a review.
+      # WebP, GIF uploads become WebP instead of an MP4 gifv, uploads may be larger (50 MB images, 1 GB videos), and
+      # videos uploaded through v1 are processed in the background, the post being removed if that processing fails.
+      # The playbook stops when the image's own copy no longer has the SHA256 a patch was made from, so a new tag
+      # forces a review.
       patches:
         - path: "/opt/mastodon/lib/paperclip/vips_lazy_thumbnail.rb"
           upstream_sha256: "de7655d90db41a5da3a49c81e46c44eead1da5bf8c02c90ac69bd32ca8e88e96"
         - path: "/opt/mastodon/app/models/media_attachment.rb"
           upstream_sha256: "b300e5222b088a890a52330ae84745c0b534820262de3bc1578ccc3bc1ae9219"
+        - path: "/opt/mastodon/app/controllers/api/v1/media_controller.rb"
+          upstream_sha256: "7ffd756cab006af2be85bd71b062ba47cbd843fc4f039fbfbd6a91dc9eaed213"
+        - path: "/opt/mastodon/app/services/post_status_service.rb"
+          upstream_sha256: "1e709114350d998dd93ce7d606eab4d6d4ffca3ea120bdf6913c29afef6b5dce"
+        - path: "/opt/mastodon/app/workers/post_process_media_worker.rb"
+          upstream_sha256: "a605d5c1ad866513fbcd67e5c67bf3d7731d18907c637746adea3d4d80f011a2"
     mastodon-streaming:
       name: "mastodon-streaming"
       repository: "ghcr.io/mastodon/mastodon-streaming"

@@ -13,7 +13,8 @@ ContainerName=mastodon-worker
 HostName=mastodon-worker
 
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/mastodon/ssl:/etc/ssl/mastodon:ro
-# Local patches (releases.yaml mastodon.patches): animated WebP stays WebP, GIF uploads become WebP.
+# Local patches (releases.yaml mastodon.patches): animated WebP stays WebP, GIF uploads become WebP, larger uploads,
+# v1 video uploads processed in the background.
 {% for patch in releases['containers']['mastodon']['patches'] %}
 Volume={{ nodes[target_host]['paths']['home'] }}/containers/mastodon/patches/{{ patch['path'] | basename }}:{{ patch['path'] }}:ro
 {% endfor %}
