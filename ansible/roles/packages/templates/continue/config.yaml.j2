@@ -1,8 +1,8 @@
 {# Open WebUI lists the chat models in services.containers.openwebui.units.main.ai; Strata serves Flash-Next with a 64k context. #}
 {% set ai = services['containers']['openwebui']['units']['main']['ai'] %}
 # Continue in code-server: chat/edit/apply through Open WebUI (its API keys reach only the
-# chat, model and embedding endpoints; key from ~/.continue/.env), and tab autocomplete
-# directly through Quartermaster on the Iris Xe (/v1/completions).
+# chat, model and embedding endpoints; key from ~/.continue/.env). Tab autocomplete is off
+# (no autocomplete model); qwen2.5-coder-1.5b stays loaded on the Iris Xe in Quartermaster.
 name: Local models
 version: 1.0.0
 schema: v1
@@ -19,30 +19,3 @@ models:
       contextLength: 65536
       maxTokens: 16384
 {% endfor %}
-  - name: qwen2.5-coder-1.5b
-    provider: openai
-    model: qwen2.5-coder-1.5b
-    apiBase: https://{{ services['containers']['quartermaster']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/v1
-    apiKey: "none"
-    useLegacyCompletionsEndpoint: true
-    roles: [autocomplete]
-    requestOptions:
-      caBundlePath: /usr/local/share/ca-certificates/{{ site['ca']['x509']['root']['certificate_file'] }}
-    defaultCompletionOptions:
-      contextLength: 4096
-      maxTokens: 64
-      temperature: 0.0
-      stop:
-        - "<|endoftext|>"
-        - "<|fim_pad|>"
-        - "<|file_sep|>"
-    autocompleteOptions:
-      maxPromptTokens: 512
-      debounceDelay: 450
-      useRecentlyOpened: false
-      experimental_includeClipboard: false
-      experimental_includeRecentlyVisitedRanges: false
-      experimental_includeRecentlyEditedRanges: false
-      experimental_includeDiff: false
-    promptTemplates:
-      autocomplete: {% raw %}"<|fim_prefix|>{{{prefix}}}<|fim_suffix|>{{{suffix}}}<|fim_middle|>"{% endraw %}
