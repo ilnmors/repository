@@ -118,10 +118,13 @@ models:
       --sampling-method euler --steps 8 --cfg-scale 1.0 -W 1024 -H 1024
       --prompt "<lora:chatrlabs-omni-turbo-8step-fp32:1.0>"
     checkEndpoint: "/v1/models"
-  # Image to video (the /v1/videos adapter returns animated WebP). WAN 2.2 Enhanced NSFW, Lightning Edition: Wan 2.2
-  # I2V A14B with the Lightning distillation baked in, a high-noise and a low-noise transformer (Q8_0, 15 GB each) that
-  # take turns on the RX 7900 XT; umT5-XXL runs on the Iris Xe. The author's settings: 2+3 steps (2 high-noise, 3
-  # low-noise), Euler/simple, CFG 1 in both stages (the high-noise stage defaults to 7). Measured 2026-11-23 on a 3 s
+  # Image to video (the /v1/videos adapter returns animated WebP). WAN 2.2 Enhanced NSFW without Lightning baked in
+  # (models.yaml), a high-noise and a low-noise transformer (Q8_0, 15 GB each) that take turns on the RX 7900 XT, each
+  # with the lightx2v 4-step Lightning LoRA at 1.0 (the "|high_noise|" tag puts a LoRA on the high-noise transformer;
+  # the --prompt tags become the default for every request, as for qwen-image-2.1); umT5-XXL runs on the Iris Xe.
+  # Chosen 2026-11-28 over the FAST MOVE Lightning edition, whose motion was jumpy (3 s clip, same image, prompt and
+  # seed: 207 s, about half the frame-to-frame speed change, no spikes; high-noise LoRA at 0.5 looked the same).
+  # Earlier model, for the numbers below: Euler/simple, CFG 1 in both stages. Measured 2026-11-23 on a 3 s
   # clip (49 frames): 624x624 4+4 steps 353 s, 624x624 2+2 205 s, 512x512 2+3 140 s, so clips default to about 512x512
   # worth of pixels (672x384, or the start image's shape at that area). Since 2026-11-27 it runs 3+3 steps
   # (since 79dc7ca, --high-noise-steps adds to --steps).
@@ -138,10 +141,12 @@ models:
       --high-noise-diffusion-model {{ qm['wan2.2-enhanced-i2v']['high_noise'] }}
       --t5xxl {{ qm['wan2.2-enhanced-i2v']['t5xxl'] }}
       --vae {{ qm['wan2.2-enhanced-i2v']['vae'] }}
+      --lora-model-dir {{ qm['wan2.2-enhanced-i2v']['lora_low'] | dirname }}
       --backend te=vulkan0,diffusion=vulkan1,vae=vulkan1
       --steps 3 --high-noise-steps 3 --cfg-scale 1.0
       --sampling-method euler --scheduler simple --params-backend disk
       --video-frames 49 --fps 16 -W 672 -H 384 --vae-tiling --temporal-tiling
+      --prompt "<lora:{{ qm['wan2.2-enhanced-i2v']['lora_low'] | basename | splitext | first }}:1.0><lora:|high_noise|{{ qm['wan2.2-enhanced-i2v']['lora_high'] | basename | splitext | first }}:1.0>"
     checkEndpoint: "/v1/models"
 
 # The embedding and autocomplete models stay loaded on the Iris Xe; chat and image/video swap on the RX 7900 XT.

@@ -84,19 +84,26 @@ qwen-image-2.1:
     url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-LoRA-v0.1/resolve/main/chatrlabs-omni-turbo-8step-fp32.safetensors"
     file: "loras/chatrlabs-omni-turbo-8step-fp32.safetensors"
 
-# Image to video (2026-11-22): DaSiWa WAN 2.2 I2V 14B SynthSeduction v9 Lightspeed (Darksidewalker, Civitai model
-# 2269796), an uncensored Wan 2.2 I2V A14B merge with the 4-step distillation baked in. Wan 2.2 A14B samples with a
-# high-noise and a low-noise transformer (Q8_0, 15 GB each). Civitai needs an account key, so both are placed in
-# DATA by hand (SHA256 4db65f7a...dd79c207 high, 99cded93...e4a8fbf102 low). umT5-XXL text encoder and the Wan 2.1 VAE.
+# Image to video (2026-11-28): WAN 2.2 Enhanced NSFW (Civitai model 2053259), the "nolightning SVI cf" version
+# (consistent face, no Lightning distillation baked in; versions 2668710 high and 2668712 low, Q8_0, 15 GB each,
+# SHA256 b63c0e0a...d0340429 high, 128dde43...f500ce0f low), with the lightx2v Wan 2.2 I2V A14B 4-step Lightning LoRA
+# 260412 rank 64 as a separate file for each transformer (Kijai's ComfyUI conversion, 0.6 GB each, SHA256
+# 8e0a86e7...9d3399 high, 09e10abd...25cc583 low). Until 2026-11-28 it was the "NSFW FAST MOVE V2 Q8" Lightning
+# edition (versions 2540892/2540896), whose motion was jumpy. Civitai serves these files without an account key now.
+# umT5-XXL text encoder and the Wan 2.1 VAE.
 wan2.2-enhanced-i2v:
   - role: "high_noise"
-    url: "https://civitai.red/api/download/models/2540892?fileId=2429064"
-    file: "Wan2_2-I2V-Enhanced-High_FP8.gguf"
-    manual: true
+    url: "https://civitai.com/api/download/models/2668710"
+    file: "Wan2_2-I2V-A14B-HIGH_consistent_face_Q8.gguf"
   - role: "diffusion"
-    url: "https://civitai.red/api/download/models/2540896?fileId=2429066"
-    file: "Wan2_2-I2V-Enhanced-Low_FP8.gguf"
-    manual: true
+    url: "https://civitai.com/api/download/models/2668712"
+    file: "Wan2_2-I2V-A14B-LOW_consistent_face_Q8.gguf"
+  - role: "lora_high"
+    url: "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    file: "loras/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+  - role: "lora_low"
+    url: "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    file: "loras/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
   - role: "t5xxl"
     url: "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf"
   - role: "vae"
