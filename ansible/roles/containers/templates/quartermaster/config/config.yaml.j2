@@ -98,7 +98,7 @@ models:
   #     --steps 12 --cfg-scale 1.0 --sampling-method euler_a --scheduler beta -W 1024 -H 1024 --guidance 2.5
   #   checkEndpoint: "/v1/models"
   {% endraw %}
-  # Qwen-Image-2.1 Uncensored Omni in Q8_0 with its BF16 VAE, abliterated Qwen3-VL-8B Q6_K, and F16 vision projector
+  # Qwen-Image-2.1 Uncensored Omni in Q8_0 with its BF16 VAE, abliterated Qwen3-VL-8B Q8_0, and F16 vision projector
   # for all-in-one T2I + native multi-reference I2I editing. All modules compute on the RX 7900 XT (vulkan1) with
   # --offload-to-cpu so weights reside in system RAM (~38 GiB free while chat is unloaded) and stream per stage without
   # 20 GB VRAM OOM; this cuts native I2I time in half vs te=vulkan0 (63.5 s -> 30.8 s). Passing the 8-step Turbo LoRA
