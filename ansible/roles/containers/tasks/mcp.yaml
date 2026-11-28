@@ -1,0 +1,148 @@
+---
+- name: Register the mcp database and account # noqa: var-naming[no-role-prefix]
+  vars:
+    containers_postgresql_client: "mcp"
+    target_host: "{{ containers_postgresql_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_postgresql_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "postgresql-register.yaml"
+    apply:
+      delegate_to: "{{ containers_postgresql_host }}"
+
+- name: Register the mcp authelia client # noqa: var-naming[no-role-prefix]
+  vars:
+    containers_authelia_client: "mcp"
+    target_host: "{{ containers_authelia_host }}"
+    ansible_become_pass: "{{ secrets['sudo'][containers_authelia_host]['password'] }}"
+  ansible.builtin.include_tasks:
+    file: "authelia-register.yaml"
+    apply:
+      delegate_to: "{{ containers_authelia_host }}"
+
+- name: Set the target container # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    target_container: "mcp"
+
+- name: Register the missing mcp section on secrets.yaml
+  vars:
+    secrets_target: '["mcp"]'
+    secrets_content: >-
+      {{
+        {
+          'auth_token': lookup('ansible.builtin.pipe', 'openssl rand -base64 32'),
+          'secret_key': lookup('ansible.builtin.pipe', 'openssl rand -base64 32')
+        } | to_json
+      }}
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: "'mcp' not in secrets"
+  no_log: true
+
+- name: Register the missing mcp auth token on secrets.yaml
+  vars:
+    secrets_target: '["mcp"]["auth_token"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: ((secrets.get('mcp') or {}).get('auth_token') | default('', true) | length) == 0
+  no_log: true
+
+- name: Register the missing mcp secret key on secrets.yaml
+  vars:
+    secrets_target: '["mcp"]["secret_key"]'
+    secrets_content: "{{ lookup('ansible.builtin.pipe', 'openssl rand -base64 32') | to_json }}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when: ((secrets.get('mcp') or {}).get('secret_key') | default('', true) | length) == 0
+  no_log: true
+
+- name: Set the mcp secrets fact
+  ansible.builtin.set_fact:
+    containers_secrets:
+      - name: "MCP_AUTH_TOKEN"
+        value: "{{ secrets['mcp']['auth_token'] }}"
+      - name: "MCP_SECRET_KEY"
+        value: "{{ secrets['mcp']['secret_key'] }}"
+      - name: "MCP_POSTGRES_PASSWORD"
+        value: "{{ secrets['postgresql']['password']['mcp'] }}"
+      - name: "MCP_OIDC_CLIENT_SECRET"
+        value: "{{ secrets['authelia']['oidc']['clients']['mcp']['secret'] }}"
+  no_log: true
+
+- name: Create the mcp directory
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: "directory"
+    owner: "{{ item['owner'] }}"
+    group: "{{ item['group'] }}"
+    mode: "{{ item['mode'] }}"
+  loop:
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/mcp"
+      owner: "{{ services['containers']['mcp']['units']['main']['subuid'] }}"
+      group: "{{ nodes[target_host]['group'] }}"
+      mode: "0770"
+    - path: "{{ nodes[target_host]['paths']['home'] }}/containers/mcp/ssl"
+      owner: "{{ services['containers']['mcp']['units']['main']['subuid'] }}"
+      group: "{{ nodes[target_host]['group'] }}"
+      mode: "0750"
+  loop_control:
+    label: "{{ item['path'] | basename }}"
+  become: true
+
+- name: Deploy the mcp root certificate
+  ansible.builtin.copy:
+    content: |
+      {{ secrets['ca']['x509']['root']['crt'] }}
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mcp/ssl/{{ site['ca']['x509']['root']['certificate_file'] }}"
+    owner: "{{ services['containers']['mcp']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0440"
+  become: true
+  notify: "notification_restart_mcp"
+  no_log: true
+
+- name: Deploy the mcp configuration
+  ansible.builtin.template:
+    src: "mcp/config.yaml.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/containers/mcp/config.yaml"
+    owner: "{{ services['containers']['mcp']['units']['main']['subuid'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0640"
+  become: true
+  notify: "notification_restart_mcp"
+
+- name: Register the podman secrets
+  ansible.builtin.include_tasks:
+    file: "secret.yaml"
+    apply:
+      notify: "notification_restart_mcp"
+  no_log: true
+
+- name: Deploy the mcp image
+  vars:
+    containers_image_notifications: "notification_restart_mcp"
+  ansible.builtin.include_tasks:
+    file: "deploy.yaml"
+
+- name: Deploy the container file
+  ansible.builtin.template:
+    src: "mcp/mcp.container.j2"
+    dest: "{{ nodes[target_host]['paths']['home'] }}/.config/containers/systemd/mcp.container"
+    owner: "{{ nodes[target_host]['user'] }}"
+    group: "{{ nodes[target_host]['group'] }}"
+    mode: "0644"
+  notify: "notification_restart_mcp"
+
+- name: Start the mcp
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "mcp.service"
+    state: "started"
+    daemon_reload: true
+  register: "containers_mcp_started"
+
+- name: Apply the mcp configuration handlers
+  ansible.builtin.meta: "flush_handlers"

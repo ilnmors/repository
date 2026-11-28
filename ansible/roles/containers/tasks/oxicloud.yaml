@@ -39,7 +39,7 @@
       - name: "OXICLOUD_JWT_SECRET"
         value: "{{ secrets['oxicloud']['jwt_secret'] }}"
       - name: "OXICLOUD_OIDC_CLIENT_SECRET"
-        value: "{{ secrets['oxicloud']['oidc']['secret'] }}"
+        value: "{{ secrets['authelia']['oidc']['clients']['oxicloud']['secret'] }}"
       - name: "OXICLOUD_DB_CONNECTION_STRING"
         value: "postgres://oxicloud:{{ secrets['postgresql']['password']['oxicloud'] | urlencode | replace('/', '%2F') }}\
           @{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}\

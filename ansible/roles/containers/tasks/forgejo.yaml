@@ -117,7 +117,7 @@
   vars:
     containers_forgejo_authelia_url: "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
   environment:
-    FORGEJO_OIDC_SECRET: "{{ secrets['forgejo']['oidc']['secret'] }}"
+    FORGEJO_OIDC_SECRET: "{{ secrets['authelia']['oidc']['clients']['forgejo']['secret'] }}"
   # The secret reaches the container as an environment variable and is expanded inside it (single quotes).
   ansible.builtin.shell: |
     set -euo pipefail

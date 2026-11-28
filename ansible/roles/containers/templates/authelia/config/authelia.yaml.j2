@@ -100,7 +100,7 @@ identity_providers:
       - client_id: '{{ client['name'] }}'
         client_name: '{{ client['name'] }}'
         consent_mode: 'implicit'
-        client_secret: '{{ secrets[client['name']]['oidc']['hash'] }}'
+        client_secret: '{{ secrets['authelia']['oidc']['clients'][client['name']]['hash'] }}'
         public: false
         authorization_policy: '{{ client['oidc']['policy'] | default('one_factor') }}'
         require_pkce: {{ client['oidc']['pkce'] | default(false) | bool | lower }}

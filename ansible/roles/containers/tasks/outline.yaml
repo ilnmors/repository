@@ -69,7 +69,7 @@
       - name: "OUTLINE_DATABASE_PASSWORD"
         value: "{{ secrets['postgresql']['password']['outline'] }}"
       - name: "OUTLINE_OIDC_CLIENT_SECRET"
-        value: "{{ secrets['outline']['oidc']['secret'] }}"
+        value: "{{ secrets['authelia']['oidc']['clients']['outline']['secret'] }}"
       - name: "OUTLINE_S3_SECRET_KEY"
         value: "{{ secrets['rustfs']['password']['outline'] }}"
   no_log: true

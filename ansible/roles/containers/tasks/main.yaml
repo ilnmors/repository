@@ -207,6 +207,14 @@
   when: target_host in services['containers']['searxng']['units']['main']['hosts']
   tags: ["searxng"]
 
+- name: Include the mcp task
+  ansible.builtin.include_tasks:
+    file: "mcp.yaml"
+    apply:
+      tags: ["mcp"]
+  when: target_host in services['containers']['mcp']['units']['main']['hosts']
+  tags: ["mcp"]
+
 - name: Include the openwebui task
   ansible.builtin.include_tasks:
     file: "openwebui.yaml"

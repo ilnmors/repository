@@ -1,0 +1,68 @@
+{% set mcp_unit = services['containers']['mcp']['units']['main'] %}
+{% set pg_unit = services['containers']['postgresql']['units']['main'] %}
+{% set authelia_unit = services['containers']['authelia']['units']['main'] %}
+server:
+  host: "0.0.0.0"
+  port: {{ mcp_unit['ports']['mcp']['container'] }}
+  ui_port: {{ mcp_unit['ports']['http']['container'] }}
+  public_url: "https://{{ mcp_unit['domain']['public'] }}.{{ site['domain']['public'] }}"
+  auth_token_file: "/run/secrets/MCP_AUTH_TOKEN"
+  secret_key_file: "/run/secrets/MCP_SECRET_KEY"
+  ca_bundle: "/etc/ssl/mcp/{{ site['ca']['x509']['root']['certificate_file'] }}"
+  default_max_chars: 6000
+  http_timeout_seconds: 15.0
+  require_user_header: true
+
+database:
+  host: "{{ pg_unit['domain']['internal'] }}.{{ site['domain']['internal'] }}"
+  port: {{ pg_unit['ports']['tcp']['int'] }}
+  name: "mcp_db"
+  user: "mcp"
+  password_file: "/run/secrets/MCP_POSTGRES_PASSWORD"
+  sslmode: "verify-full"
+  sslrootcert: "/etc/ssl/mcp/{{ site['ca']['x509']['root']['certificate_file'] }}"
+
+oidc:
+  issuer: "https://{{ authelia_unit['domain']['public'] }}.{{ site['domain']['public'] }}"
+  client_id: "mcp"
+  client_secret_file: "/run/secrets/MCP_OIDC_CLIENT_SECRET"
+  scopes:
+{% for scope in mcp_unit['dependency']['oidc']['scopes'] %}
+    - "{{ scope }}"
+{% endfor %}
+  auth_method: "{{ mcp_unit['dependency']['oidc']['auth_method'] }}"
+  session_ttl_seconds: 28800
+
+users: {}
+
+services:
+  oxicloud:
+    base_url: "http://host.containers.internal:{{ services['containers']['oxicloud']['units']['main']['ports']['http']['int'] }}"
+    webdav_max_bytes: 524288
+  kaneo:
+    base_url: "http://host.containers.internal:{{ services['containers']['kaneo']['units']['main']['ports']['http']['int'] }}"
+  outline:
+    base_url: "https://{{ services['containers']['outline']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+  bookstack:
+    base_url: "http://host.containers.internal:{{ services['containers']['bookstack']['units']['main']['ports']['http']['int'] }}"
+  linkding:
+    base_url: "http://host.containers.internal:{{ services['containers']['linkding']['units']['main']['ports']['http']['int'] }}"
+  immich:
+    base_url: "http://host.containers.internal:{{ services['containers']['immich']['units']['main']['ports']['http']['int'] }}"
+  sure:
+    base_url: "http://host.containers.internal:{{ services['containers']['sure']['units']['main']['ports']['http']['int'] }}"
+    mode: "rest"
+  tandoor:
+    base_url: "http://host.containers.internal:{{ services['containers']['tandoor']['units']['main']['ports']['http']['int'] }}"
+  mastodon:
+    base_url: "https://{{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+  forgejo:
+    base_url: "http://host.containers.internal:{{ services['containers']['forgejo']['units']['main']['ports']['http']['int'] }}"
+  prometheus:
+    base_url: "https://{{ services['containers']['prometheus']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['prometheus']['units']['main']['ports']['https']['int'] }}"
+  loki:
+    base_url: "https://{{ services['containers']['loki']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}:{{ services['containers']['loki']['units']['main']['ports']['https']['int'] }}"
+    tenant: "{{ site['domain']['internal'] }}"
+    excluded_units:
+      - "openwebui"
+      - "quartermaster"

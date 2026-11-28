@@ -62,33 +62,37 @@
   args:
     executable: "/bin/bash"
   when: >-
-    (secrets[containers_authelia_client]['oidc']['secret'] | default('', true) | length) == 0 or
-    (secrets[containers_authelia_client]['oidc']['hash'] | default('', true) | length) == 0
+    ((((secrets['authelia']['oidc'].get('clients') or {}).get(containers_authelia_client) or {}).get('secret') | default('', true)) | length) == 0 or
+    ((((secrets['authelia']['oidc'].get('clients') or {}).get(containers_authelia_client) or {}).get('hash') | default('', true)) | length) == 0
   changed_when: false
   register: "containers_authelia_register_generated"
   no_log: true
 
+- name: Register the missing authelia OIDC clients map on secrets.yaml
+  vars:
+    secrets_target: '["authelia"]["oidc"]["clients"]'
+    secrets_content: "{}"
+  ansible.builtin.include_role:
+    name: "secrets"
+    tasks_from: "update"
+  when:
+    - containers_authelia_register_generated['stdout'] is defined
+    - "'clients' not in (secrets['authelia']['oidc'] | default({}, true))"
+  no_log: true
+
 - name: Register the missing authelia OIDC client secret on secrets.yaml
   vars:
-    secrets_target: '[{{ containers_authelia_client | to_json }}]["oidc"][{{ containers_authelia_register_secret["key"] | to_json }}]'
+    secrets_target: '["authelia"]["oidc"]["clients"][{{ containers_authelia_client | to_json }}]'
     secrets_content: >-
       {{
-        containers_authelia_register_generated['stdout']
-        | regex_search(containers_authelia_register_secret['pattern'], '\1')
-        | first
-        | to_json
+        {
+          'secret': (containers_authelia_register_generated['stdout'] | regex_search('Random Password: (\S+)', '\1') | first),
+          'hash': (containers_authelia_register_generated['stdout'] | regex_search('Digest: (\S+)', '\1') | first)
+        } | to_json
       }}
   ansible.builtin.include_role:
     name: "secrets"
     tasks_from: "update"
-  loop:
-    - key: "secret"
-      pattern: 'Random Password: (\S+)'
-    - key: "hash"
-      pattern: 'Digest: (\S+)'
-  loop_control:
-    loop_var: "containers_authelia_register_secret"
-    label: "{{ containers_authelia_register_secret['key'] }}"
   when: containers_authelia_register_generated['stdout'] is defined
   no_log: true
 

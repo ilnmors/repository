@@ -892,6 +892,39 @@ services:
           dependency:
             web:
               status: true
+    mcp:
+      units:
+        main:
+          release: "mcp"
+          hosts: ["app"]
+          # Dual-port split: ports.http (8091) serves the public OIDC key-management UI through Caddy (zero /mcp/*
+          # routes); ports.mcp (8090) stays internal-only for Open WebUI via host.containers.internal (pasta).
+          domain:
+            public: "mcp"
+            internal: "mcp.app"
+          # mcp (uid 1000) in the image
+          subuid: 100999
+          ports:
+            http:
+              protocol: "tcp"
+              int: 8091
+              container: 8091
+            mcp:
+              protocol: "tcp"
+              int: 8090
+              container: 8090
+          dependency:
+            web:
+              status: true
+            db:
+              status: true
+              type: "postgresql"
+            oidc:
+              status: true
+              redirect_uris: ["/auth/oidc/callback"]
+              scopes: ["openid", "email", "profile", "groups"]
+              auth_method: "client_secret_basic"
+              pkce: true
     openwebui:
       units:
         main:

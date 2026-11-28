@@ -51,7 +51,7 @@
       - name: "BOOKSTACK_DB_PASSWORD"
         value: "{{ secrets['mariadb']['password']['bookstack'] }}"
       - name: "BOOKSTACK_OIDC_CLIENT_SECRET"
-        value: "{{ secrets['bookstack']['oidc']['secret'] }}"
+        value: "{{ secrets['authelia']['oidc']['clients']['bookstack']['secret'] }}"
       - name: "BOOKSTACK_S3_SECRET_KEY"
         value: "{{ secrets['rustfs']['password']['bookstack'] }}"
   no_log: true

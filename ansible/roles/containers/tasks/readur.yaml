@@ -51,7 +51,7 @@
       - name: "READUR_DATABASE_URL"
         value: "postgresql://readur:{{ secrets['postgresql']['password']['readur'] | urlencode | replace('/', '%2F') }}@{{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }}/readur_db?sslmode=verify-full&sslrootcert=/etc/ssl/readur/{{ site['ca']['x509']['root']['certificate_file'] }}"
       - name: "READUR_OIDC_CLIENT_SECRET"
-        value: "{{ secrets['readur']['oidc']['secret'] }}"
+        value: "{{ secrets['authelia']['oidc']['clients']['readur']['secret'] }}"
       - name: "READUR_S3_SECRET_KEY"
         value: "{{ secrets['rustfs']['password']['readur'] }}"
   no_log: true

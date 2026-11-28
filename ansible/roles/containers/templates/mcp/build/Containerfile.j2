@@ -1,0 +1,18 @@
+FROM {{ releases['containers']['mcp']['repository'] }}:{{ releases['containers']['mcp']['build']['base']['tag'] }}
+
+ARG MCP_TAG={{ releases['containers']['mcp']['build']['source']['tag'] }}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    ILNMORS_MCP_HOST=0.0.0.0 \
+    ILNMORS_MCP_PORT=8090
+
+RUN groupadd --gid 1000 mcp \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin mcp \
+    && pip install --no-cache-dir "{{ releases['containers']['mcp']['build']['source']['repository'] }}/archive/refs/tags/${MCP_TAG}.tar.gz"
+
+USER 1000:1000
+EXPOSE 8090 8091
+
+CMD ["ilnmors-mcp"]

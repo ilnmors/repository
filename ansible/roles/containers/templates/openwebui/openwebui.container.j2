@@ -122,6 +122,11 @@ Environment="WEB_FETCH_MAX_CONTENT_LENGTH=20000"
 Environment="WEB_SEARCH_ENGINE=searxng"
 Environment="SEARXNG_QUERY_URL=http://host.containers.internal:{{ services['containers']['searxng']['units']['main']['ports']['http']['int'] }}/search?q=<query>"
 {% endif %}
+{% if containers_openwebui_mcp_enabled | default(false) %}
+# Unified homelab MCP gateway (ilnmors-mcp) on the same host; forwards user email/role for per-user isolation.
+Environment="ENABLE_FORWARD_USER_INFO_HEADERS=true"
+Secret=OPEN_WEBUI_TOOL_SERVER_CONNECTIONS,type=env,target=TOOL_SERVER_CONNECTIONS
+{% endif %}
 {% set video_model = services['containers']['openwebui']['units']['main']['ai']['video_model'] | default('') %}
 {% if video_model | length > 0 %}
 # Video through Quartermaster's /v1/videos adapter (in front of its sd-server video jobs). Clips take

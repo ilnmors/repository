@@ -57,7 +57,7 @@
       - name: "SURE_POSTGRES_PASSWORD"
         value: "{{ secrets['postgresql']['password']['sure'] }}"
       - name: "SURE_OIDC_CLIENT_SECRET"
-        value: "{{ secrets['sure']['oidc']['secret'] }}"
+        value: "{{ secrets['authelia']['oidc']['clients']['sure']['secret'] }}"
       - name: "SURE_S3_SECRET_KEY"
         value: "{{ secrets['rustfs']['password']['sure'] }}"
       - name: "SURE_OPENAI_ACCESS_TOKEN"

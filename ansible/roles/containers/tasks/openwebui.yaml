@@ -45,17 +45,31 @@
 
 - name: Set the openwebui fact
   ansible.builtin.set_fact:
-    containers_secrets:
-      - name: "OPEN_WEBUI_SECRET_KEY"
-        value: "{{ secrets['openwebui']['secret_key'] }}"
-      - name: "OPEN_WEBUI_POSTGRES_PASSWORD"
-        value: "{{ secrets['postgresql']['password']['openwebui'] }}"
-      - name: "OPEN_WEBUI_OAUTH_CLIENT_SECRET"
-        value: "{{ secrets['openwebui']['oidc']['secret'] }}"
-      - name: "OPEN_WEBUI_S3_SECRET_KEY"
-        value: "{{ secrets['rustfs']['password']['openwebui'] }}"
-      - name: "OPEN_WEBUI_ADMIN_API_KEY"
-        value: "{{ secrets['openwebui']['api']['console'] }}"
+    containers_openwebui_mcp_enabled: >-
+      {{
+        (target_host in services['containers']['mcp']['units']['main']['hosts'])
+        and (((secrets.get('mcp') or {}).get('auth_token') | default('', true)) | length > 0)
+      }}
+    containers_secrets: >-
+      {%- set items = [
+        {'name': 'OPEN_WEBUI_SECRET_KEY', 'value': secrets['openwebui']['secret_key']},
+        {'name': 'OPEN_WEBUI_POSTGRES_PASSWORD', 'value': secrets['postgresql']['password']['openwebui']},
+        {'name': 'OPEN_WEBUI_OAUTH_CLIENT_SECRET', 'value': secrets['authelia']['oidc']['clients']['openwebui']['secret']},
+        {'name': 'OPEN_WEBUI_S3_SECRET_KEY', 'value': secrets['rustfs']['password']['openwebui']},
+        {'name': 'OPEN_WEBUI_ADMIN_API_KEY', 'value': secrets['openwebui']['api']['console']}
+      ] -%}
+      {%- set mcp_key = (secrets.get('mcp') or {}).get('auth_token') | default('', true) -%}
+      {%- if (target_host in services['containers']['mcp']['units']['main']['hosts']) and (mcp_key | length > 0) -%}
+      {%-   set mcp_port = services['containers']['mcp']['units']['main']['ports']['mcp']['int'] -%}
+      {%-   set conns = [
+        {'type': 'mcp', 'url': 'http://host.containers.internal:' ~ mcp_port ~ '/mcp/pim', 'path': '', 'auth_type': 'bearer', 'key': mcp_key, 'config': {'enable': true}, 'info': {'id': 'homelab-pim', 'name': 'Homelab PIM', 'description': 'OxiCloud, Kaneo'}},
+        {'type': 'mcp', 'url': 'http://host.containers.internal:' ~ mcp_port ~ '/mcp/knowledge', 'path': '', 'auth_type': 'bearer', 'key': mcp_key, 'config': {'enable': true}, 'info': {'id': 'homelab-knowledge', 'name': 'Homelab Knowledge', 'description': 'Outline, BookStack, Linkding, Immich'}},
+        {'type': 'mcp', 'url': 'http://host.containers.internal:' ~ mcp_port ~ '/mcp/home', 'path': '', 'auth_type': 'bearer', 'key': mcp_key, 'config': {'enable': true}, 'info': {'id': 'homelab-home', 'name': 'Homelab Home', 'description': 'Sure, Tandoor, Mastodon'}},
+        {'type': 'mcp', 'url': 'http://host.containers.internal:' ~ mcp_port ~ '/mcp/ops', 'path': '', 'auth_type': 'bearer', 'key': mcp_key, 'config': {'enable': true}, 'info': {'id': 'homelab-ops', 'name': 'Homelab Ops', 'description': 'Forgejo, Prometheus, Loki (admin only)'}}
+      ] -%}
+      {%-   set _ = items.append({'name': 'OPEN_WEBUI_TOOL_SERVER_CONNECTIONS', 'value': conns | to_json}) -%}
+      {%- endif -%}
+      {{ items }}
   no_log: true
 
 - name: Create the openwebui directory

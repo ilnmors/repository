@@ -51,7 +51,7 @@
                   "provider_id": "authelia",
                   "name": "authelia",
                   "client_id": "tandoor",
-                  "secret": "{{ secrets['tandoor']['oidc']['secret'] }}",
+                  "secret": "{{ secrets['authelia']['oidc']['clients']['tandoor']['secret'] }}",
                   "settings": {
                     "server_url": "https://{{ services['containers']['authelia']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}/.well-known/openid-configuration",
                     "token_auth_method": "client_secret_basic"

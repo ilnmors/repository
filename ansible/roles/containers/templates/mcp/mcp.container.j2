@@ -1,0 +1,45 @@
+{% set mcp_unit = services['containers']['mcp']['units']['main'] %}
+[Quadlet]
+DefaultDependencies=false
+
+[Unit]
+Description=ilnmors-mcp Homelab MCP Gateway
+
+[Container]
+Image={{ containers_container_repository }}:{{ releases['containers'][target_container]['tag'] }}
+ContainerName=mcp
+HostName=mcp
+
+PublishPort={{ mcp_unit['ports']['mcp']['int'] }}:{{ mcp_unit['ports']['mcp']['container'] }}/{{ mcp_unit['ports']['mcp']['protocol'] }}
+PublishPort={{ mcp_unit['ports']['http']['int'] }}:{{ mcp_unit['ports']['http']['container'] }}/{{ mcp_unit['ports']['http']['protocol'] }}
+
+ReadOnly=true
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mcp/config.yaml:/etc/mcp/config.yaml:ro
+Volume={{ nodes[target_host]['paths']['home'] }}/containers/mcp/ssl:/etc/ssl/mcp:ro
+
+Environment="TZ={{ site['timezone'] }}"
+Environment="ILNMORS_MCP_CONFIG=/etc/mcp/config.yaml"
+Environment="ILNMORS_MCP_OIDC_GROUPS_CLAIM=groups"
+Environment="ILNMORS_MCP_OIDC_ALLOWED_GROUPS=admins,users"
+Environment="ILNMORS_MCP_OIDC_ADMIN_GROUPS=admins"
+
+Secret=MCP_AUTH_TOKEN,type=mount,target=/run/secrets/MCP_AUTH_TOKEN,uid=1000,gid=1000,mode=0400
+Secret=MCP_SECRET_KEY,type=mount,target=/run/secrets/MCP_SECRET_KEY,uid=1000,gid=1000,mode=0400
+Secret=MCP_POSTGRES_PASSWORD,type=mount,target=/run/secrets/MCP_POSTGRES_PASSWORD,uid=1000,gid=1000,mode=0400
+Secret=MCP_OIDC_CLIENT_SECRET,type=mount,target=/run/secrets/MCP_OIDC_CLIENT_SECRET,uid=1000,gid=1000,mode=0400
+
+HealthCmd=python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:{{ mcp_unit['ports']['mcp']['container'] }}/healthz', timeout=3); urllib.request.urlopen('http://127.0.0.1:{{ mcp_unit['ports']['http']['container'] }}/healthz', timeout=3)"
+HealthInterval=30s
+HealthTimeout=5s
+HealthStartPeriod=15s
+HealthRetries=3
+
+[Service]
+MemoryKSM=yes
+ExecStartPre=/usr/bin/nc -zv {{ services['containers']['postgresql']['units']['main']['domain']['internal'] }}.{{ site['domain']['internal'] }} {{ services['containers']['postgresql']['units']['main']['ports']['tcp']['int'] }}
+Restart=always
+RestartSec=30s
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

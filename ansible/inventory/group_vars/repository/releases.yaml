@@ -299,6 +299,17 @@ releases:
       name: "searxng"
       repository: "docker.io/searxng/searxng"
       tag: "2026.11.23-a7163d091"
+    mcp:
+      name: "mcp"
+      repository: "docker.io/library/python"
+      tag: "0.2.3"
+      build:
+        status: true
+        base:
+          tag: "3.13-slim"
+        source:
+          repository: "https://github.com/ilnmors/mcp"
+          tag: "v0.2.3"
     openwebui:
       name: "openwebui"
       repository: "ghcr.io/open-webui/open-webui"

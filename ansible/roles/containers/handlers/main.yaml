@@ -334,6 +334,18 @@
   listen: "notification_restart_searxng"
   ignore_errors: true
 
+- name: Restart the mcp.service
+  ansible.builtin.systemd_service:
+    scope: "user"
+    name: "mcp.service"
+    state: "restarted"
+    daemon_reload: true
+  when: not (containers_mcp_started['changed'] | default(false))
+  changed_when: false
+  register: "result_restart_mcp"
+  listen: "notification_restart_mcp"
+  ignore_errors: true
+
 - name: Restart the openwebui.service
   ansible.builtin.systemd_service:
     scope: "user"
