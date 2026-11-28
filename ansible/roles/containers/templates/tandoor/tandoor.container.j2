@@ -18,7 +18,7 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/tandoor/ssl:/etc/ssl
 
 # General
 Environment="TZ={{ site['timezone'] }}"
-Environment="ALLOWED_HOSTS={{ services['containers']['tandoor']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="ALLOWED_HOSTS={{ services['containers']['tandoor']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }},host.containers.internal"
 Environment="CSRF_TRUSTED_ORIGINS=https://{{ services['containers']['tandoor']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
 # auth Caddy -> app Caddy -> Tandoor built-in nginx
 Environment="ALLAUTH_TRUSTED_PROXY_COUNT=3"
