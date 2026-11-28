@@ -25,6 +25,7 @@ Volume={{ nodes[target_host]['paths']['home'] }}/containers/mastodon/patches/{{ 
 # General
 Environment="TZ={{ site['timezone'] }}"
 Environment="LOCAL_DOMAIN={{ services['containers']['mastodon']['units']['main']['domain']['public'] }}.{{ site['domain']['public'] }}"
+Environment="ALTERNATE_DOMAINS=host.containers.internal"
 Environment="LIMITED_FEDERATION_MODE=true"
 Environment="DISALLOW_UNAUTHENTICATED_API_ACCESS=true"
 Environment="ES_ENABLED=false"
